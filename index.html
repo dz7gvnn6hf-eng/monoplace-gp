@@ -96,6 +96,7 @@ h1 span{color:var(--red)}
 .home-top h1{font-size:clamp(30px,6vh,54px)}
 .home-top .online{margin:0 0 0 auto;font-weight:600;color:var(--muted)}
 .home-top .online b{color:var(--green);font-weight:700}
+.home-top .online.warn{color:var(--yellow)}
 .home-top .btn{padding:10px 14px;font-size:16px}
 /* The three cards nest like broadcast graphics: parallel slanted edges, one accent per mode (race red, title gold, record purple). */
 .modes{--s:34px;--gap:12px;display:flex;min-height:0}
@@ -1856,6 +1857,11 @@ const isPlayerPeer = p => p.kind === 'viewer' && (p.presence.role === 'host' || 
 // A game is a star: the host owns the PeerJS id of the game's name and relays everyone's presence to every guest.
 // It mimics the parts of the room capability the game uses (peers, presence, join, leave).
 const P2P_PREFIX = 'monoplace-gp-v1-';
+const NETMSG = {
+  timeout: 'La connexion directe avec l’autre joueur a échoué : votre réseau, ou le sien, la bloque. Essayez un autre réseau, par exemple le Wi-Fi au lieu de la 4G, ou la version claude.ai du jeu.',
+  noserver: 'Le serveur de connexion en ligne est injoignable : vérifiez votre connexion internet puis réessayez.',
+};
+let lastJoinErr = null;
 const cleanNick = n => typeof n === 'string' ? n.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 16) : '';
 const myNick = () => cleanNick($('nick').value) || 'Pilote';
 function p2pLobby() {
@@ -1867,7 +1873,8 @@ function p2pJoin(name, opts = {}) {
     const others = new Map();
     let done = false, list = [], cache = null, timer = 0, conn = null, mine = Object.freeze({}), dirty = true;
     const fail = code => { if (done) return; done = true; clearTimeout(limit); try { peer.destroy(); } catch (e) { /* already gone */ } reject({ code }); };
-    const limit = setTimeout(() => fail('upstream_error'), 12000);
+    let opened = false; // reached the PeerJS server; past that, a timeout means the other player is unreachable
+    const limit = setTimeout(() => fail(opened ? 'timeout' : 'noserver'), 12000);
     const mk = (id, presence, me) => Object.freeze({ peer: id, by: null, isMe: me, sameTab: me, kind: 'viewer', guest: false, presence, updatedAt: Date.now() });
     const room = {
       name,
@@ -1881,6 +1888,7 @@ function p2pJoin(name, opts = {}) {
       onPeers: () => () => {},
       leave() { clearInterval(timer); try { peer.destroy(); } catch (e) { /* already gone */ } return Promise.resolve(); },
     };
+    const netErr = e => e && /network|server|socket/.test(e.type);
     const ok = () => { if (done) return; done = true; clearTimeout(limit); resolve(room); timer = setInterval(host ? tickHost : tickGuest, 66); };
     function tickHost() {
       if (!dirty) return;
@@ -1897,9 +1905,10 @@ function p2pJoin(name, opts = {}) {
         c.on('close', () => { others.delete(c.peer); cache = null; dirty = true; });
         c.on('error', () => {});
       });
-      peer.on('error', e => fail(e && e.type === 'unavailable-id' ? 'taken' : 'upstream_error'));
+      peer.on('error', e => fail(e && e.type === 'unavailable-id' ? 'taken' : netErr(e) ? 'noserver' : 'upstream_error'));
     } else {
       peer.on('open', () => {
+        opened = true;
         conn = peer.connect(P2P_PREFIX + name, { serialization: 'json', reliable: true });
         conn.on('open', ok);
         conn.on('data', d => {
@@ -1910,7 +1919,7 @@ function p2pJoin(name, opts = {}) {
         conn.on('close', () => { list = []; cache = null; }); // the host left: the lobby and the race notice its absence
         conn.on('error', () => {});
       });
-      peer.on('error', e => fail(e && e.type === 'peer-unavailable' ? 'not_found' : 'upstream_error'));
+      peer.on('error', e => fail(e && e.type === 'peer-unavailable' ? 'not_found' : netErr(e) ? 'noserver' : 'upstream_error'));
     }
   });
 }
@@ -1957,7 +1966,7 @@ async function hostGame(pub, fixed, rankedWanted) {
     cfg: { track: trackPayload(T.def), laps: ranked ? 5 : ui.laps, diff: ui.diff, rain: ranked ? false : weatherPick(), hold: 0.4 + Math.random() * 1.1, state: 'lobby', seq: 0, ranked } };
   showLobby('Création de la partie…');
   try { net.room = await ROOM.join(name, { host: true }); }
-  catch (e) { if (e && e.code === 'taken' && fixed) { NET = null; return false; } lobbyFail('Impossible de créer la partie pour le moment. Réessayez dans un instant.'); return true; }
+  catch (e) { if (e && e.code === 'taken' && fixed) { NET = null; return false; } lobbyFail(NETMSG[e && e.code] || 'Impossible de créer la partie pour le moment. Réessayez dans un instant.'); return true; }
   if (NET !== net) { net.room.leave().catch(() => {}); return true; }
   net.room.presence({ role: 'host', team: ui.team, nick: myNick(), game: net.cfg, ...(ROOM.p2p ? { rk: rankShare() } : {}) }).catch(() => {});
   ROOM.presence({ st: 'host', g: name, open: pub, ranked, n: 1 }).catch(() => {});
@@ -1970,7 +1979,7 @@ async function joinGame(name, probe) {
   const net = NET = { name, code: name.slice(2), pub: name[0] !== 'p', ranked: name[0] === 'r', host: false, room: null, waitUntil: Date.now() + 8000, cfg: null };
   showLobby('Connexion à la partie…');
   try { net.room = await ROOM.join(name); }
-  catch (e) { if (probe) { NET = null; return false; } lobbyFail(e && e.code === 'not_found' ? 'Aucune partie avec ce code : vérifiez-le auprès de votre ami.' : 'Impossible de rejoindre cette partie.'); return false; }
+  catch (e) { lastJoinErr = e && e.code; if (probe) { NET = null; return false; } lobbyFail(lastJoinErr === 'not_found' ? 'Aucune partie avec ce code : vérifiez-le auprès de votre ami.' : NETMSG[lastJoinErr] || 'Impossible de rejoindre cette partie.'); return false; }
   if (NET !== net) { net.room.leave().catch(() => {}); return false; }
   net.room.presence({ role: 'guest', team: ui.team, nick: myNick(), ...(ROOM.p2p ? { rk: rankShare() } : {}) }).catch(() => {});
   ROOM.presence({ st: 'play', g: name, open: null, n: null }).catch(() => {});
@@ -1985,10 +1994,12 @@ async function joinGame(name, probe) {
 }
 // Direct connections have no directory of players: public games live on five fixed names; join the first that waits, else host one.
 async function quickMatchP2P(ranked) {
+  lastJoinErr = null;
   for (let k = 1; k <= 5; k++) {
     const name = (ranked ? 'r-pub00' : 'q-pub00') + k;
     if (await hostGame(true, name) || await joinGame(name, true)) return;
     if (NET) return;
+    if (NETMSG[lastJoinErr]) { NET = { pub: true }; showLobby(''); return lobbyFail(NETMSG[lastJoinErr]); } // a game exists but cannot be reached: don't hide it by hosting another
   }
   NET = { pub: true }; showLobby(''); lobbyFail('Toutes les parties publiques sont pleines ou déjà lancées. Réessayez dans un instant.');
 }
@@ -2300,8 +2311,14 @@ function setOnline(n) {
   $('onlineCount').innerHTML = k ? '<b>' + k + '</b> autre' + (k > 1 ? 's' : '') + ' pilote' + (k > 1 ? 's' : '') + ' en ligne' : 'Personne d’autre en ligne pour l’instant';
   $('mfRace').innerHTML = k ? '<b>' + k + '</b> pilote' + (k > 1 ? 's' : '') + ' en ligne · solo ou en ligne' : '<b>6</b> voitures · solo ou en ligne';
 }
+function hubStatus(kind) {
+  const o = $('onlineCount');
+  o.classList.toggle('warn', kind !== 'ok');
+  if (kind === 'noserver') o.textContent = 'Serveur du jeu en ligne injoignable : vérifiez votre connexion internet.';
+  if (kind === 'blocked') o.textContent = 'Un autre joueur est en ligne, mais la connexion directe échoue sur ce réseau : essayez un autre réseau (Wi-Fi ou 4G).';
+}
 function hubStart() {
-  const h = hub = { conns: new Map(), isHub: false, conn: null, t: 0 };
+  const h = hub = { conns: new Map(), isHub: false, conn: null, t: 0, gen: 0, fails: 0 };
   const send = (c, msg) => { if (c && c.open) { try { c.send(msg); } catch (e) { /* dropped */ } } };
   const broadcast = () => {
     galleryMerge(myShared());
@@ -2310,32 +2327,40 @@ function hubStart() {
     setOnline(h.conns.size + 1);
   };
   const dirty = () => { clearTimeout(h.t); h.t = setTimeout(broadcast, 400); };
-  const retry = () => setTimeout(asHub, 1000 + Math.random() * 3000);
-  function asHub() {
-    const peer = new Peer(HUB_ID, { debug: 0 });
-    peer.on('open', () => { h.isHub = true; broadcast(); });
+  // Each attempt has a generation number, so the leftovers of a failed attempt never start a second one.
+  const retry = g => { if (g !== h.gen) return; const ng = ++h.gen; setTimeout(() => asHub(ng), 1000 + Math.random() * 3000); };
+  const netErr = e => e && /network|server|socket/.test(e.type);
+  function asHub(g) {
+    const peer = h.peer = new Peer(HUB_ID, { debug: 0 });
+    peer.on('open', () => { if (g !== h.gen) return; h.isHub = true; hubStatus('ok'); broadcast(); });
     peer.on('connection', c => {
       c.on('data', d => { if (d && (d.t === 'hello' || d.t === 'c')) { h.conns.set(c.peer, c); galleryMerge(d.c); rankMerge(d.rk); dirty(); } });
       c.on('close', () => { h.conns.delete(c.peer); dirty(); });
       c.on('error', () => {});
     });
     peer.on('disconnected', () => { try { peer.reconnect(); } catch (e) { /* retried by PeerJS */ } });
-    peer.on('error', e => { if (h.isHub) return; try { peer.destroy(); } catch (x) { /* gone */ } if (e && e.type === 'unavailable-id') asClient(); else retry(); });
-    h.peer = peer;
+    peer.on('error', e => {
+      if (g !== h.gen || h.isHub) return;
+      try { peer.destroy(); } catch (x) { /* gone */ }
+      if (e && e.type === 'unavailable-id') asClient(g); else { if (netErr(e)) hubStatus('noserver'); retry(g); }
+    });
   }
-  function asClient() {
-    const peer = new Peer({ debug: 0 });
+  function asClient(g) {
+    const peer = h.peer = new Peer({ debug: 0 });
+    const giveUp = () => { if (g !== h.gen) return; h.conn = null; try { peer.destroy(); } catch (e) { /* gone */ } retry(g); };
+    // The hub exists but its connection never opens: the network blocks direct connections.
+    const limit = setTimeout(() => { if (g !== h.gen || h.conn) return; if (++h.fails >= 2) hubStatus('blocked'); giveUp(); }, 10000);
     peer.on('open', () => {
       const c = peer.connect(HUB_ID, { serialization: 'json', reliable: true });
-      c.on('open', () => { h.conn = c; send(c, { t: 'hello', c: myShared(), rk: rankShare() }); });
+      c.on('open', () => { if (g !== h.gen) return; clearTimeout(limit); h.fails = 0; h.conn = c; hubStatus('ok'); send(c, { t: 'hello', c: myShared(), rk: rankShare() }); });
       c.on('data', d => { if (d && d.t === 'all') { galleryMerge(d.c); rankMerge(d.rk); if (Number.isInteger(d.n)) setOnline(d.n); } });
-      c.on('close', () => { h.conn = null; try { peer.destroy(); } catch (e) { /* gone */ } retry(); }); // the hub left: someone takes over
+      c.on('close', giveUp); // the hub left: someone takes over
+      c.on('error', () => {});
     });
-    peer.on('error', () => { if (h.conn) return; try { peer.destroy(); } catch (e) { /* gone */ } retry(); });
-    h.peer = peer;
+    peer.on('error', e => { if (g !== h.gen || h.conn) return; clearTimeout(limit); if (netErr(e)) hubStatus('noserver'); giveUp(); });
   }
   h.share = () => { if (h.isHub) dirty(); else send(h.conn, { t: 'c', c: myShared(), rk: rankShare() }); };
-  asHub();
+  asHub(0);
 }
 $('inviteBtn').addEventListener('click', () => hostGame(false));
 $('lbStart').addEventListener('click', () => { if (NET && NET.host && NET.room) hostStart(); });
