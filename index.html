@@ -1,0 +1,2393 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="description" content="Monoplace GP : jeu de course de monoplaces en vue de dessus, en solo ou en ligne avec vos amis.">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>Monoplace GP</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@400;500;600;700&family=Saira+Condensed:wght@600;700;800&display=swap">
+<style>
+/* Layout: the live circuit fills the screen; broadcast-style timing panels float over it with hard, slanted edges */
+:root{
+  color-scheme:dark;
+  --ink:#0c0f14; --ink-2:#3a4251; --panel:rgba(12,15,21,.9); --panel-hi:#1a1f29; --panel-sel:#252c39;
+  --line:rgba(236,240,247,.12); --fg:#eef1f6; --muted:#8f99ab; --dim:#2a303b;
+  --red:#ec3a2a; --red-text:#ff6a5c; --purple:#a54cff; --green:#1ec46b; --yellow:#f1c22e; --white:#ffffff;
+  --light-off:#2a0d0b; --light-on:#ff2a17; --housing:#07080b;
+  --f-display:"Saira Condensed","Arial Narrow",sans-serif;
+  --f-body:"Barlow Semi Condensed","Arial Narrow",system-ui,sans-serif;
+}
+html,body{height:100%}
+body{background:var(--ink);color:var(--fg);font:500 15px/1.4 var(--f-body);overflow:hidden;touch-action:none;-webkit-user-select:none;user-select:none}
+input{-webkit-user-select:text;user-select:text}
+#game{position:fixed;inset:0;width:100%;height:100%;display:block}
+.layer{position:fixed;inset:0;padding-left:max(16px, env(safe-area-inset-left,0px));padding-right:max(16px, env(safe-area-inset-right,0px));padding-block:max(12px, env(safe-area-inset-top,0px)) max(12px, env(safe-area-inset-bottom,0px))}
+button{font:inherit;color:inherit;cursor:pointer;border:0;background:none}
+button:disabled{cursor:not-allowed;opacity:.45}
+button:focus-visible,input:focus-visible{outline:2px solid var(--fg);outline-offset:2px}
+.lbl{margin:0;font:700 11px/1 var(--f-body);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.num{font-variant-numeric:tabular-nums}
+h1{margin:0;font:800 clamp(48px,9vw,72px)/.86 var(--f-display);text-transform:uppercase;letter-spacing:-.01em;transform:skewX(-8deg);transform-origin:left bottom;text-wrap:balance}
+h1 span{color:var(--red)}
+.btn{padding:14px 20px;background:var(--panel-hi);font:700 18px/1 var(--f-display);text-transform:uppercase;letter-spacing:.04em;box-shadow:inset 0 0 0 1px var(--line)}
+.btn:hover:not(:disabled){background:var(--panel-sel)}
+.go{display:flex;justify-content:space-between;align-items:center;gap:12px;background:var(--red);color:var(--white);font:800 22px/1 var(--f-display);text-transform:uppercase;letter-spacing:.04em;padding:16px 28px 16px 20px;clip-path:polygon(0 0,100% 0,calc(100% - 14px) 100%,0 100%);text-align:left}
+.go:hover:not(:disabled){filter:brightness(1.08)}
+.note{margin:0;font-size:13px;color:var(--muted)}
+.actions{display:flex;flex-wrap:wrap;gap:10px}
+.input{width:100%;min-width:0;background:var(--panel-hi);border:1px solid var(--line);color:var(--fg);font:600 16px var(--f-body);padding:10px 12px}
+
+/* ---------- HUD ---------- */
+#hud{pointer-events:none}
+#hud .frame{position:relative;height:100%}
+.tower{position:absolute;left:0;top:0;width:164px;margin:0;padding:0 0 8px;list-style:none;background:var(--panel);clip-path:polygon(0 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%)}
+.tower:empty{display:none}
+.tower li{display:grid;grid-template-columns:18px 3px 1fr auto;align-items:center;gap:7px;height:26px;padding:0 10px 0 8px;font:600 14px/1 var(--f-body)}
+.tower li+li{box-shadow:inset 0 1px 0 var(--line)}
+.tower .p{font:700 15px/1 var(--f-display);text-align:right}
+.tower .c{height:14px}
+.tower .g{font-size:12px;color:var(--muted)}
+.tower li.me{background:var(--fg);color:var(--ink)}
+.tower li.me .g{color:var(--ink-2)}
+.timing{position:absolute;right:0;top:0;width:196px;display:grid;gap:6px}
+.tpanel{background:var(--panel);padding:10px 12px 12px;clip-path:polygon(12px 0,100% 0,100% 100%,0 100%,0 12px);display:grid;gap:8px}
+.lapline{display:flex;justify-content:space-between;align-items:baseline}
+.lapline b{font:700 20px/1 var(--f-display)}
+.cur{font:700 34px/1 var(--f-display);letter-spacing:.01em}
+.sectors{display:grid;grid-template-columns:repeat(3,1fr);gap:3px}
+.sectors i{font:600 11px/18px var(--f-body);font-style:normal;height:18px;background:var(--dim);color:var(--muted);text-align:center;font-variant-numeric:tabular-nums}
+.sectors i.p{background:var(--purple);color:var(--white)}
+.sectors i.g{background:var(--green);color:var(--ink)}
+.sectors i.y{background:var(--yellow);color:var(--ink)}
+.times{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;margin:0;font-size:14px;align-items:baseline}
+.times dt{font:700 11px/1 var(--f-body);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.times dd{margin:0;text-align:right;font-weight:600}
+.times .p{color:var(--purple)} .times .g{color:var(--green)} .times .y{color:var(--yellow)} .times .r{color:var(--red-text)}
+#mini{width:196px;height:120px;background:var(--panel);display:block;clip-path:polygon(0 0,100% 0,100% 100%,12px 100%,0 calc(100% - 12px))}
+#pauseBtn{position:absolute;left:50%;top:0;transform:translateX(-50%);pointer-events:auto;width:44px;height:36px;background:var(--panel);font:800 14px/1 var(--f-display);letter-spacing:.1em}
+#lights{position:absolute;left:50%;top:52px;transform:translateX(-50%);display:flex;gap:10px;padding:10px 14px;background:var(--housing);border-radius:6px}
+#lights i{width:30px;height:30px;border-radius:50%;background:var(--light-off)}
+#lights i.on{background:var(--light-on);box-shadow:0 0 18px var(--light-on)}
+#toast{position:absolute;left:50%;top:24%;transform:translateX(-50%) skewX(-8deg);font:800 clamp(20px,4.4vw,36px)/1 var(--f-display);text-transform:uppercase;letter-spacing:.02em;padding:10px 20px;background:var(--panel);opacity:0;transition:opacity .25s;white-space:nowrap;max-width:100%}
+#toast.show{opacity:1}
+#toast.p{color:var(--purple)} #toast.g{color:var(--green)} #toast.y{color:var(--yellow)}
+#tag{position:absolute;left:50%;bottom:72px;transform:translateX(-50%) skewX(-8deg);background:var(--yellow);color:var(--ink);font:800 15px/1 var(--f-display);letter-spacing:.06em;text-transform:uppercase;padding:6px 12px;white-space:nowrap}
+.speedo{position:absolute;left:50%;bottom:0;transform:translateX(-50%);display:flex;background:var(--panel);clip-path:polygon(16px 0,100% 0,100% 100%,0 100%)}
+.speedo .v{display:flex;align-items:baseline;gap:6px;padding:8px 12px 8px 30px}
+.speedo b{font:800 44px/1 var(--f-display);min-width:3ch;text-align:right}
+.speedo .gear{display:grid;place-items:center;min-width:54px;background:var(--red);color:var(--white);font:800 32px/1 var(--f-display)}
+#touch{display:none;position:absolute;left:0;right:0;bottom:0;justify-content:space-between;align-items:flex-end}
+.touch #touch{display:flex}
+.touch .speedo{bottom:92px}
+.touch #tag{bottom:164px}
+#touch div{display:flex;gap:10px}
+.tb{pointer-events:auto;touch-action:none;width:76px;height:76px;border-radius:14px;border:1px solid var(--line);background:rgba(12,15,21,.55);font:800 15px/1 var(--f-display);letter-spacing:.06em}
+.tb.on{background:rgba(238,241,246,.28)}
+.tb.gas{background:rgba(30,196,107,.25)}
+.tb.gas.on{background:rgba(30,196,107,.55)}
+
+/* ---------- Home: three modes ---------- */
+#home{display:grid;grid-template-rows:auto minmax(0,1fr);gap:12px;background:rgba(8,10,14,.78)}
+.home-top{display:flex;flex-wrap:wrap;align-items:center;gap:8px 18px}
+.home-top h1{font-size:clamp(30px,6vh,54px)}
+.home-top .online{margin:0 0 0 auto;font-weight:600;color:var(--muted)}
+.home-top .online b{color:var(--green);font-weight:700}
+.home-top .btn{padding:10px 14px;font-size:16px}
+/* The three cards nest like broadcast graphics: parallel slanted edges, one accent per mode (race red, title gold, record purple). */
+.modes{--s:34px;--gap:12px;display:flex;min-height:0}
+.mode{--accent:var(--red-text);--glow:rgba(236,58,42,.24);
+  position:relative;flex:1 1 0;min-width:0;display:flex;flex-direction:column;justify-content:flex-end;gap:10px;text-align:left;overflow:hidden;
+  padding:26px calc(26px + var(--s)) 26px 26px;
+  background:radial-gradient(90% 55% at 50% 28%,var(--glow),transparent 72%),repeating-linear-gradient(118deg,rgba(255,255,255,.028) 0 2px,transparent 2px 10px),linear-gradient(180deg,#161b25,#0b0e13);
+  clip-path:polygon(var(--s) 0,100% 0,calc(100% - var(--s)) 100%,0 100%);
+  transition:filter .2s ease;animation:rise .55s cubic-bezier(.2,.8,.2,1) both}
+.mode + .mode{margin-left:calc(var(--gap) - var(--s))}
+.mode:first-child{clip-path:polygon(0 0,100% 0,calc(100% - var(--s)) 100%,0 100%)}
+.mode:last-child{clip-path:polygon(var(--s) 0,100% 0,100% 100%,0 100%);padding-right:26px}
+.mode:nth-child(2){animation-delay:.07s} .mode:nth-child(3){animation-delay:.14s}
+.mode[data-mode="champ"]{--accent:var(--yellow);--glow:rgba(241,194,46,.18)}
+.mode[data-mode="tt"]{--accent:var(--purple);--glow:rgba(165,76,255,.24)}
+.mode canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;transition:transform .35s cubic-bezier(.2,.8,.2,1)}
+.mode > span{position:relative}
+.mode .mk{font:700 12px/1 var(--f-body);letter-spacing:.16em;text-transform:uppercase;color:var(--accent)}
+.mode .mt{font:800 clamp(36px,4.6vw,72px)/.88 var(--f-display);text-transform:uppercase;transform:skewX(-8deg);transform-origin:left bottom;overflow-wrap:anywhere}
+.mode .ms{font-size:16px;line-height:1.35;color:var(--muted);max-width:32ch}
+.mode .mf{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 8px;padding-top:12px;margin-top:2px;box-shadow:inset 0 1px 0 var(--line);font-size:14px;color:var(--muted);font-variant-numeric:tabular-nums}
+.mode .mf b{font:700 20px/1 var(--f-display);color:var(--fg)}
+.mode .go-hint{display:flex;align-items:center;gap:10px;font:800 18px/1 var(--f-display);text-transform:uppercase;letter-spacing:.06em;color:var(--accent)}
+.mode .go-hint i{font-style:normal;transition:transform .2s ease}
+.mode:hover,.mode:focus-visible{filter:brightness(1.16)}
+.mode:hover canvas,.mode:focus-visible canvas{transform:scale(1.04) translateY(-4px)}
+.mode:hover .go-hint i,.mode:focus-visible .go-hint i{transform:translateX(6px)}
+.mode:focus-visible{outline:none;box-shadow:inset 0 -4px 0 var(--accent)}
+@keyframes rise{from{transform:translateY(16px)}}
+@media (prefers-reduced-motion:reduce){.mode,.mode canvas,.mode .go-hint i{animation:none;transition:none}}
+@media (max-width:700px){
+  .modes{--s:14px;--gap:8px}
+  .mode{padding:14px calc(6px + var(--s)) 16px 6px;align-items:center}
+  .mode:last-child{padding-right:6px}
+  .mode .mk,.mode .mf{display:none}
+  .mode .go-hint{font-size:0}
+  .mode .go-hint i{font-size:24px}
+  .mode .mt{writing-mode:vertical-rl;transform:rotate(180deg);transform-origin:center;font-size:clamp(30px,10vw,46px)}
+  .home-top h1{font-size:32px}
+  .home-top .btn{padding:8px 10px;font-size:14px}
+  .mode .ms{display:none}
+  .mode .go-hint{font-size:14px}
+}
+
+/* ---------- Setup ---------- */
+#menu{display:grid;grid-template-columns:minmax(0,500px) 1fr;padding:0}
+#menu .panel{background:var(--panel);overflow-y:auto;display:flex;flex-direction:column;gap:22px;
+  padding-left:max(16px, env(safe-area-inset-left,0px));padding-right:max(16px, env(safe-area-inset-right,0px));
+  padding-block:max(20px, env(safe-area-inset-top,0px)) max(24px, env(safe-area-inset-bottom,0px))}
+.setup-head{display:grid;gap:8px}
+.back{position:relative;z-index:1;justify-self:start;padding:6px 0;color:var(--muted);font:700 13px/1 var(--f-body);letter-spacing:.12em;text-transform:uppercase}
+.back:hover{color:var(--fg)}
+.setup-title{margin:0;font:800 clamp(40px,7vw,60px)/.9 var(--f-display);text-transform:uppercase;transform:skewX(-8deg);transform-origin:left bottom}
+.grp{display:grid;gap:8px}
+.seg{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:4px;background:var(--panel-hi);padding:4px}
+.seg button{padding:10px 6px;font:700 16px/1.1 var(--f-body);color:var(--muted);text-align:center}
+.seg button[aria-pressed="true"]{background:var(--fg);color:var(--ink)}
+.tracks{display:grid;gap:6px}
+.tracks .sub{margin-top:8px}
+.tcard{display:grid;grid-template-columns:88px minmax(0,1fr);gap:14px;align-items:center;text-align:left;background:var(--panel-hi);padding:8px 12px 8px 8px;box-shadow:inset 0 0 0 1px transparent}
+.tcard canvas{width:88px;height:56px;display:block}
+.tcard[aria-pressed="true"]{background:var(--panel-sel);box-shadow:inset 0 0 0 1px var(--fg)}
+.tcard .tx{display:grid;gap:2px;min-width:0}
+.tcard .nm{font:700 21px/1.05 var(--f-display);text-transform:uppercase;overflow-wrap:anywhere}
+.tcard .meta{font-size:13px;color:var(--muted)}
+.tcard .rec{font-size:13px;font-variant-numeric:tabular-nums}
+.tcard .rec b{color:var(--purple);font-weight:600}
+.tcard.newc{background:transparent;box-shadow:inset 0 0 0 1px var(--line)}
+.tcard .plus{width:88px;height:56px;display:grid;place-items:center;font:800 34px/1 var(--f-display);color:var(--muted);box-shadow:inset 0 0 0 1px var(--line)}
+.rounds{margin:0;padding:0;list-style:none;display:grid;gap:4px}
+.rounds li{display:grid;grid-template-columns:28px 1fr;gap:10px;align-items:center;background:var(--panel-hi);padding:8px 10px}
+.rounds .n{font:800 18px/1 var(--f-display);color:var(--red-text)}
+.opts{display:grid;grid-template-columns:1fr 1.6fr;gap:12px}
+.swatches{display:flex;flex-wrap:wrap;gap:8px;background:var(--panel-hi);padding:7px}
+.swatches button{width:30px;height:30px;box-shadow:inset 0 0 0 2px rgba(0,0,0,.3)}
+.swatches button[aria-pressed="true"]{outline:2px solid var(--fg);outline-offset:2px}
+.board{list-style:none;margin:0;padding:0;display:grid;gap:2px}
+.board li{display:grid;grid-template-columns:22px 4px minmax(0,1fr) auto;gap:8px;align-items:center;padding:7px 10px;background:var(--panel-hi);font-size:14px}
+.board li.me{box-shadow:inset 0 0 0 1px var(--fg)}
+.board .p{font:700 15px/1 var(--f-display);text-align:right}
+.board .c{height:14px}
+.board .n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.board .t{font-variant-numeric:tabular-nums;font-weight:600;color:var(--muted)}
+.keys{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;margin:0;font-size:14px;color:var(--muted);align-items:center}
+.keys dt{display:flex;gap:4px}
+.keys dd{margin:0}
+kbd{display:inline-grid;place-items:center;min-width:24px;height:22px;padding:0 5px;border:1px solid var(--line);border-bottom-width:2px;font:600 12px/1 var(--f-body);color:var(--fg)}
+.caption{align-self:end;justify-self:end;text-align:right;padding:0 max(32px, env(safe-area-inset-right,0px)) max(32px, env(safe-area-inset-bottom,0px)) 24px;max-width:560px;pointer-events:none;text-shadow:0 2px 12px rgba(0,0,0,.6)}
+.caption h2{margin:6px 0 6px;font:800 clamp(40px,5vw,64px)/.9 var(--f-display);text-transform:uppercase;transform:skewX(-8deg);text-wrap:balance;overflow-wrap:anywhere}
+.caption p{margin:0}
+.caption .lbl{color:var(--fg)}
+@media (min-width:700px){#menu .panel{padding-left:max(36px, env(safe-area-inset-left,0px));padding-right:36px}}
+@media (max-width:899px){#menu{grid-template-columns:1fr}#menu .panel{background:rgba(12,15,21,.86)}.caption{display:none}}
+
+/* ---------- Editor ---------- */
+#editor{pointer-events:none;display:flex;flex-direction:column;justify-content:space-between;gap:12px}
+#editor > *{pointer-events:auto}
+.ed-top{display:flex;flex-wrap:wrap;gap:10px;align-items:center;background:var(--panel);padding:10px 12px}
+.ed-top h2{margin:0;font:800 24px/1 var(--f-display);text-transform:uppercase;transform:skewX(-8deg)}
+.ed-top .input{flex:1 1 200px;padding:9px 10px}
+.ed-top .seg{flex:1 1 260px}
+.ed-bottom{background:var(--panel);padding:12px;display:grid;gap:10px}
+.ed-status{margin:0;font-weight:600}
+.ed-status.bad{color:var(--red-text)} .ed-status.ok{color:var(--green)}
+.ed-corner{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.ed-corner input{flex:1 1 160px;accent-color:var(--red)}
+
+/* ---------- Modals ---------- */
+.modal{display:flex;flex-direction:column;background:rgba(6,8,11,.6);overflow-y:auto}
+.card{margin:auto;width:min(600px,100%);background:var(--panel);padding:24px clamp(16px,4vw,28px);display:grid;gap:14px;clip-path:polygon(16px 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%,0 16px)}
+.card h2{margin:0;font:800 clamp(34px,6vw,48px)/.95 var(--f-display);text-transform:uppercase;transform:skewX(-8deg);transform-origin:left bottom}
+.card p{margin:0}
+.code{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.code b{font:800 44px/1 var(--f-display);letter-spacing:.2em;-webkit-user-select:text;user-select:text;color:var(--yellow)}
+.join-row{display:flex;gap:10px}
+.join-row .input{font:800 26px/1 var(--f-display);letter-spacing:.2em;text-transform:uppercase}
+.tblwrap{overflow-x:auto}
+.res{width:100%;border-collapse:collapse;font-size:15px}
+.res th{font:700 11px/1 var(--f-body);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);text-align:left;padding:6px}
+.res td{padding:8px 6px;box-shadow:inset 0 1px 0 var(--line);white-space:nowrap}
+.res .r{text-align:right}
+.res tr.me td{background:rgba(238,241,246,.1)}
+.res .fl{color:var(--purple)}
+.res .pen{color:var(--red-text)}
+.res .chip{display:inline-block;width:4px;height:14px;margin-right:8px;vertical-align:-2px}
+.champ{display:grid;gap:8px}
+.chat{display:grid;gap:8px}
+.says{display:flex;flex-wrap:wrap;gap:6px}
+.says button{padding:8px 12px;background:var(--panel-hi);box-shadow:inset 0 0 0 1px var(--line);font:700 14px/1 var(--f-body)}
+.says button:hover{background:var(--panel-sel)}
+.feed{list-style:none;margin:0;padding:0;display:grid;gap:3px;font-size:14px;min-height:20px}
+.feed li b{font-weight:700;color:var(--yellow)}
+
+@media (max-width:520px){
+  .tower{width:128px}
+  .tower li{grid-template-columns:14px 3px 1fr auto;gap:5px;height:22px;padding:0 7px 0 5px;font-size:12px}
+  .tower .p{font-size:13px}.tower .g{font-size:11px}
+  .timing{width:150px}
+  .tpanel{padding:8px 10px 10px;gap:6px}
+  .cur{font-size:26px}
+  .times{font-size:12px;gap:3px 8px}
+  #mini{width:150px;height:96px}
+  .speedo b{font-size:36px}.speedo .gear{min-width:46px;font-size:26px}
+  #lights i{width:22px;height:22px}#lights{gap:7px;padding:8px 10px;top:330px}
+  .tb{width:68px;height:68px}
+  .opts{grid-template-columns:1fr}
+  .seg button{font-size:15px}
+  .home-top .online{margin:0;flex-basis:100%;order:3;font-size:13px}
+}
+@media (prefers-reduced-motion:reduce){#toast{transition:none}}
+</style>
+
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+</head>
+<body>
+<canvas id="game" aria-label="Circuit vu de dessus"></canvas>
+
+<div id="hud" class="layer" hidden>
+  <div class="frame">
+    <ol id="tower" class="tower" aria-label="Classement en direct"></ol>
+    <div class="timing">
+      <div class="tpanel">
+        <div class="lapline"><span class="lbl" id="lapLbl">Tour</span><b id="lapNo" class="num">1/3</b></div>
+        <div id="cur" class="cur num">0:00.000</div>
+        <div class="sectors" aria-label="Temps des secteurs"><i id="s0">S1</i><i id="s1">S2</i><i id="s2">S3</i></div>
+        <dl class="times num">
+          <dt>Dernier</dt><dd id="lastLap">—</dd>
+          <dt>Meilleur</dt><dd id="bestLap">—</dd>
+          <dt>Record</dt><dd id="recLap" class="p">—</dd>
+          <dt>Pneus</dt><dd id="tyreTxt" class="g">100 %</dd>
+          <dt>Aileron</dt><dd id="wingTxt" class="g">OK</dd>
+          <dt id="pitDt">Stand</dt><dd id="pitTxt">À faire</dd>
+        </dl>
+      </div>
+      <canvas id="mini" aria-hidden="true"></canvas>
+    </div>
+    <button id="pauseBtn" type="button" aria-label="Pause">II</button>
+    <div id="lights" aria-hidden="true" hidden><i></i><i></i><i></i><i></i><i></i></div>
+    <div id="toast" role="status"></div>
+    <div id="tag" hidden></div>
+    <div class="speedo"><div class="v"><b id="spd" class="num">0</b><span class="lbl">km/h</span></div><div class="gear" id="gear">N</div></div>
+    <div id="touch">
+      <div><button class="tb" data-key="left" type="button" aria-label="Tourner à gauche">◀</button><button class="tb" data-key="right" type="button" aria-label="Tourner à droite">▶</button></div>
+      <div><button class="tb" data-key="brake" type="button">FREIN</button><button class="tb gas" data-key="gas" type="button">GAZ</button></div>
+    </div>
+  </div>
+</div>
+
+<section id="home" class="layer">
+  <header class="home-top">
+    <h1>Monoplace <span>GP</span></h1>
+    <p class="online" id="onlineCount"></p>
+    <button id="sndHome" class="btn" type="button" aria-keyshortcuts="M">Son activé</button>
+    <button id="codeBtn" class="btn" type="button" hidden>Rejoindre avec un code</button>
+  </header>
+  <div class="modes">
+    <button class="mode" data-mode="race" type="button"><canvas aria-hidden="true"></canvas>
+      <span class="mk">Course unique</span><span class="mt">Grand Prix</span>
+      <span class="ms">Six monoplaces sur la grille. Seul contre les bots, ou en ligne avec vos amis.</span>
+      <span class="mf" id="mfRace"><b>6</b> voitures · 3 à 10 tours</span>
+      <span class="go-hint" aria-hidden="true">Choisir le circuit <i>→</i></span></button>
+    <button class="mode" data-mode="champ" type="button"><canvas aria-hidden="true"></canvas>
+      <span class="mk">Saison</span><span class="mt">Championnat</span>
+      <span class="ms">Quatre Grands Prix à la suite. Les points s’additionnent, le meilleur total gagne le titre.</span>
+      <span class="mf"><b>4</b> manches · <b>25</b> points la victoire</span>
+      <span class="go-hint" aria-hidden="true">Préparer la saison <i>→</i></span></button>
+    <button class="mode" data-mode="tt" type="button"><canvas aria-hidden="true"></canvas>
+      <span class="mk">Contre-la-montre</span><span class="mt">Chrono</span>
+      <span class="ms">Seul en piste, face à votre fantôme et à celui du meilleur joueur.</span>
+      <span class="mf" id="mfTt">Pas encore de record</span>
+      <span class="go-hint" aria-hidden="true">Viser le record <i>→</i></span></button>
+  </div>
+</section>
+
+<section id="menu" class="layer" hidden>
+  <div class="panel">
+    <div class="setup-head">
+      <button id="backBtn" class="back" type="button">← Modes</button>
+      <h2 id="setupTitle" class="setup-title">Grand Prix</h2>
+    </div>
+    <div class="grp" id="trackGrp">
+      <p class="lbl">Circuit</p>
+      <input id="trackSearch" class="input" type="search" placeholder="Rechercher un circuit par son nom" aria-label="Rechercher un circuit" autocomplete="off">
+      <div class="seg" id="sortSeg" hidden><button type="button" data-k="sort" data-v="pop">Les plus aimés</button><button type="button" data-k="sort" data-v="new">Les plus récents</button></div>
+      <div id="trackList" class="tracks"></div>
+      <div class="actions">
+        <button id="likeBtn" class="btn" type="button" hidden aria-pressed="false">♥ J’aime</button>
+        <button id="editBtn" class="btn" type="button" hidden>Modifier ce circuit</button>
+        <button id="dupBtn" class="btn" type="button">Copier dans l’éditeur</button>
+      </div>
+    </div>
+    <div class="grp" id="champGrp" hidden>
+      <p class="lbl">Manches, dans l’ordre</p>
+      <ol class="rounds" id="rounds"></ol>
+      <p class="note">Points de la 1re à la 6e place : 25, 18, 15, 12, 10, 8.</p>
+    </div>
+    <div class="grp" id="qualiGrp"><p class="lbl">Qualifications</p>
+      <div class="seg"><button type="button" data-k="quali" data-v="1">Un tour chrono</button><button type="button" data-k="quali" data-v="0">Sans, départ dernier</button></div>
+    </div>
+    <div class="opts" id="raceOpts">
+      <div class="grp"><p class="lbl">Tours</p>
+        <div class="seg"><button type="button" data-k="laps" data-v="3">3</button><button type="button" data-k="laps" data-v="5">5</button><button type="button" data-k="laps" data-v="10">10</button></div>
+      </div>
+      <div class="grp"><p class="lbl">Bots</p>
+        <div class="seg"><button type="button" data-k="diff" data-v="facile">Facile</button><button type="button" data-k="diff" data-v="normal">Normal</button><button type="button" data-k="diff" data-v="difficile">Difficile</button></div>
+      </div>
+    </div>
+    <div class="opts">
+      <div class="grp"><p class="lbl">Météo</p>
+        <div class="seg"><button type="button" data-k="weather" data-v="dry">Sec</button><button type="button" data-k="weather" data-v="rain">Pluie</button><button type="button" data-k="weather" data-v="var">Variable</button></div>
+      </div>
+      <div class="grp"><p class="lbl">Votre écurie</p><div class="swatches" id="teams"></div></div>
+    </div>
+    <div class="grp">
+      <button id="go" class="go" type="button"><span id="goTxt">Course contre les bots</span><span aria-hidden="true">→</span></button>
+      <label class="note" id="nickRow" hidden>Votre pseudo en ligne <input id="nick" class="input" maxlength="16" autocomplete="off" spellcheck="false"></label>
+      <div class="actions" id="netActions">
+        <button id="quickBtn" class="btn" type="button">Course en ligne</button>
+        <button id="inviteBtn" class="btn" type="button">Inviter des amis</button>
+      </div>
+      <p class="note" id="netNote"></p>
+      <p class="note" id="ghostNote" hidden></p>
+      <p class="note" id="pitNote">À partir de 5 tours, un arrêt au stand est obligatoire (sinon +15 s).</p>
+    </div>
+    <section class="grp" id="boardSec" hidden>
+      <p class="lbl" id="boardTitle">Classement des joueurs</p>
+      <ol class="board" id="boardList"></ol>
+      <p class="note" id="boardNote"></p>
+    </section>
+    <dl class="keys">
+      <dt><kbd>↑</kbd><kbd>Z</kbd></dt><dd>Accélérer</dd>
+      <dt><kbd>↓</kbd><kbd>S</kbd></dt><dd>Freiner, puis marche arrière</dd>
+      <dt><kbd>←</kbd><kbd>→</kbd><kbd>Q</kbd><kbd>D</kbd></dt><dd>Diriger</dd>
+      <dt><kbd>Échap</kbd></dt><dd>Pause</dd>
+      <dt><kbd>M</kbd></dt><dd>Couper ou remettre le son</dd>
+    </dl>
+    <p class="note">Sur clavier QWERTY, ZQSD devient WASD. Stands : la voie des stands part à gauche avant la ligne droite de départ, limitée à 80 km/h. Arrêtez-vous dans le garage de votre couleur, marqué VOUS, pour des pneus neufs. Rouler dans l’aspiration d’une voiture vous fait gagner de la vitesse. Secteur violet : record du circuit battu ; vert : votre meilleur de la séance. En chrono, une voiture fantôme rejoue votre record.</p>
+  </div>
+  <aside class="caption" aria-hidden="true">
+    <p class="lbl" id="capMeta"></p>
+    <h2 id="capName"></h2>
+    <p id="capBlurb"></p>
+  </aside>
+</section>
+
+<section id="editor" class="layer" hidden>
+  <div class="ed-top" id="edTop">
+    <h2>Éditeur</h2>
+    <input id="edName" class="input" type="text" maxlength="28" placeholder="Nom du circuit (obligatoire)" aria-label="Nom du circuit, obligatoire" autocomplete="off">
+    <div class="seg" role="group" aria-label="Décor">
+      <button type="button" data-env="0">Lac</button><button type="button" data-env="1">Forêt</button><button type="button" data-env="2">Ville</button><button type="button" data-env="3">Montagne</button>
+    </div>
+  </div>
+  <div class="ed-bottom" id="edBottom">
+    <p id="edStatus" class="ed-status" role="status"></p>
+    <div class="ed-corner">
+      <label for="edRadius" class="lbl">Virage <b id="edSel">1</b> · rayon</label>
+      <input type="range" id="edRadius" min="150" max="700" step="10">
+      <button id="edDel" class="btn" type="button">Retirer le virage</button>
+      <button id="edUndo" class="btn" type="button" aria-keyshortcuts="Control+Z">Annuler</button>
+      <button id="edRedo" class="btn" type="button" aria-keyshortcuts="Control+Y">Rétablir</button>
+    </div>
+    <p class="note">Touchez une zone vide pour ajouter un virage après celui sélectionné. Glissez un virage pour le déplacer. Le départ est entre les virages 1 et 2, dans le sens de la flèche ; la zone jaune à sa gauche accueille les stands.<span id="edShare"> Une fois enregistré, votre circuit apparaît dans la recherche des autres joueurs.</span></p>
+    <div class="actions">
+      <button id="edSave" class="go" type="button"><span>Enregistrer</span><span aria-hidden="true">→</span></button>
+      <button id="edBack" class="btn" type="button">Retour</button>
+      <button id="edRemove" class="btn" type="button" hidden>Supprimer le circuit</button>
+    </div>
+  </div>
+</section>
+
+<section id="lobby" class="layer modal" hidden>
+  <div class="card">
+    <p class="lbl" id="lbKind">Course en ligne</p>
+    <h2 id="lbTitle">Salle d’attente</h2>
+    <p id="lbTrack"></p>
+    <div class="grp" id="lbCodeBox" hidden>
+      <p class="lbl">Code de la partie</p>
+      <div class="code"><b id="lbCode"></b><button id="lbCopy" class="btn" type="button">Copier le code</button><button id="lbLink" class="btn" type="button" hidden>Copier le lien</button></div>
+      <p class="note" id="lbShare">Vos amis touchent « Rejoindre avec un code » sur l’écran d’accueil et tapent ce code. Ils doivent avoir accès à cette page : invitez-les depuis le menu Partager.</p>
+    </div>
+    <ol class="board" id="lbPlayers" aria-label="Pilotes dans la partie"></ol>
+    <p class="note" id="lbNote"></p>
+    <div class="chat" data-chat><div class="says" role="group" aria-label="Messages rapides"></div><ul class="feed" aria-live="polite"></ul></div>
+    <div class="actions">
+      <button id="lbStart" class="go" type="button" hidden><span>Lancer la course</span><span aria-hidden="true">→</span></button>
+      <button id="lbLeave" class="btn" type="button">Quitter</button>
+    </div>
+  </div>
+</section>
+
+<section id="join" class="layer modal" hidden>
+  <form class="card" id="joinForm">
+    <p class="lbl">Partie entre amis</p>
+    <h2>Rejoindre</h2>
+    <label class="note" for="joinCode">Tapez le code à 5 caractères que votre ami voit dans sa salle d’attente.</label>
+    <div class="join-row"><input id="joinCode" class="input" maxlength="5" autocomplete="off" spellcheck="false" placeholder="ABCDE"></div>
+    <p class="note" id="joinErr" role="status"></p>
+    <div class="actions">
+      <button class="go" type="submit"><span>Rejoindre</span><span aria-hidden="true">→</span></button>
+      <button id="joinCancel" class="btn" type="button">Annuler</button>
+    </div>
+  </form>
+</section>
+
+<section id="quali" class="layer modal" hidden>
+  <div class="card">
+    <p class="lbl" id="qTrack"></p>
+    <h2 id="qTitle">Qualifications</h2>
+    <div class="tblwrap">
+      <table class="res">
+        <thead><tr><th>Grille</th><th>Pilote</th><th class="r">Temps</th><th class="r">Écart</th></tr></thead>
+        <tbody id="qBody"></tbody>
+      </table>
+    </div>
+    <div class="actions">
+      <button id="qGo" class="go" type="button"><span>Lancer la course</span><span aria-hidden="true">→</span></button>
+      <button id="qRetry" class="btn" type="button">Refaire le tour</button>
+      <button id="qMenu" class="btn" type="button">Menu</button>
+    </div>
+  </div>
+</section>
+
+<section id="pause" class="layer modal" hidden>
+  <div class="card">
+    <p class="lbl" id="pauseTrack"></p>
+    <h2>Pause</h2>
+    <p id="pauseInfo"></p>
+    <div class="actions">
+      <button id="resumeBtn" class="go" type="button"><span>Reprendre</span><span aria-hidden="true">→</span></button>
+      <button id="restartBtn" class="btn" type="button">Recommencer</button>
+      <button id="quitBtn" class="btn" type="button">Menu</button>
+      <button id="sndPause" class="btn" type="button" aria-keyshortcuts="M">Son activé</button>
+    </div>
+  </div>
+</section>
+
+<section id="results" class="layer modal" hidden>
+  <div class="card">
+    <p class="lbl" id="resTrack"></p>
+    <h2 id="resTitle"></h2>
+    <div class="tblwrap">
+      <table class="res">
+        <thead><tr><th>Pos</th><th>Pilote</th><th class="r">Temps</th><th class="r">Meilleur tour</th></tr></thead>
+        <tbody id="resBody"></tbody>
+      </table>
+    </div>
+    <div class="champ" id="champBox" hidden>
+      <p class="lbl" id="champTitle"></p>
+      <div class="tblwrap">
+        <table class="res">
+          <thead><tr><th>Pos</th><th>Pilote</th><th class="r">Cette course</th><th class="r">Points</th></tr></thead>
+          <tbody id="champBody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="chat" id="resChat" data-chat hidden><div class="says" role="group" aria-label="Messages rapides"></div><ul class="feed" aria-live="polite"></ul></div>
+    <div class="actions">
+      <button id="againBtn" class="go" type="button"><span id="againTxt">Rejouer</span><span aria-hidden="true">→</span></button>
+      <button id="menuBtn" class="btn" type="button">Menu</button>
+    </div>
+  </div>
+</section>
+
+<script>
+(() => {
+'use strict';
+// World units are pixels at zoom 1. 7.2 px = 1 m, so 640 px/s = 320 km/h.
+// SCALE stretches corner positions, SR corner radii: big circuits with room for a full pit complex.
+const DS = 8, HW = 62, R0 = 132, CAR_R = 10, SCALE = 2, SR = 1.3;
+const MAXV = 640, ACC = 470, BRAKE = 1150, TURN = 3.1, PX_M = 7.2;
+const NSPLIT = 30, VM = 0.88, BRK_PROF = 850, H = 1 / 120;
+// Pit complex left of the main straight. rel = samples from the start line, lat = px from the centre line (left is negative).
+// Entry ramp PA→E1, pit wall E1→X0, exit ramp X0→PB; six garages (one per team) before the line.
+const PA = -110, E1 = -85, X0 = 40, PB = 65, BOX0 = -66, BOXSP = 11, WALL_IN = 136, WALL_OUT = 148, LANE = -186, STALL_IN = 225, STALL = -262, PIT_OUT = 300;
+const PIT_V = 160, PIT_TIME = 2.4, PIT_PEN = 15, SC_V = 300;
+const boxRel = k => BOX0 + k * BOXSP;
+const pitOuter = rel => rel < PA || rel > PB ? R0 : rel < E1 ? R0 + (PIT_OUT - R0) * (rel - PA) / (E1 - PA) : rel > X0 ? R0 + (PIT_OUT - R0) * (PB - rel) / (PB - X0) : PIT_OUT;
+const relIdx = (i, N) => i > N / 2 ? i - N : i; // signed samples from the start line
+const POINTS = [25, 18, 15, 12, 10, 8];
+const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const wrapA = a => { a %= 2 * Math.PI; if (a > Math.PI) a -= 2 * Math.PI; else if (a < -Math.PI) a += 2 * Math.PI; return a; };
+const fmt = s => {
+  if (s == null || !isFinite(s)) return '—';
+  const ms = Math.round(s * 1000), m = Math.floor(ms / 60000), sec = Math.floor(ms / 1000) % 60;
+  return m + ':' + String(sec).padStart(2, '0') + '.' + String(ms % 1000).padStart(3, '0');
+};
+const gapF = s => (s = Math.max(0, s), '+' + (s < 60 ? s.toFixed(3) : fmt(s)));
+const norm = s => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+const rng = s => () => { s |= 0; s = s + 0x6D2B79F5 | 0; let t = Math.imul(s ^ s >>> 15, 1 | s); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+const hashId = s => { let h = 7; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return Math.abs(h); };
+const CODE_ABC = 'abcdefghjkmnpqrstuvwxyz23456789';
+const randCode = n => Array.from(crypto.getRandomValues(new Uint8Array(n)), b => CODE_ABC[b % CODE_ABC.length]).join('');
+const store = { get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* storage blocked: kept for this visit only */ } }, del(k) { try { localStorage.removeItem(k); } catch (e) { /* ignore */ } } };
+
+// Each circuit: corners [x, y, radius] in driving order; straights join the tangent arcs.
+const DEFS = [
+  { id: 'lac', name: 'Anneau du Lac', blurb: 'Rapide et large autour du lac, avec une chicane pour casser le rythme.',
+    theme: { out: '#2f5527', run: '#5b9641', stripe: '#558f3c', wall: '#1e2228', dash: '#eef1f4', asph: '#3a3e45', deco: 'trees', d1: '#24461f', d2: '#2f5b27', water: '#2d6a8a', shore: '#cbbd8c' },
+    lake: [1650, 950, 1050, 430],
+    verts: [[0,0,450],[3200,0,550],[3500,1600,500],[2600,2000,220],[2150,1750,200],[1650,1750,200],[1200,2000,220],[200,2000,500],[-300,1000,450]] },
+  { id: 'pins', name: 'Côte des Pins', blurb: 'Une épingle serrée à l’est, puis des courbes qui s’enchaînent dans la forêt.',
+    theme: { out: '#1f3d25', run: '#4a843b', stripe: '#447d36', wall: '#1e2228', dash: '#e8392a', asph: '#383c43', deco: 'trees', d1: '#142c19', d2: '#1d4023' },
+    verts: [[0,0,350],[2600,0,350],[3300,600,300],[3300,1600,170],[2900,1600,170],[2900,1050,220],[1700,1050,300],[1300,2000,300],[-200,2100,400],[-400,900,350]] },
+  { id: 'ville', name: 'Ville Basse', blurb: 'Circuit urbain : angles droits entre les immeubles et chicane au bord du port.',
+    theme: { out: '#4a4e55', run: '#7d828a', stripe: '#787d85', wall: '#c8ccd2', dash: '#e8392a', asph: '#30333a', deco: 'blocks', d1: '#353940', d2: '#62676f' },
+    verts: [[0,0,160],[2400,0,160],[2400,700,160],[1700,700,160],[1700,1500,160],[2800,1500,180],[2800,2300,160],[1900,2300,150],[1650,2050,150],[1350,2050,150],[1100,2300,150],[600,2300,160],[600,1300,160],[0,1300,160]] },
+  { id: 'cretes', name: 'Col des Crêtes', blurb: 'Lacets techniques à flanc de montagne et grande courbe rapide au retour.',
+    theme: { out: '#5e5038', run: '#9a8a5c', stripe: '#938356', wall: '#26231f', dash: '#f1c22e', asph: '#3b3d42', deco: 'rocks', d1: '#4b402c', d2: '#7a6d4f' },
+    verts: [[0,0,300],[3200,0,200],[3200,700,170],[1800,700,170],[1800,1150,170],[3200,1150,200],[3200,1900,300],[200,1900,350],[700,1100,250],[-200,500,300]] },
+];
+const OFFICIAL_IDS = new Set(DEFS.map(d => d.id));
+
+// Fillet each corner with a tangent arc, then sample the loop every ~DS px.
+function sampleTrack(verts) {
+  const V = verts.map(v => [v[0] * SCALE, v[1] * SCALE, v[2] * SR]), n = V.length, C = [], bad = [];
+  let turns = 0, sum = 0;
+  for (let i = 0; i < n; i++) {
+    const p0 = V[(i + n - 1) % n], p1 = V[i], p2 = V[(i + 1) % n];
+    let ax = p1[0] - p0[0], ay = p1[1] - p0[1], bx = p2[0] - p1[0], by = p2[1] - p1[1];
+    const la = Math.hypot(ax, ay), lb = Math.hypot(bx, by);
+    if (!la || !lb) { bad.push(i); C.push({ A: [p1[0], p1[1]], B: [p1[0], p1[1]], cx: p1[0], cy: p1[1], r: 0, th: 0, s: 0, t: 0, lb }); continue; }
+    ax /= la; ay /= la; bx /= lb; by /= lb;
+    const th = Math.atan2(ax * by - ay * bx, ax * bx + ay * by), r = p1[2], s = Math.sign(th), t = r * Math.tan(Math.abs(th) / 2);
+    const A = [p1[0] - ax * t, p1[1] - ay * t];
+    C.push({ A, B: [p1[0] + bx * t, p1[1] + by * t], cx: A[0] - ay * r * s, cy: A[1] + ax * r * s, r, th, s, t, lb });
+    if (Math.abs(th) > 0.3) turns++;
+    if (Math.abs(th) > 3) bad.push(i);
+    sum += th;
+  }
+  C.forEach((c, i) => { if (c.t + C[(i + 1) % n].t > c.lb + 1e-6) bad.push(i, (i + 1) % n); });
+  const X = [], Y = [], K = []; let first = 0;
+  for (let i = 0; i < n; i++) {
+    const c = C[i], d = C[(i + 1) % n];
+    const L = Math.hypot(d.A[0] - c.B[0], d.A[1] - c.B[1]), m = Math.max(1, Math.round(L / DS));
+    if (!i) first = m;
+    for (let k = 0; k < m; k++) { X.push(c.B[0] + (d.A[0] - c.B[0]) * k / m); Y.push(c.B[1] + (d.A[1] - c.B[1]) * k / m); K.push(0); }
+    const ma = Math.max(1, Math.round(Math.abs(d.th) * d.r / DS)), a0 = Math.atan2(d.A[1] - d.cy, d.A[0] - d.cx);
+    for (let k = 0; k < ma; k++) { const a = a0 + d.th * k / ma; X.push(d.cx + Math.cos(a) * d.r); Y.push(d.cy + Math.sin(a) * d.r); K.push(d.s / (d.r || 1)); }
+  }
+  const N = X.length;
+  let len = 0; for (let i = 0; i < N; i++) { const j = (i + 1) % N; len += Math.hypot(X[j] - X[i], Y[j] - Y[i]); }
+  // Index 0 = start/finish line, 42% down the main straight so the grid and pit lane fit behind it.
+  return { X, Y, K, N, off: Math.round(first * 0.42), first, turns, sum, bad, len };
+}
+
+// Two parts of the loop closer than two run-off widths would merge their walls.
+function tooClose(s) {
+  const { X, Y, N } = s, need = Math.ceil(Math.PI * (R0 + 20) / DS), lim = 2 * R0 + 20;
+  for (let i = 0; i < N; i += 3) for (let j = i + need; j < N; j += 3) {
+    if (N - (j - i) < need) break;
+    const dx = X[i] - X[j], dy = Y[i] - Y[j];
+    if (dx * dx + dy * dy < lim * lim) return [X[i], Y[i], X[j], Y[j]];
+  }
+  return null;
+}
+
+// The pit complex must not overlap any other part of the loop.
+function pitCheck(s) {
+  const { X, Y, N, off } = s;
+  const P = (rel, lat) => {
+    const i = (off + rel + N) % N, a = (i + N - 1) % N, b = (i + 1) % N, dx = X[b] - X[a], dy = Y[b] - Y[a], l = Math.hypot(dx, dy) || 1;
+    return [X[i] - dy / l * lat, Y[i] + dx / l * lat];
+  };
+  const poly = [];
+  for (let r = PA; r <= PB; r += 2) poly.push(P(r, -pitOuter(r) - (r >= E1 && r <= X0 ? 70 : 0)));
+  for (let r = PB; r >= PA; r -= 2) poly.push(P(r, -HW));
+  for (let r = PA; r <= PB; r += 3) for (const lat of [-PIT_OUT - 70, LANE]) {
+    const [px, py] = P(r, lat);
+    for (let j = 0; j < N; j += 2) {
+      const rj = relIdx(((j - off) % N + N) % N, N);
+      if (rj >= PA - 60 && rj <= PB + 60) continue;
+      const dx = X[j] - px, dy = Y[j] - py;
+      if (dx * dx + dy * dy < (R0 + 30) ** 2) return { poly, hit: [px, py, X[j], Y[j]] };
+    }
+  }
+  return { poly, hit: null };
+}
+
+const km = len => (len / PX_M / 1000).toFixed(2).replace('.', ',');
+function validate(verts) {
+  if (verts.length < 3) return { msg: 'Il faut au moins 3 virages.' };
+  const s = sampleTrack(verts);
+  const path = new Path2D(); s.X.forEach((x, i) => i ? path.lineTo(x, s.Y[i]) : path.moveTo(x, s.Y[i])); path.closePath(); s.path = path;
+  if (s.bad.length) return { s, bad: s.bad, msg: 'Le virage ' + (s.bad[0] + 1) + ' manque de place : réduisez son rayon ou éloignez ses voisins.' };
+  if (Math.abs(Math.abs(s.sum) - 2 * Math.PI) > 0.1) return { s, msg: 'Le tracé se croise : placez les virages dans l’ordre de passage.' };
+  if (s.first < 280) return { s, msg: 'La ligne droite de départ, entre les virages 1 et 2, est trop courte pour les stands.' };
+  const pit = pitCheck(s); s.pitPoly = pit.poly;
+  const close = tooClose(s);
+  if (close) return { s, close, msg: 'Deux portions du circuit sont trop proches (en rouge) : écartez-les.' };
+  if (pit.hit) return { s, close: pit.hit, msg: 'Les stands, à gauche de la ligne droite de départ, touchent une autre partie du circuit : éloignez-la.' };
+  return { s, ok: true, msg: km(s.len) + ' km · ' + s.turns + ' virages · prêt à rouler' };
+}
+
+function buildTrack(def, seed) {
+  const S = sampleTrack(def.verts), N = S.N, off = S.off;
+  console.assert(!S.bad.length, def.name + ' : virage trop large');
+  const rot = a => Float32Array.from({ length: N }, (_, i) => a[(i + off) % N]);
+  const x = rot(S.X), y = rot(S.Y), curv = rot(S.K);
+  const tx = new Float32Array(N), ty = new Float32Array(N), nx = new Float32Array(N), ny = new Float32Array(N);
+  let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+  for (let i = 0; i < N; i++) {
+    const a = (i + N - 1) % N, b = (i + 1) % N, dx = x[b] - x[a], dy = y[b] - y[a], l = Math.hypot(dx, dy) || 1;
+    tx[i] = dx / l; ty[i] = dy / l; nx[i] = -ty[i]; ny[i] = tx[i];
+    x0 = Math.min(x0, x[i]); y0 = Math.min(y0, y[i]); x1 = Math.max(x1, x[i]); y1 = Math.max(y1, y[i]);
+  }
+  // Racing line: repeated smoothing, each point kept on its own cross-section of the track.
+  const ro = new Float32Array(N), px = Float32Array.from(x), py = Float32Array.from(y), qx = new Float32Array(N), qy = new Float32Array(N), W = 12, lim = HW - 18;
+  for (let it = 0; it < 120; it++) {
+    for (let i = 0; i < N; i++) { const a = (i + N - W) % N, b = (i + W) % N; qx[i] = .5 * px[i] + .25 * (px[a] + px[b]); qy[i] = .5 * py[i] + .25 * (py[a] + py[b]); }
+    for (let i = 0; i < N; i++) { const o = clamp((qx[i] - x[i]) * nx[i] + (qy[i] - y[i]) * ny[i], -lim, lim); ro[i] = o; px[i] = x[i] + nx[i] * o; py[i] = y[i] + ny[i] * o; }
+  }
+  // Speed profile: the car's turn-rate limit for each curvature, then braking distance backwards.
+  const prof = new Float32Array(N), G5 = 6;
+  for (let i = 0; i < N; i++) {
+    const a = (i + N - G5) % N, b = (i + G5) % N;
+    const d1 = Math.hypot(px[i] - px[a], py[i] - py[a]), d2 = Math.hypot(px[b] - px[i], py[b] - py[i]);
+    const k = Math.abs(wrapA(Math.atan2(py[b] - py[i], px[b] - px[i]) - Math.atan2(py[i] - py[a], px[i] - px[a]))) / (((d1 + d2) / 2) || 1);
+    prof[i] = Math.min(MAXV, VM * TURN / (k + 0.42 * TURN / MAXV));
+  }
+  for (let p = 0; p < 2; p++) for (let i = N - 1; i >= 0; i--) {
+    const j = (i + 1) % N, d = Math.hypot(px[j] - px[i], py[j] - py[i]);
+    prof[i] = Math.min(prof[i], Math.sqrt(prof[j] * prof[j] + 2 * BRK_PROF * d));
+  }
+
+  const path = new Path2D(), rpath = new Path2D(), kerbs = new Path2D();
+  path.moveTo(x[0], y[0]); rpath.moveTo(px[0], py[0]);
+  for (let i = 1; i < N; i++) { path.lineTo(x[i], y[i]); rpath.lineTo(px[i], py[i]); }
+  path.closePath(); rpath.closePath();
+  const kb = i => { for (let k = -4; k <= 4; k++) if (curv[(i + k + N) % N] !== 0) return true; return false; };
+  let prev = false;
+  for (let i = 0; i < N; i++) { const on = kb(i); if (on) prev ? kerbs.lineTo(x[i], y[i]) : kerbs.moveTo(x[i], y[i]); prev = on; }
+  const at = (i, lat) => ({ x: x[i] + nx[i] * lat, y: y[i] + ny[i] * lat, a: Math.atan2(ty[i], tx[i]) });
+
+  const grid = [];
+  for (let k = 0; k < 6; k++) { const i = (N - Math.round((36 + k * 54) / DS)) % N; grid.push({ i, ...at(i, (k % 2 ? 1 : -1) * 24) }); }
+
+  const deco = [], rnd = rng(seed * 977 + 13), M = 700, lake = def.lake && def.lake.map(v => v * SCALE);
+  for (let k = 0; k < 1600; k++) {
+    const dx0 = x0 - M + rnd() * (x1 - x0 + 2 * M), dy0 = y0 - M + rnd() * (y1 - y0 + 2 * M), r = 12 + rnd() * 24, a = rnd() * Math.PI;
+    if (lake && ((dx0 - lake[0]) / (lake[2] + 60)) ** 2 + ((dy0 - lake[1]) / (lake[3] + 60)) ** 2 < 1) continue;
+    let bd = 1e18, bi = 0; for (let i = 0; i < N; i += 3) { const dx = x[i] - dx0, dy = y[i] - dy0, d = dx * dx + dy * dy; if (d < bd) { bd = d; bi = i; } }
+    const ri = relIdx(bi, N), dd = Math.sqrt(bd);
+    if (ri >= PA - 20 && ri <= PB + 20 && dd < PIT_OUT + 140 + r) continue; // keep the pit complex and garages clear
+    if (dd > R0 + 24 + r) deco.push({ x: dx0, y: dy0, r, a });
+  }
+
+  return { def, N, x, y, tx, ty, nx, ny, curv, ro, prof, len: S.len, turns: S.turns, path, rpath, kerbs, grid, deco, lake,
+    cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, w: x1 - x0, h: y1 - y0 };
+}
+
+// ---------- Circuit catalogue: official, yours, and other players' ----------
+const REC_KEY = 'monoplace-gp.records.v2', CUST_KEY = 'monoplace-gp.circuits', GHOST_KEY = 'monoplace-gp.ghost2.';
+const lbKey = id => id + '-2'; // shared leaderboard field per circuit, versioned since the circuits were enlarged
+let records = store.get(REC_KEY) || {};
+const saveRecords = () => store.set(REC_KEY, records);
+const loadGhost = id => { const g = store.get(GHOST_KEY + id); return g && Array.isArray(g.d) && g.d.length > 30 ? g : null; };
+
+const VALID = new Map();
+// Circuits from storage or other players are untrusted: shape-check and require a name here; isOk() re-validates the layout.
+// A circuit of yours that no longer fits the rules is kept (never dropped from your save) and offered for correction.
+const isOk = c => { const k = c.id + ':' + hashId(JSON.stringify(c.verts)); if (!VALID.has(k)) VALID.set(k, !!validate(c.verts).ok); return VALID.get(k); };
+function cleanCircuit(c) {
+  if (!c || typeof c.id !== 'string' || !/^c[a-z0-9]{1,24}$/.test(c.id) || !Array.isArray(c.verts) || c.verts.length < 3 || c.verts.length > 30) return null;
+  if (!c.verts.every(v => Array.isArray(v) && v.length === 3 && v.every(n => Number.isFinite(n) && Math.abs(n) < 10000))) return null;
+  const name = String(c.name || '').trim().slice(0, 28);
+  if (!name) return null;
+  return { id: c.id, name, env: [0, 1, 2, 3].includes(c.env) ? c.env : 0, verts: c.verts.map(v => v.slice()), at: Number.isFinite(c.at) ? c.at : 0 };
+}
+const cleanList = l => Array.isArray(l) ? l.map(cleanCircuit).filter(Boolean).slice(0, 20) : [];
+let mine = cleanList(store.get(CUST_KEY)), others = [];
+
+const customDef = c => ({ id: c.id, name: c.name, env: c.env, by: c.by || null, at: c.at, verts: c.verts, custom: true, theme: DEFS[c.env].theme,
+  blurb: c.by ? 'Circuit créé par un joueur.' : 'Circuit créé dans l’éditeur.' });
+const defKey = d => OFFICIAL_IDS.has(d.id) ? d.id : d.id + ':' + hashId(JSON.stringify(d.verts));
+const BUILT = new Map(), OUTL = new Map();
+DEFS.forEach((d, i) => BUILT.set(d.id, buildTrack(d, i)));
+function findDef(id) {
+  const d = DEFS.find(x => x.id === id); if (d) return d;
+  const c = mine.find(x => x.id === id && isOk(x)) || others.find(x => x.id === id);
+  return c ? customDef(c) : null;
+}
+function trackOf(def) { const k = defKey(def); if (!BUILT.has(k)) BUILT.set(k, buildTrack(def, hashId(def.id) % 997)); return BUILT.get(k); }
+const getTrack = id => { const d = findDef(id); return d ? trackOf(d) : null; };
+function outlineOf(def) {
+  const k = defKey(def);
+  if (BUILT.has(k)) return BUILT.get(k);
+  if (!OUTL.has(k)) {
+    const s = sampleTrack(def.verts), path = new Path2D(); let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+    s.X.forEach((x, i) => { const y = s.Y[i]; i ? path.lineTo(x, y) : path.moveTo(x, y); x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); });
+    path.closePath();
+    OUTL.set(k, { path, cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, w: x1 - x0, h: y1 - y0, len: s.len, turns: s.turns });
+  }
+  return OUTL.get(k);
+}
+
+// ---------- Cloud: shared leaderboard, shared circuits, online room ----------
+let DB = null, USER = null, ME = null, board = {}, boardState = 'off', myLaps = {}, cloudQ = Promise.resolve();
+let myGhosts = null, likes = new Map(), myVotes = new Set();
+const GHOST_CACHE = new Map();
+async function initCloud() {
+  if (!window.claude || !window.claude.use) { if (window.Peer) initRoom(p2pLobby()); return; }
+  const [db, user, room] = await Promise.all(['db', 'user', 'room'].map(n => window.claude.use(n)));
+  USER = user; ME = user ? await user.id() : null;
+  if (room) initRoom(room);
+  if (!db) return;
+  DB = db;
+  boardState = 'loading'; renderBoard();
+  const timer = setTimeout(() => { if (boardState === 'loading') { boardState = 'slow'; renderBoard(); } }, 10000);
+  db.collection('laps').onSnapshot(snap => {
+    if (!snap.metadata.fromCache) clearTimeout(timer);
+    board = {}; snap.docs.forEach(d => { board[d.id] = d.data(); });
+    myLaps = {};
+    const mineLaps = ME && board[ME];
+    if (mineLaps) for (const id of OFFICIAL_IDS) { const e = mineLaps[lbKey(id)]; if (e && Number.isFinite(e.t)) myLaps[lbKey(id)] = { t: e.t, c: e.c, at: e.at }; }
+    boardState = 'ok'; renderBoard();
+  }, () => { clearTimeout(timer); boardState = 'slow'; renderBoard(); });
+  let synced = false;
+  db.collection('circuits').onSnapshot(snap => {
+    let myDoc = null; const all = [];
+    snap.docs.forEach(d => { const list = cleanList(d.data().list); if (d.id === ME) myDoc = list; else list.forEach(c => { if (isOk(c)) all.push({ ...c, by: d.id }); }); });
+    others = all.slice(0, 400);
+    if (!synced && !snap.metadata.fromCache) { synced = true; syncMine(myDoc); }
+    else if (synced && myDoc) { mine = myDoc; store.set(CUST_KEY, mine); }
+    if (!el.menu.hidden) renderTrackList();
+  }, () => {});
+  db.collection('votes').onSnapshot(snap => {
+    likes = new Map(); myVotes = new Set();
+    snap.docs.forEach(d => { const ids = d.data().ids; if (!Array.isArray(ids)) return; new Set(ids.filter(x => typeof x === 'string').slice(0, 300)).forEach(id => { likes.set(id, (likes.get(id) || 0) + 1); if (d.id === ME) myVotes.add(id); }); });
+    if (!el.menu.hidden) { renderTrackList(); refreshLike(); }
+  }, () => {});
+  if (ME) {
+    try { const d = await db.doc('ghosts/' + ME).get(); myGhosts = {}; if (d.exists) for (const id of OFFICIAL_IDS) { const g = validGhost(d.data()[lbKey(id)]); if (g) myGhosts[lbKey(id)] = g; } }
+    catch (e) { myGhosts = null; /* never overwrite ghosts we could not read */ }
+  }
+}
+// A ghost is another player's input: a time plus x, y, angle triples at 15 per second.
+function validGhost(g) {
+  return g && Number.isFinite(g.t) && g.t > 5 && Array.isArray(g.d) && g.d.length >= 90 && g.d.length <= 30000 && g.d.length % 3 === 0 && g.d.every(Number.isFinite) ? { t: g.t, d: g.d } : null;
+}
+// The best other player's ghost on an official circuit, for the time trial.
+async function fetchTopGhost(id, sess) {
+  if (!DB || !OFFICIAL_IDS.has(id)) return;
+  const top = Object.entries(board).filter(([uid, d]) => uid !== ME && d && d[lbKey(id)] && Number.isFinite(d[lbKey(id)].t)).sort((a, b) => a[1][lbKey(id)].t - b[1][lbKey(id)].t)[0];
+  if (!top) return;
+  const uid = top[0], key = uid + ':' + id;
+  if (!GHOST_CACHE.has(key)) {
+    try { const d = await DB.doc('ghosts/' + uid).get(); GHOST_CACHE.set(key, d.exists ? validGhost(d.data()[lbKey(id)]) : null); } catch (e) { return; }
+  }
+  const g = GHOST_CACHE.get(key);
+  if (!g || G !== sess) return;
+  const ps = USER ? await USER.profiles([uid]) : {};
+  if (G !== sess) return;
+  G.ghosts.push({ d: g.d, hz: 15, drv: { color: '#f4f5f7', alt: '#a54cff', helmet: '#a54cff' }, label: ((ps[uid] && ps[uid].name) || 'Meilleur joueur') + ' · ' + fmt(g.t) });
+}
+function toggleLike(id) {
+  if (!DB || !ME) return;
+  if (myVotes.has(id)) myVotes.delete(id); else myVotes.add(id);
+  likes.set(id, Math.max(0, (likes.get(id) || 0) + (myVotes.has(id) ? 1 : -1)));
+  const body = { ids: [...myVotes].slice(-300) };
+  cloudQ = cloudQ.then(() => DB.doc('votes/' + ME).set(body)).catch(() => {});
+  renderTrackList(); refreshLike();
+}
+// First contact: merge this browser's circuits (and the older private copy) into the shared document.
+async function syncMine(myDoc) {
+  let list = myDoc || [];
+  if (!myDoc && ME) { try { const g = await DB.doc('data/users/' + ME + '/garage').get(); if (g.exists) list = cleanList(g.data().circuits); } catch (e) { /* none */ } }
+  const ids = new Set(list.map(c => c.id)), extra = mine.filter(c => !ids.has(c.id));
+  mine = list.concat(extra).slice(0, 20); store.set(CUST_KEY, mine);
+  if (extra.length || (!myDoc && mine.length)) persistMine();
+  if (!el.menu.hidden) renderTrackList();
+}
+function persistMine() {
+  store.set(CUST_KEY, mine);
+  if (DB && ME) { const body = { list: mine }; cloudQ = cloudQ.then(() => DB.doc('circuits/' + ME).set(body)).catch(() => {}); }
+}
+function shareLap(trackId, t, color, rec) {
+  if (!DB || !ME || !OFFICIAL_IDS.has(trackId)) return;
+  const k = lbKey(trackId);
+  if (myLaps[k] && myLaps[k].t <= t) return;
+  myLaps = { ...myLaps, [k]: { t: Math.round(t * 1000) / 1000, c: color, at: Date.now() } };
+  const body = myLaps;
+  cloudQ = cloudQ.then(() => DB.doc('laps/' + ME).set(body)).catch(() => {});
+  if (myGhosts && rec.length >= 180) {
+    const d = []; for (let i = 0; i + 2 < rec.length; i += 6) d.push(rec[i], rec[i + 1], rec[i + 2]); // 30 → 15 samples per second
+    myGhosts = { ...myGhosts, [k]: { t: Math.round(t * 1000) / 1000, d } };
+    const gb = myGhosts;
+    cloudQ = cloudQ.then(() => DB.doc('ghosts/' + ME).set(gb)).catch(() => {});
+  }
+}
+
+// ---------- Teams, drivers & cars ----------
+const TEAMS = [
+  { name: 'Rouge', color: '#ec3a2a', alt: '#f4f5f7', helmet: '#f1c22e' },
+  { name: 'Turquoise', color: '#18b3a0', alt: '#0b2f2b', helmet: '#f4f5f7' },
+  { name: 'Orange', color: '#ff8a1e', alt: '#16181c', helmet: '#2f6bff' },
+  { name: 'Bleu', color: '#2f62f5', alt: '#f1c22e', helmet: '#f4f5f7' },
+  { name: 'Argent', color: '#c5cad3', alt: '#14161a', helmet: '#ec3a2a' },
+  { name: 'Vert', color: '#2d9f4c', alt: '#f4f5f7', helmet: '#16181c' },
+].map((t, i) => ({ ...t, i }));
+const RIVALS = [{ code: 'ROY', name: 'Mathis Roy' }, { code: 'LAM', name: 'Inès Lambert' }, { code: 'KOV', name: 'Dario Kovač' }, { code: 'SAN', name: 'Léo Santos' }, { code: 'BRI', name: 'Chloé Brière' }];
+// skill scales the bots' speed profile; err is the mean number of seconds between driving mistakes.
+const DIFF = { facile: { skill: 0.84, err: 22 }, normal: { skill: 0.915, err: 40 }, difficile: { skill: 0.98, err: 75 } };
+
+function makeCar(T, slot, drv, isPlayer, skill, errEvery) {
+  const g = T.grid[slot], dist = g.i - T.N;
+  return { x: g.x, y: g.y, a: g.a, vx: 0, vy: 0, steer: 0, inSteer: 0, thr: 0, brk: 0, idx: g.i, off: 24, lat: 0, pz: false, dist, slot,
+    lap: 0, passed: Math.floor(dist / (T.N / NSPLIT)), sec: Math.floor(dist / (T.N / 3)), splits: [], lapStart: 0, secStart: 0,
+    cur: [null, null, null], curCls: ['', '', ''], last: null, lastCls: '', best: null, fin: false, finT: 0, finLap: 0, finPassed: 0, pen: 0, hits: 0, dmg: 0, pull: 0, scCap: 0,
+    tyre: 1, tow: 0, service: 0, pitted: false, pitLap: -1, box: drv.i | 0, pitAsph: false, wrongBox: false, wl: new Float32Array(4), wlOk: false, remote: false, bot: false,
+    drv, isPlayer, auto: !isPlayer, ai: { skill, off: 0, stuck: 0, rev: 0, err: 0, errEvery, errIn: errEvery * (0.5 + Math.random()), form: 1, pit: 0 } };
+}
+
+let G = null;
+const keys = { gas: false, brake: false, left: false, right: false };
+const tq = []; let toastT = 0;
+const toast = (msg, cls) => { tq.push([msg, cls || '']); if (cls === 'p') sfxChime([784, 1175, 1568]); else if (cls === 'g') sfxChime([659, 988]); };
+const SKN = 3000, skids = new Float32Array(SKN * 4); let skidI = 0, skidC = 0;
+const parts = [];
+
+function startSession(o) {
+  const T = o.T || getTrack(o.tid) || getTrack('lac');
+  G = { opts: o, mode: o.mode, laps: o.laps, attract: !!o.attract, champ: !!o.champ, rain: !!o.rain, T, t: 0, n: 0, cars: [],
+    state: o.attract ? 'race' : 'countdown', cd: 0, hold: o.hold || 0.4 + Math.random() * 1.1, acc: 0, leaderDone: false, bestSec: [null, null, null],
+    over: false, resAt: 0, player: null, pos: 0, mandatory: !o.attract && o.mode === 'race' && o.laps >= 5,
+    ghosts: [], rec: [], hint: false, online: null, sc: null, scUsed: false, sim: false, quali: o.quali || null };
+  const d = DIFF[o.diff] || DIFF.normal;
+  if (G.attract) for (let k = 0; k < 6; k++) G.cars.push(makeCar(T, k, { ...TEAMS[k], ...RIVALS[k % 5] }, false, 0.95 - k * 0.012, 0));
+  else if (o.online) {
+    // Humans take the slots the host assigned; bots fill the rest. Only the host drives the bots.
+    const usedS = new Set(), usedT = new Set();
+    for (const s of o.online.slots) {
+      if (usedS.has(s.s)) continue;
+      usedS.add(s.s); usedT.add(s.t);
+      const me = s.p === o.online.me;
+      const nk = s.nick || 'Pilote', code = nk.normalize('NFD').replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase() || 'P' + (6 - s.s);
+      const c = makeCar(T, s.s, { ...TEAMS[s.t], code: me ? 'VOUS' : code, name: me ? 'Vous' : nk }, me, 0, 0);
+      if (me) G.player = c; else { c.remote = true; c.auto = false; c.peer = s.p; c.by = s.by; }
+      G.cars.push(c);
+    }
+    const freeT = TEAMS.map((_, i) => i).filter(i => !usedT.has(i));
+    let k = 0;
+    for (let s = 0; s < 6; s++) {
+      if (usedS.has(s)) continue;
+      const c = makeCar(T, s, { ...TEAMS[freeT[k]], ...RIVALS[k] }, false, d.skill - k * 0.012, d.err);
+      c.bot = true; if (!o.online.host) { c.remote = true; c.auto = false; }
+      G.cars.push(c); k++;
+    }
+    G.online = { host: o.online.host, lastPub: 0 };
+  } else {
+    const team = o.team || 0, me = { ...TEAMS[team], code: 'VOUS', name: 'Vous' };
+    if (o.mode === 'tt') G.cars.push(G.player = makeCar(T, 0, me, true, 0, 0));
+    else {
+      const others = TEAMS.filter((_, i) => i !== team);
+      const slot = code => o.grid ? o.grid[code] : null;
+      for (let k = 0; k < 5; k++) G.cars.push(makeCar(T, slot(RIVALS[k].code) ?? k, { ...others[k], ...RIVALS[k] }, false, d.skill - k * 0.012, d.err));
+      G.cars.push(G.player = makeCar(T, slot('VOUS') ?? 5, me, true, 0, 0));
+    }
+  }
+  G.order = G.cars.slice();
+  if (o.mode === 'tt' && !o.quali) {
+    const mg = loadGhost(T.def.id);
+    if (mg) G.ghosts.push({ mine: true, d: mg.d, hz: 30, drv: G.player.drv, label: '' });
+    fetchTopGhost(T.def.id, G);
+  }
+  tq.length = 0; toastT = 0; skidI = skidC = 0; parts.length = 0;
+  for (const k in keys) keys[k] = false;
+  camTarget(true, 0);
+}
+
+// ---------- Simulation ----------
+function botDrive(c) {
+  const T = G.T, N = T.N, ai = c.ai, v = Math.hypot(c.vx, c.vy), fx = Math.cos(c.a), fy = Math.sin(c.a);
+  let want = 0, def = 0, cap = 1e9;
+  for (const o of G.cars) {
+    if (o === c) continue;
+    const dx = o.x - c.x, dy = o.y - c.y, f = dx * fx + dy * fy, l = -dx * fy + dy * fx, ov = Math.hypot(o.vx, o.vy);
+    if (f > 0 && f < 110 && Math.abs(l) < 30) {
+      if (!G.sc) want = l > 0 ? -34 : 34; // pass on the other side (never under the safety car)
+      if (f < 60 && ov < v) cap = Math.min(cap, ov + (f - 30) * 2);
+    } else if (f < -20 && f > -110 && Math.abs(l) < 40 && ov > v - 10) def = l > 0 ? 22 : -22; // cover the attacker's side
+  }
+  ai.off += ((want || def) - ai.off) * Math.min(1, H * 2.5);
+  const rel = relIdx(c.idx, N), myBox = boxRel(c.box);
+  if (!ai.pit && !c.fin && rel > PB + 10 && ((G.mandatory && !c.pitted && c.lap >= 1 && (c.tyre < 0.5 || c.lap >= Math.floor(G.laps / 2))) || (c.dmg > 0.45 && G.mode === 'race' && c.lap < G.laps - 1))) ai.pit = 1;
+  if (ai.pit === 1 && rel > myBox + 4 && rel < PB + 5) ai.pit = 2; // missed the garage: leave and try next lap
+  if (ai.pit === 2 && rel > X0 + 2) ai.pit = 0; // out of the pit lane (re-decides next lap if the stop was missed)
+  const pitting = (ai.pit === 1 && rel >= PA - 120 && rel <= PB) || ai.pit === 2;
+  const j = (c.idx + Math.round(6 + v * 0.032)) % N, rj = relIdx(j, N);
+  const race = clamp(T.ro[j] + ai.off, -HW + 16, HW - 16);
+  const o = !pitting || rj < PA + 2 || (ai.pit === 2 && rj > X0) ? race : ai.pit === 1 && rj >= myBox - 30 && rj <= myBox + 2 ? STALL : LANE; // cars steer badly when slow: move over early
+  const steer = clamp(wrapA(Math.atan2(T.y[j] + T.ny[j] * o - c.y, T.x[j] + T.nx[j] * o - c.x) - c.a) * 3, -1, 1);
+  if (ai.rev > 0) { ai.rev -= H; c.thr = 0; c.brk = 1; c.inSteer = -steer; return; }
+  if (v < 25 && !pitting) { if ((ai.stuck += H) > 1.2) { ai.stuck = 0; ai.rev = 0.9; } }
+  else if (v < 5 && ai.pit === 1 && rel >= PA && !c.service) { if ((ai.stuck += H) > 2) { ai.stuck = 0; ai.pit = 2; } } // stuck short of the garage
+  else ai.stuck = 0;
+  if (ai.errEvery) {
+    if (ai.err > 0) ai.err -= H;
+    else if ((ai.errIn -= H) <= 0 && T.prof[(c.idx + 25) % N] < MAXV * 0.7) { ai.err = 1.1; ai.errIn = ai.errEvery * (0.5 + Math.random()); }
+  }
+  let vt = T.prof[(c.idx + 2) % N] * ai.skill * ai.form * (ai.err > 0 ? 1.18 : 1) * (1 + 0.06 * c.tow) * (G.rain ? 0.86 : 1) * (0.88 + 0.12 * c.tyre) * (1 - 0.1 * c.dmg);
+  if (c.scCap) vt = Math.min(vt, c.scCap);
+  if (pitting && ai.pit === 1) {
+    const toEntry = (PA - rel) * DS, toBox = (myBox - rel) * DS;
+    vt = Math.min(vt, toEntry > 0 ? Math.sqrt(PIT_V * PIT_V + 1400 * toEntry) : PIT_V * 0.95, Math.sqrt(900 * Math.max(0, toBox - 6)));
+  } else if (ai.pit === 2 && rel <= X0) vt = Math.min(vt, PIT_V * 0.95);
+  c.inSteer = steer;
+  const e = Math.min(vt, cap) - v;
+  c.thr = e > 0 ? clamp(e / 30, 0.25, 1) : 0;
+  c.brk = e < -10 ? clamp(-e / 90, 0.15, 1) : 0;
+}
+
+function drive(c) {
+  if (c.remote) return;
+  if (G.state === 'countdown' || c.service > 0) { c.thr = 0; c.brk = 0; c.inSteer = 0; return; }
+  if (c.auto) return botDrive(c);
+  c.inSteer = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
+  c.thr = keys.gas ? 1 : 0; c.brk = keys.brake ? 1 : 0;
+}
+
+function tow() {
+  for (const c of G.cars) {
+    c.tow = 0;
+    if (c.remote || Math.hypot(c.vx, c.vy) < 250) continue;
+    const fx = Math.cos(c.a), fy = Math.sin(c.a);
+    for (const o of G.cars) {
+      if (o === c) continue;
+      const dx = o.x - c.x, dy = o.y - c.y, f = dx * fx + dy * fy;
+      if (f > 40 && f < 220 && Math.abs(dx * fy - dy * fx) < 26) c.tow = Math.max(c.tow, 1 - (f - 40) / 360);
+    }
+  }
+}
+
+function spawn(kind, x, y, vx, vy) {
+  if (parts.length > 400) parts.shift();
+  const life = kind === 'spark' ? 0.35 : kind === 'smoke' ? 0.9 : kind === 'spray' ? 0.6 : 0.5;
+  parts.push({ kind, x, y, vx: vx + (Math.random() - 0.5) * 60, vy: vy + (Math.random() - 0.5) * 60, life, max: life });
+}
+function sparks(x, y, nx, ny) { for (let k = 0; k < 7; k++) spawn('spark', x, y, (-nx * 0.6 + Math.random() - 0.5) * 380, (-ny * 0.6 + Math.random() - 0.5) * 380); }
+function addSkid(x1, y1, x2, y2) { skids.set([x1, y1, x2, y2], skidI * 4); skidI = (skidI + 1) % SKN; skidC = Math.min(SKN, skidC + 1); }
+
+function hurt(c, amt, side) {
+  if (c.remote || G.attract || G.sim || amt <= 0) return;
+  const before = c.dmg; c.dmg = Math.min(1, c.dmg + amt); c.pull = side;
+  if (c.isPlayer && before < 0.3 && c.dmg >= 0.3) toast('Aileron endommagé · passez au stand', 'y');
+  if (amt > 0.3) safetyCar();
+}
+
+// Safety car: after a heavy crash it leads the field at reduced pace, then returns to the pits; green flag at the leader's next line crossing.
+const leader = () => G.cars.reduce((a, b) => cmp(a, b) <= 0 ? a : b);
+function safetyCar() {
+  if (G.sc || G.scUsed || G.online || G.attract || G.sim || G.mode !== 'race' || G.state !== 'race' || G.laps < 3) return;
+  const L = leader();
+  if (L.fin || L.lap >= G.laps - 1) return;
+  G.scUsed = true; G.scAhead = null;
+  G.sc = { s: (L.idx + 30) % G.T.N, v: Math.hypot(L.vx, L.vy) * 0.8, travel: 0, gone: false, x: L.x, y: L.y, a: L.a };
+  toast('Voiture de sécurité', 'y');
+}
+function scCaps() {
+  const sc = G.sc, N = G.T.N;
+  for (const c of G.cars) {
+    if (c.remote) continue;
+    let cap = SC_V * 1.3; // the pack closes up behind the safety car
+    if (!sc.gone) { const d = (sc.s - c.idx + N) % N; if (d < N / 2 && d * DS < 220) cap = Math.min(cap, Math.max(0, sc.v + (d * DS - 70) * 2)); }
+    c.scCap = cap;
+  }
+}
+function scStep() {
+  const sc = G.sc, T = G.T, N = T.N;
+  if (sc.gone) {
+    if (leader().lap > sc.greenLap) { G.sc = null; for (const c of G.cars) c.scCap = 0; toast('Drapeau vert', 'g'); }
+    return;
+  }
+  const i = Math.floor(sc.s) % N, j = (i + 1) % N, f = sc.s - Math.floor(sc.s), rel = relIdx(i, N);
+  sc.v += clamp(Math.min(SC_V, T.prof[i] * 0.85) - sc.v, -700 * H, 250 * H);
+  const ds = sc.v * H / DS; sc.s = (sc.s + ds) % N; sc.travel += ds;
+  const inLane = sc.travel > N * 0.35 && rel >= PA - 2 && rel <= PB;
+  const lat = inLane ? T.ro[i] + (LANE - T.ro[i]) * clamp((rel - PA) / (E1 - PA), 0, 1) : T.ro[i];
+  sc.x = T.x[i] + (T.x[j] - T.x[i]) * f + T.nx[i] * lat; sc.y = T.y[i] + (T.y[j] - T.y[i]) * f + T.ny[i] * lat; sc.a = Math.atan2(T.ty[i], T.tx[i]);
+  if (inLane && rel >= E1 + 10) { sc.gone = true; sc.greenLap = leader().lap; toast('La voiture de sécurité rentre', 'y'); }
+}
+
+// A car driven by another player: glide towards the last position they sent, extrapolated by their speed.
+function netStep(c) {
+  if (!c.netOk) return;
+  c.tx += c.vx * H; c.ty += c.vy * H;
+  c.x += c.vx * H + (c.tx - c.x) * 0.12; c.y += c.vy * H + (c.ty - c.y) * 0.12;
+}
+
+function physics(c) {
+  if (c.service > 0) {
+    c.vx = c.vy = 0;
+    if ((c.service -= H) <= 0) { if (c.isPlayer) toast(c.dmg > 0.15 ? 'Pneus neufs · aileron réparé' : 'Pneus neufs', 'g'); c.tyre = 1; c.dmg = 0; c.pitted = true; c.ai.pit = c.ai.pit ? 2 : 0; }
+    return;
+  }
+  const T = G.T, fx = Math.cos(c.a), fy = Math.sin(c.a), grass = c.off > HW + 6 && !c.pitAsph, wet = G.rain, g = 0.72 + 0.28 * c.tyre;
+  let vf = c.vx * fx + c.vy * fy, vl = -c.vx * fy + c.vy * fx;
+  c.steer += clamp(clamp(c.inSteer + c.pull * c.dmg * 0.18, -1, 1) - c.steer, -H * 7, H * 7); // a broken wing pulls to its side
+  const top = grass ? MAXV * 0.42 : MAXV * (1 + 0.06 * c.tow) * (1 - 0.12 * c.dmg);
+  if (c.thr > 0) { if (vf < -2) vf = Math.min(0, vf + BRAKE * c.thr * H); else vf += ACC * c.thr * (grass ? .55 : 1) * (wet ? .85 : 1) * (1 + .25 * c.tow) * Math.max(0, 1 - (vf / top) ** 2) * H; }
+  if (c.brk > 0) { if (vf > 2) vf = Math.max(0, vf - BRAKE * c.brk * (grass ? .5 : 1) * (wet ? .72 : 1) * g * H); else if (!c.thr) vf = Math.max(-150, vf - 280 * c.brk * H); }
+  if (c.pz && vf > PIT_V) vf = Math.max(PIT_V, vf - BRAKE * 1.6 * H); // pit-lane speed limiter
+  if (c.scCap && vf > c.scCap) vf = Math.max(c.scCap, vf - BRAKE * H); // safety-car pace
+  const nv = vf - ((grass ? 1.4 : 0.1) * vf + Math.sign(vf) * (grass ? 60 : 25)) * H;
+  vf = nv * vf < 0 ? 0 : nv;
+  const slide = Math.abs(vl); c.slide = slide; c.onGrass = grass;
+  vl *= Math.exp(-(grass ? 3.2 : (wet ? 6.5 : 11) * g) * H);
+  c.vx = fx * vf - fy * vl; c.vy = fy * vf + fx * vl;
+  const sp = Math.abs(vf);
+  c.a += c.steer * TURN * (0.8 + 0.2 * g) * (1 - 0.2 * c.dmg) * (wet ? 0.92 : 1) * Math.min(1, sp / 140) * (1 - 0.42 * Math.min(sp, MAXV) / MAXV) * Math.sign(vf) * H;
+  c.x += c.vx * H; c.y += c.vy * H;
+  if (!G.attract && G.state === 'race') c.tyre = Math.max(0, c.tyre - (sp + 2 * slide) * H / (8 * T.len) * (wet ? 0.7 : 1));
+  // Effects: smoke, dirt, spray and skid marks from the rear wheels
+  const rx = c.x - fx * 16, ry = c.y - fy * 16;
+  if (!G.sim) {
+  if (c.dmg > 0.7 && Math.random() < 0.12) spawn('smoke', c.x + fx * 16, c.y + fy * 16, c.vx * 0.2, c.vy * 0.2);
+  if (grass) { if (sp > 80 && Math.random() < 0.25) spawn('dirt', rx, ry, -c.vx * 0.2, -c.vy * 0.2); }
+  else if (!wet && slide > 120 && Math.random() < 0.2) spawn('smoke', rx, ry, c.vx * 0.1, c.vy * 0.1);
+  if (wet && sp > 220 && Math.random() < 0.35) spawn('spray', rx, ry, c.vx * 0.3, c.vy * 0.3);
+  if ((G.n & 3) === 0) {
+    const lx = rx - fy * 9, ly = ry + fx * 9, qx = rx + fy * 9, qy = ry - fx * 9;
+    if (c.wlOk && !grass && (slide > 70 || (c.brk > 0.6 && vf > 180))) { addSkid(c.wl[0], c.wl[1], lx, ly); addSkid(c.wl[2], c.wl[3], qx, qy); }
+    c.wl[0] = lx; c.wl[1] = ly; c.wl[2] = qx; c.wl[3] = qy; c.wlOk = true;
+  }
+  }
+  // Walls: the drivable area is every point within R0 of the centre line, plus the pit complex (minus its pit wall).
+  for (let s = -13; s <= 13; s += 26) {
+    const qx = c.x + fx * s, qy = c.y + fy * s;
+    nearest(T, qx, qy, c.idx, 14);
+    const i = NI, rel = relIdx(i, T.N), lat = (qx - T.x[i]) * T.nx[i] + (qy - T.y[i]) * T.ny[i];
+    let nx = 0, ny = 0, pen = 0;
+    if (lat < -(R0 - CAR_R - 1) && rel >= PA && rel <= PB) {
+      const out = pitOuter(rel) - CAR_R;
+      if (-lat > out) { pen = -lat - out; nx = -T.nx[i]; ny = -T.ny[i]; }
+      else if (rel >= E1 && rel <= X0 && -lat > WALL_IN - CAR_R && -lat < WALL_OUT + CAR_R) {
+        if (-lat < (WALL_IN + WALL_OUT) / 2) { pen = -lat - (WALL_IN - CAR_R); nx = -T.nx[i]; ny = -T.ny[i]; }
+        else { pen = WALL_OUT + CAR_R + lat; nx = T.nx[i]; ny = T.ny[i]; }
+      }
+    } else if (ND > R0 - CAR_R) { pen = ND - (R0 - CAR_R); nx = (qx - T.x[i]) / ND; ny = (qy - T.y[i]) / ND; }
+    if (pen > 0) {
+      c.x -= nx * pen; c.y -= ny * pen;
+      const vn = c.vx * nx + c.vy * ny;
+      if (vn > 0) { c.vx -= nx * vn * 1.35; c.vy -= ny * vn * 1.35; if (vn > 60) { c.hits++; if (!G.sim) { sparks(qx + nx * CAR_R, qy + ny * CAR_R, nx, ny); sfxHit(c, vn); } if (vn > 110) hurt(c, (vn - 110) / 450, Math.sign(-nx * fy + ny * fx) || 1); } }
+      c.vx *= 0.992; c.vy *= 0.992;
+    }
+  }
+}
+
+let NI = 0, ND = 0;
+function nearest(T, px, py, from, win) {
+  const N = T.N; let bi = from, bd = 1e18;
+  for (let k = -win; k <= win; k++) { const i = (from + k + N) % N, dx = T.x[i] - px, dy = T.y[i] - py, d = dx * dx + dy * dy; if (d < bd) { bd = d; bi = i; } }
+  NI = bi; ND = Math.sqrt(bd);
+}
+
+function collide() {
+  const cs = G.cars;
+  for (let i = 0; i < cs.length; i++) for (let j = i + 1; j < cs.length; j++) {
+    const a = cs[i], b = cs[j];
+    if ((a.remote && b.remote) || Math.abs(a.x - b.x) > 60 || Math.abs(a.y - b.y) > 60) continue;
+    // A remote car is moved by its own player: here it acts as an immovable obstacle.
+    const wa = a.remote ? 0 : b.remote ? 1 : 0.5, wb = 1 - wa;
+    for (let sa = -12; sa <= 12; sa += 24) for (let sb = -12; sb <= 12; sb += 24) {
+      const ax = a.x + Math.cos(a.a) * sa, ay = a.y + Math.sin(a.a) * sa, bx = b.x + Math.cos(b.a) * sb, by = b.y + Math.sin(b.a) * sb;
+      const dx = bx - ax, dy = by - ay, d2 = dx * dx + dy * dy, R = 2 * CAR_R;
+      if (d2 >= R * R || d2 < 1e-6) continue;
+      const d = Math.sqrt(d2), nx = dx / d, ny = dy / d, pen = R - d;
+      a.x -= nx * pen * wa; a.y -= ny * pen * wa; b.x += nx * pen * wb; b.y += ny * pen * wb;
+      const vr = (b.vx - a.vx) * nx + (b.vy - a.vy) * ny;
+      if (vr < 0) { const imp = -vr * 1.2; a.vx -= nx * imp * wa; a.vy -= ny * imp * wa; b.vx += nx * imp * wb; b.vy += ny * imp * wb; }
+      if (vr < -90 && !G.sim) { sparks((ax + bx) / 2, (ay + by) / 2, nx, ny); sfxHit(a, -vr); }
+      if (vr < -130) { hurt(a, (-vr - 130) / 650, 1); hurt(b, (-vr - 130) / 650, -1); }
+    }
+  }
+}
+
+function progress(c) {
+  const T = G.T, N = T.N;
+  nearest(T, c.x, c.y, c.idx, 40);
+  let d = NI - c.idx; if (d > N / 2) d -= N; if (d < -N / 2) d += N;
+  c.idx = NI; c.off = ND;
+  if (c.remote) return; // their laps and times come from their own page
+  c.dist += d;
+  c.lat = (c.x - T.x[NI]) * T.nx[NI] + (c.y - T.y[NI]) * T.ny[NI];
+  const rel = relIdx(NI, N);
+  const inPit = rel >= PA && rel <= PB;
+  c.pz = inPit && c.lat < -WALL_IN;
+  c.pitAsph = inPit && c.lat < -HW && (c.lat < -WALL_IN || rel < E1 || rel > X0);
+  if (G.state !== 'race') return;
+  const sp = Math.hypot(c.vx, c.vy), stall = c.pz && c.lat < -STALL_IN + 20;
+  if (stall && !c.service && !c.fin && c.pitLap !== c.lap && Math.abs(rel - boxRel(c.box)) <= 4 && sp < 60) {
+    c.service = PIT_TIME + c.dmg * 3; c.pitLap = c.lap; // a damaged wing takes longer to change
+    if (c.isPlayer) toast('Arrêt au stand', 'y');
+  } else if (c.isPlayer && stall && sp < 40 && !c.wrongBox && Math.abs(rel - boxRel(c.box)) > 4) {
+    c.wrongBox = true; toast('Votre garage est le ' + TEAMS[c.box].name.toLowerCase(), 'y');
+  }
+  if (sp > 100) c.wrongBox = false;
+  const m = Math.floor(c.dist / (N / NSPLIT));
+  while (c.passed < m) { c.passed++; if (c.passed >= 0) c.splits[c.passed] = G.t; }
+  const sN = Math.floor(c.dist / (N / 3));
+  while (c.sec < sN) { c.sec++; if (c.sec >= 1) sectorDone(c, (c.sec - 1) % 3); }
+  const lapN = Math.floor(c.dist / N);
+  if (lapN > c.lap) { c.lap = lapN; lapDone(c); }
+}
+
+function sectorDone(c, s) {
+  const st = G.t - c.secStart; c.secStart = G.t; c.cur[s] = st;
+  if (!c.isPlayer || c.fin) return;
+  const rec = records[G.T.def.id], bs = G.bestSec;
+  c.curCls[s] = (!rec || st < rec.sec[s]) ? 'p' : (bs[s] == null || st <= bs[s]) ? 'g' : 'y';
+  if (bs[s] == null || st < bs[s]) bs[s] = st;
+}
+
+function lapDone(c) {
+  if (c.fin) return; // cool-down laps after the flag don't count
+  const lt = G.t - c.lapStart; c.lapStart = G.t; c.last = lt;
+  const pb = c.best == null || lt < c.best; if (pb) c.best = lt;
+  if (!c.isPlayer) c.ai.form = 1 + (Math.random() - 0.5) * 0.025;
+  else {
+    const id = G.T.def.id, rec = records[id];
+    if (!rec || lt < rec.lap) {
+      records[id] = { lap: lt, sec: c.cur.slice() }; saveRecords();
+      store.set(GHOST_KEY + id, { d: G.rec });
+      if (G.mode === 'tt' && !G.quali) G.ghosts = G.ghosts.filter(g => !g.mine).concat({ mine: true, d: G.rec, hz: 30, drv: c.drv, label: '' });
+      c.lastCls = 'p'; toast('Record du circuit · ' + fmt(lt), 'p');
+    } else if (pb) { c.lastCls = 'g'; toast('Meilleur tour · ' + fmt(lt), 'g'); }
+    else c.lastCls = '';
+    shareLap(id, lt, c.drv.color, G.rec);
+    G.rec = [];
+  }
+  if (G.mode === 'race' && !G.attract && (c.lap >= G.laps || G.leaderDone)) {
+    c.fin = true; c.pen += G.mandatory && !c.pitted ? PIT_PEN : 0; c.finT = G.t + c.pen; c.finLap = c.lap; c.finPassed = c.passed; G.leaderDone = true;
+    if (c.isPlayer) {
+      G.order.sort(cmp); G.pos = G.order.indexOf(c) + 1;
+      G.over = true; G.resAt = G.t + 1.6; c.auto = true; c.ai.skill = 0.8;
+      toast(G.pos === 1 ? 'Victoire' : 'Drapeau à damier', G.pos === 1 ? 'p' : '');
+      if (G.pos !== 1) sfxChime([523, 659, 784]);
+      if (c.pen) toast('Pénalité +15 s · arrêt non effectué', 'y');
+    }
+  } else if (c.isPlayer && G.mode === 'race' && c.lap === G.laps - 1) toast('Dernier tour');
+  if (G.quali && c.isPlayer && !G.over) { G.over = true; G.qTime = lt; G.resAt = G.t + 1.4; c.auto = true; c.ai.skill = 0.8; toast('Tour de qualification · ' + fmt(lt), c.lastCls); }
+  c.cur = [null, null, null]; c.curCls = ['', '', ''];
+}
+
+function cmp(a, b) {
+  const N = G.T.N, da = a.fin ? a.finLap * N : a.dist, db = b.fin ? b.finLap * N : b.dist;
+  if (da !== db) return db - da;
+  if (a.fin && b.fin) return a.finT - b.finT;
+  return (b.fin ? 1 : 0) - (a.fin ? 1 : 0);
+}
+
+function step() {
+  G.n++;
+  if (G.state === 'race') G.t += H;
+  tow();
+  if (G.sc) scCaps();
+  for (const c of G.cars) drive(c);
+  for (const c of G.cars) c.remote ? netStep(c) : physics(c);
+  collide();
+  if (G.sc) scStep();
+  for (const c of G.cars) progress(c);
+  const p = G.player;
+  if (p && G.state === 'race' && !p.fin && (G.n & 3) === 0) G.rec.push(Math.round(p.x * 10) / 10, Math.round(p.y * 10) / 10, Math.round(p.a * 1000) / 1000);
+}
+
+function update(dt) {
+  if (G.online) netSync(dt);
+  if (G.state === 'paused') return;
+  if (G.state === 'countdown' && (G.cd += dt) >= 4 + G.hold) {
+    G.state = 'race';
+    if (G.rain) toast('Piste mouillée', 'y');
+    if (G.mandatory) toast('Arrêt au stand obligatoire', 'y');
+  }
+  G.acc = Math.min(G.acc + dt, 0.1);
+  while (G.acc >= H) { G.acc -= H; step(); }
+  if (G.online) netPublish();
+}
+
+// ---------- Rendering ----------
+const cv = document.getElementById('game'), ctx = cv.getContext('2d');
+const cam = { x: 0, y: 0, z: 1, ax: 0, ay: 0 };
+function camTarget(snap, dt) {
+  const W = innerWidth, Hh = innerHeight, T = G.T;
+  let tx, ty, tz, ax = W / 2;
+  if (G.attract) {
+    const mw = W >= 900 && !el.menu.hidden ? Math.min(500, W * .42) : 0;
+    tz = Math.min((W - mw) / (T.w + 520), Hh / (T.h + 520)); tx = T.cx; ty = T.cy; ax = mw + (W - mw) / 2;
+  } else {
+    const p = G.player, sp = Math.hypot(p.vx, p.vy);
+    tz = clamp(Math.min(W, Hh) / 700, 0.5, 1.4) * (1 - 0.24 * sp / MAXV); tx = p.x + p.vx * 0.32; ty = p.y + p.vy * 0.32;
+  }
+  const k = snap ? 1 : 1 - Math.exp(-5 * dt);
+  cam.x += (tx - cam.x) * k; cam.y += (ty - cam.y) * k; cam.z += (tz - cam.z) * k; cam.ax += (ax - cam.ax) * (snap ? 1 : k); cam.ay = Hh / 2;
+}
+
+const patCache = {};
+function grass(th) {
+  if (!patCache[th.run]) {
+    const c = document.createElement('canvas'); c.width = c.height = 120;
+    const g = c.getContext('2d'); g.fillStyle = th.run; g.fillRect(0, 0, 120, 120); g.fillStyle = th.stripe; g.fillRect(0, 0, 60, 120);
+    patCache[th.run] = ctx.createPattern(c, 'repeat');
+  }
+  return patCache[th.run];
+}
+const disc = (g, x, y, r) => { g.beginPath(); g.arc(x, y, r, 0, 7); g.fill(); };
+
+function drawWorld(T, x0, y0, x1, y1) {
+  const th = T.def.theme;
+  if (T.lake) {
+    const [cx, cy, rx, ry] = T.lake;
+    ctx.fillStyle = th.shore; ctx.beginPath(); ctx.ellipse(cx, cy, rx + 30, ry + 30, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = th.water; ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, 0, 0, 7); ctx.fill();
+  }
+  for (const d of T.deco) {
+    if (d.x < x0 - 60 || d.x > x1 + 60 || d.y < y0 - 60 || d.y > y1 + 60) continue;
+    if (th.deco === 'trees') { ctx.fillStyle = th.d1; disc(ctx, d.x + 5, d.y + 6, d.r); ctx.fillStyle = th.d2; disc(ctx, d.x, d.y, d.r); }
+    else if (th.deco === 'rocks') { ctx.fillStyle = th.d1; ctx.beginPath(); ctx.ellipse(d.x + 4, d.y + 4, d.r, d.r * .7, d.a, 0, 7); ctx.fill(); ctx.fillStyle = th.d2; ctx.beginPath(); ctx.ellipse(d.x, d.y, d.r, d.r * .7, d.a, 0, 7); ctx.fill(); }
+    else { ctx.save(); ctx.translate(d.x, d.y); ctx.rotate(Math.round(d.a / 1.57) * 1.57); ctx.fillStyle = th.d1; ctx.fillRect(-d.r * 1.6, -d.r, d.r * 3.2, d.r * 2); ctx.fillStyle = th.d2; ctx.fillRect(-d.r * 1.3, -d.r * .7, d.r * 2.6, d.r * 1.4); ctx.restore(); }
+  }
+  ctx.lineJoin = 'round'; ctx.lineCap = 'butt';
+  ctx.lineWidth = 2 * R0 + 16; ctx.strokeStyle = th.wall; ctx.stroke(T.path);
+  ctx.setLineDash([26, 26]); ctx.strokeStyle = th.dash; ctx.stroke(T.path); ctx.setLineDash([]);
+  ctx.lineWidth = 2 * R0; ctx.strokeStyle = grass(th); ctx.stroke(T.path);
+  drawPit(T);
+  ctx.lineWidth = 2 * HW + 18; ctx.strokeStyle = '#f2f3f5'; ctx.stroke(T.kerbs);
+  ctx.setLineDash([15, 15]); ctx.strokeStyle = '#d93226'; ctx.stroke(T.kerbs); ctx.setLineDash([]);
+  ctx.lineWidth = 2 * HW + 4; ctx.strokeStyle = '#e9ecf0'; ctx.stroke(T.path);
+  ctx.lineWidth = 2 * HW - 4; ctx.strokeStyle = th.asph; ctx.stroke(T.path);
+  ctx.lineWidth = 30; ctx.strokeStyle = 'rgba(0,0,0,.14)'; ctx.stroke(T.rpath);
+  // Chequered start/finish line and grid slots
+  ctx.save(); ctx.translate(T.x[0], T.y[0]); ctx.rotate(Math.atan2(T.ty[0], T.tx[0]));
+  const w = 2 * (HW - 2) / 12;
+  for (let r = 0; r < 2; r++) for (let k = 0; k < 12; k++) { ctx.fillStyle = (r + k) % 2 ? '#15171b' : '#f4f5f7'; ctx.fillRect(r * w - w, -HW + 2 + k * w, w, w); }
+  ctx.restore();
+  ctx.strokeStyle = 'rgba(244,245,247,.8)'; ctx.lineWidth = 3;
+  for (const g of T.grid) {
+    ctx.save(); ctx.translate(g.x, g.y); ctx.rotate(g.a);
+    ctx.beginPath(); ctx.moveTo(12, -15); ctx.lineTo(27, -15); ctx.lineTo(27, 15); ctx.lineTo(12, 15); ctx.stroke(); ctx.restore();
+  }
+}
+
+// Pit complex: asphalt with entry and exit ramps, grass and pit wall beside the track, fast lane, six team garages.
+function drawPit(T) {
+  const th = T.def.theme, N = T.N, a = Math.atan2(T.ty[0], T.tx[0]);
+  const P = (rel, lat) => { const i = (rel + N) % N; return [T.x[i] + T.nx[i] * lat, T.y[i] + T.ny[i] * lat]; };
+  ctx.beginPath();
+  for (let r = PA; r <= PB; r++) ctx.lineTo(...P(r, -pitOuter(r)));
+  for (let r = PB; r >= PA; r--) ctx.lineTo(...P(r, -HW));
+  ctx.closePath(); ctx.fillStyle = th.asph; ctx.fill();
+  ctx.beginPath();
+  for (let r = PA; r <= PB; r++) ctx.lineTo(...P(r, -pitOuter(r) - 4));
+  ctx.lineWidth = 8; ctx.strokeStyle = th.wall; ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(...P(E1, -HW - 3)); ctx.lineTo(...P(X0, -HW - 3)); ctx.lineTo(...P(X0, -WALL_IN)); ctx.lineTo(...P(E1, -WALL_IN)); ctx.closePath();
+  ctx.fillStyle = grass(th); ctx.fill();
+  ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(...P(E1, -(WALL_IN + WALL_OUT) / 2)); ctx.lineTo(...P(X0, -(WALL_IN + WALL_OUT) / 2));
+  ctx.lineWidth = WALL_OUT - WALL_IN; ctx.strokeStyle = '#c9cdd3'; ctx.stroke(); ctx.lineCap = 'butt';
+  ctx.setLineDash([18, 14]); ctx.beginPath(); ctx.moveTo(...P(boxRel(0) - 8, -STALL_IN)); ctx.lineTo(...P(boxRel(5) + 8, -STALL_IN));
+  ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(244,245,247,.7)'; ctx.stroke(); ctx.setLineDash([]);
+  const mine = G && G.player && !G.attract ? G.player.box : -1;
+  for (let k = 0; k < 6; k++) {
+    const t = TEAMS[k];
+    ctx.save(); ctx.translate(...P(boxRel(k), STALL)); ctx.rotate(a);
+    ctx.fillStyle = '#23262c'; ctx.fillRect(-42, -112, 84, 70);
+    ctx.fillStyle = t.color; ctx.fillRect(-42, -48, 84, 6); ctx.fillRect(-42, -112, 10, 64);
+    ctx.lineWidth = k === mine ? 5 : 3; ctx.strokeStyle = k === mine ? '#f1c22e' : t.color; ctx.strokeRect(-34, -30, 68, 60);
+    if (k === mine) { ctx.fillStyle = '#f1c22e'; ctx.font = '800 22px "Saira Condensed", sans-serif'; ctx.textAlign = 'center'; ctx.fillText('VOUS', 4, -70); }
+    ctx.restore();
+  }
+  ctx.save(); ctx.translate(...P(E1 + 5, LANE)); ctx.rotate(a + Math.PI / 2);
+  ctx.fillStyle = 'rgba(244,245,247,.85)'; ctx.font = '800 30px "Saira Condensed", sans-serif'; ctx.textAlign = 'center'; ctx.fillText('80', 0, 10); ctx.restore();
+}
+
+function drawCar(c, g = ctx) {
+  const d = c.drv;
+  g.save(); g.translate(c.x + 4, c.y + 5); g.rotate(c.a); g.fillStyle = 'rgba(0,0,0,.3)'; g.fillRect(-22, -11, 44, 22); g.restore();
+  g.save(); g.translate(c.x, c.y); g.rotate(c.a);
+  g.fillStyle = '#111317';
+  g.fillRect(-20, -13, 10, 6); g.fillRect(-20, 7, 10, 6);
+  for (let s = -1; s <= 1; s += 2) { g.save(); g.translate(13, s * 9.5); g.rotate(c.steer * 0.35); g.fillRect(-4, -2.5, 8, 5); g.restore(); }
+  g.strokeStyle = '#111317'; g.lineWidth = 1.2; g.beginPath();
+  g.moveTo(13, -8); g.lineTo(6, -2); g.moveTo(13, 8); g.lineTo(6, 2); g.moveTo(-15, -8); g.lineTo(-10, -5); g.moveTo(-15, 8); g.lineTo(-10, 5); g.stroke();
+  g.fillStyle = d.alt; g.fillRect(-23, -10, 5, 20);
+  if (c.dmg > 0.3) g.fillRect(19, c.pull > 0 ? -11 : 0, 4, 11); else g.fillRect(19, -11, 4, 22); // half the front wing is gone
+  g.fillStyle = d.color; g.beginPath();
+  g.moveTo(22, 0); g.lineTo(15, -2.5); g.lineTo(6, -3.5); g.lineTo(2, -7); g.lineTo(-11, -7); g.lineTo(-17, -3.5); g.lineTo(-19, -3.5);
+  g.lineTo(-19, 3.5); g.lineTo(-17, 3.5); g.lineTo(-11, 7); g.lineTo(2, 7); g.lineTo(6, 3.5); g.lineTo(15, 2.5); g.closePath(); g.fill();
+  g.fillStyle = d.alt; g.fillRect(-16, -1.3, 13, 2.6);
+  g.fillStyle = '#0b0c0f'; g.beginPath(); g.ellipse(0, 0, 4.6, 3, 0, 0, 7); g.fill();
+  g.fillStyle = d.helmet; disc(g, -0.6, 0, 2.3);
+  g.restore();
+}
+
+function drawParts(dt) {
+  const live = G.state !== 'paused';
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const p = parts[i];
+    if (live) { p.life -= dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.96; p.vy *= 0.96; }
+    if (p.life <= 0) { parts.splice(i, 1); continue; }
+    const k = p.life / p.max;
+    if (p.kind === 'spark') { ctx.strokeStyle = 'rgba(255,' + (170 + 70 * k | 0) + ',70,' + k + ')'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x - p.vx * 0.03, p.y - p.vy * 0.03); ctx.stroke(); }
+    else {
+      ctx.fillStyle = p.kind === 'smoke' ? 'rgba(205,208,214,' + 0.35 * k + ')' : p.kind === 'spray' ? 'rgba(225,232,240,' + 0.28 * k + ')' : 'rgba(110,85,50,' + 0.5 * k + ')';
+      disc(ctx, p.x, p.y, p.kind === 'dirt' ? 5 + (1 - k) * 6 : 8 + (1 - k) * 26);
+    }
+  }
+}
+
+function render(dt) {
+  const dpr = Math.min(2, devicePixelRatio || 1), W = innerWidth, Hh = innerHeight;
+  if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(Hh * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(Hh * dpr); }
+  camTarget(false, dt);
+  const T = G.T, z = cam.z;
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = T.def.theme.out; ctx.fillRect(0, 0, cv.width, cv.height);
+  ctx.setTransform(dpr * z, 0, 0, dpr * z, dpr * (cam.ax - cam.x * z), dpr * (cam.ay - cam.y * z));
+  const x0 = cam.x - cam.ax / z, y0 = cam.y - cam.ay / z, x1 = x0 + W / z, y1 = y0 + Hh / z;
+  drawWorld(T, x0, y0, x1, y1);
+  if (skidC) {
+    ctx.beginPath();
+    for (let i = 0; i < skidC; i++) { const k = i * 4; ctx.moveTo(skids[k], skids[k + 1]); ctx.lineTo(skids[k + 2], skids[k + 3]); }
+    ctx.lineCap = 'round'; ctx.lineWidth = 4.5; ctx.strokeStyle = 'rgba(12,12,14,.3)'; ctx.stroke(); ctx.lineCap = 'butt';
+  }
+  if (G.rain) { ctx.fillStyle = 'rgba(28,40,60,.22)'; ctx.fillRect(x0, y0, x1 - x0, y1 - y0); }
+  const p = G.player;
+  if (p && p.lap >= 1 && G.state === 'race') for (const gh of G.ghosts) {
+    const k = (G.t - p.lapStart) * gh.hz, i = Math.floor(k), d = gh.d, f = k - i;
+    if ((i + 1) * 3 + 2 >= d.length) continue;
+    const gx = d[i * 3] + (d[i * 3 + 3] - d[i * 3]) * f, gy = d[i * 3 + 1] + (d[i * 3 + 4] - d[i * 3 + 1]) * f;
+    ctx.globalAlpha = 0.38;
+    drawCar({ x: gx, y: gy, a: d[i * 3 + 2] + wrapA(d[i * 3 + 5] - d[i * 3 + 2]) * f, steer: 0, drv: gh.drv });
+    ctx.globalAlpha = 1;
+    if (gh.label) { ctx.font = '700 15px "Barlow Semi Condensed", sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(244,245,247,.85)'; ctx.fillText(gh.label, gx, gy - 30); }
+  }
+  for (const c of G.cars) if (c.x > x0 - 40 && c.x < x1 + 40 && c.y > y0 - 40 && c.y < y1 + 40) drawCar(c);
+  if (G.sc && !G.sc.gone) {
+    const sc = G.sc, blink = (performance.now() / 250 | 0) % 2;
+    ctx.save(); ctx.translate(sc.x + 4, sc.y + 5); ctx.rotate(sc.a); ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(-25, -11, 50, 22); ctx.restore();
+    ctx.save(); ctx.translate(sc.x, sc.y); ctx.rotate(sc.a);
+    ctx.fillStyle = '#d9dde3'; ctx.fillRect(-25, -11, 50, 22);
+    ctx.fillStyle = '#1b1e24'; ctx.fillRect(-8, -9, 18, 18);
+    ctx.fillStyle = '#f1c22e'; ctx.fillRect(-25, -2, 50, 4);
+    ctx.fillStyle = blink ? '#ffb000' : '#5a3d00'; ctx.fillRect(-2, -9, 5, 8);
+    ctx.fillStyle = blink ? '#5a3d00' : '#ffb000'; ctx.fillRect(-2, 1, 5, 8);
+    ctx.restore();
+  }
+  drawParts(dt);
+  if (G.rain && !RM) {
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.strokeStyle = 'rgba(205,220,240,.35)'; ctx.lineWidth = 1; ctx.beginPath();
+    const t = performance.now() / 1000;
+    for (let i = 0; i < 160; i++) {
+      const a = Math.sin(i * 12.9898) * 43758.5453, b = Math.sin(i * 78.233) * 12345.678;
+      const sx = (((a - Math.floor(a)) * W - t * 160) % W + W) % W, sy = ((b - Math.floor(b)) * Hh + t * 1100 * (0.8 + (i % 5) * 0.08)) % Hh;
+      ctx.moveTo(sx, sy); ctx.lineTo(sx - 5, sy + 16);
+    }
+    ctx.stroke();
+  }
+}
+
+function drawOutline(g, O, w, h, lw) {
+  const s = Math.min((w - 14) / O.w, (h - 14) / O.h);
+  g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, g.canvas.width, g.canvas.height);
+  const k = g.canvas.width / w;
+  g.setTransform(k * s, 0, 0, k * s, k * (w / 2 - O.cx * s), k * (h / 2 - O.cy * s));
+  g.lineJoin = 'round'; g.lineWidth = lw / s; g.strokeStyle = 'rgba(238,241,246,.85)'; g.stroke(O.path);
+  return s;
+}
+
+// ---------- HUD ----------
+const $ = id => document.getElementById(id);
+const el = { hud: $('hud'), home: $('home'), menu: $('menu'), pause: $('pause'), results: $('results'), quali: $('quali'), editor: $('editor'), lobby: $('lobby'), join: $('join'),
+  tower: $('tower'), lapNo: $('lapNo'), lapLbl: $('lapLbl'), cur: $('cur'), last: $('lastLap'), best: $('bestLap'), rec: $('recLap'),
+  tyre: $('tyreTxt'), wing: $('wingTxt'), pitDt: $('pitDt'), pit: $('pitTxt'), tag: $('tag'), spd: $('spd'), gear: $('gear'), lights: $('lights'), toast: $('toast'), mini: $('mini') };
+const secEls = [$('s0'), $('s1'), $('s2')], lightEls = [...el.lights.children], mctx = el.mini.getContext('2d');
+const SCREENS = ['home', 'menu', 'pause', 'results', 'quali', 'editor', 'lobby', 'join'];
+
+function show(id) {
+  for (const s of SCREENS) el[s].hidden = s !== id;
+  el.hud.hidden = !(id === null || id === 'pause' || id === 'results' || id === 'quali');
+  if (id === 'home') requestAnimationFrame(drawModeArts);
+}
+
+function gapText(c, L) {
+  if (c === L) return c.fin ? fmt(c.finT) : 'Tête';
+  if (c.fin && L.fin && c.finLap === L.finLap) return gapF(c.finT - L.finT);
+  const N = G.T.N, ld = L.fin ? L.finLap * N : L.dist;
+  if (c.remote || L.remote) { const laps = Math.floor((ld - c.dist) / N); return laps >= 1 ? '+' + laps + ' T' : '+' + Math.max(0, (ld - c.dist) * DS / 450).toFixed(1); }
+  const down = Math.floor(((L.fin ? L.finPassed : L.passed) - c.passed) / NSPLIT);
+  if (down >= 1) return '+' + down + ' T';
+  const m = c.passed;
+  return m >= 0 && L.splits[m] != null && c.splits[m] != null ? gapF(c.splits[m] - L.splits[m]) : '';
+}
+
+const esc = s => String(s).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+const row = (cls, cells) => '<tr class="' + cls + '">' + cells.map(([c, v]) => '<td class="' + c + '">' + v + '</td>').join('') + '</tr>';
+const chip = d => '<span class="chip" style="background:' + d.color + '"></span>' + esc(d.name);
+function champRows() {
+  const add = {}; G.order.forEach((c, i) => { add[c.drv.code] = POINTS[i] || 0; });
+  return G.cars.map(c => ({ c, add: add[c.drv.code], pts: (ui.champ.pts[c.drv.code] || 0) + add[c.drv.code] })).sort((a, b) => b.pts - a.pts);
+}
+function renderResults() {
+  const o = G.order, L = o[0], fast = Math.min(...o.map(c => c.best ?? Infinity));
+  G.pos = o.indexOf(G.player) + 1;
+  $('resTitle').textContent = G.pos === 1 ? 'Victoire' : 'Arrivée en P' + G.pos;
+  $('resBody').innerHTML = o.map((c, i) => {
+    let t;
+    if (!c.fin) t = 'En piste';
+    else if (c === L) t = fmt(c.finT);
+    else if (c.finLap < L.finLap) { const n = L.finLap - c.finLap; t = '+' + n + ' tour' + (n > 1 ? 's' : ''); }
+    else t = gapF(c.finT - L.finT);
+    if (c.pen) t += ' <span class="pen">(pén. +' + c.pen + ' s)</span>';
+    return row(c.isPlayer ? 'me' : '', [['num', i + 1], ['', chip(c.drv)], ['r num', t], ['r num' + (c.best === fast ? ' fl' : ''), fmt(c.best)]]);
+  }).join('');
+  $('champBox').hidden = !G.champ;
+  $('againBtn').hidden = !!G.online;
+  $('resChat').hidden = !G.online;
+  if (G.online) collectSays();
+  if (G.champ) {
+    const rows = champRows(), last = ui.champ.round === DEFS.length - 1, mineP = rows.findIndex(r => r.c.isPlayer) + 1;
+    $('champTitle').textContent = last ? 'Classement final du championnat · ' + (mineP === 1 ? 'vous êtes champion' : 'vous terminez P' + mineP) : 'Championnat · après la manche ' + (ui.champ.round + 1) + ' sur ' + DEFS.length;
+    $('champBody').innerHTML = rows.map((r, i) => row(r.c.isPlayer ? 'me' : '', [['num', i + 1], ['', chip(r.c.drv)], ['r num', '+' + r.add], ['r num', r.pts]])).join('');
+    $('againTxt').textContent = last ? 'Nouveau championnat' : 'Course suivante';
+  } else $('againTxt').textContent = 'Rejouer';
+}
+
+let slow = 0, hudLit = 0;
+function hud(dt) {
+  if ((toastT -= dt) <= 0) {
+    if (tq.length) { const [m, c] = tq.shift(); el.toast.textContent = m; el.toast.className = 'show ' + c; toastT = 1.8; }
+    else if (el.toast.className) el.toast.className = '';
+  }
+  if (G.attract) return;
+  const p = G.player, T = G.T, sp = Math.hypot(p.vx, p.vy), vf = p.vx * Math.cos(p.a) + p.vy * Math.sin(p.a);
+  const st = G.state === 'paused' ? G.prev : G.state;
+  el.spd.textContent = Math.round(sp / PX_M * 3.6);
+  el.gear.textContent = sp < 8 ? 'N' : vf < 0 ? 'R' : Math.min(8, 1 + Math.floor(sp / MAXV * 8));
+  el.cur.textContent = fmt(st === 'race' ? (p.fin ? p.last : G.t - p.lapStart) : 0);
+  const lit = st === 'countdown' ? Math.min(5, Math.floor(G.cd / 0.8)) : 0;
+  el.lights.hidden = !(st === 'countdown' || (st === 'race' && G.t < 0.9));
+  lightEls.forEach((l, k) => l.classList.toggle('on', k < lit));
+  if (lit !== hudLit) { if (lit > hudLit) sfxBeep(lit === 5 ? 880 : 587); hudLit = lit; }
+  const tag = p.service > 0 ? 'Au stand · ' + p.service.toFixed(1).replace('.', ',') + ' s' : p.pz ? 'Limiteur 80 km/h' : G.sc ? (G.sc.gone ? 'Drapeau vert au prochain passage' : 'Voiture de sécurité') : p.tow > 0.3 ? 'Aspiration' : '';
+  if (el.tag.textContent !== tag) { el.tag.textContent = tag; el.tag.hidden = !tag; }
+  // minimap
+  const mw = el.mini.clientWidth, mh = el.mini.clientHeight, dpr = Math.min(2, devicePixelRatio || 1);
+  if (mw) {
+    if (el.mini.width !== Math.round(mw * dpr)) { el.mini.width = Math.round(mw * dpr); el.mini.height = Math.round(mh * dpr); }
+    const s = drawOutline(mctx, T, mw, mh, 4);
+    for (const c of G.cars) { mctx.fillStyle = c.drv.color; disc(mctx, c.x, c.y, (c.isPlayer ? 5 : 3.5) / s); if (c.isPlayer) { mctx.lineWidth = 1.5 / s; mctx.strokeStyle = '#fff'; mctx.stroke(); } }
+    if (G.sc && !G.sc.gone) { mctx.fillStyle = '#f1c22e'; disc(mctx, G.sc.x, G.sc.y, 4.5 / s); }
+  }
+  if ((slow -= dt) > 0) return;
+  slow = 0.15;
+  el.lapLbl.textContent = (G.quali ? 'Qualifs' : 'Tour') + (G.rain ? ' · pluie' : '');
+  if (G.quali && G.over && G.t >= G.resAt && el.quali.hidden && el.pause.hidden) showQuali();
+  el.lapNo.textContent = G.mode === 'tt' ? String(p.lap + 1) : Math.min(p.lap + 1, G.laps) + '/' + G.laps;
+  for (let s = 0; s < 3; s++) { secEls[s].className = p.curCls[s]; secEls[s].textContent = p.cur[s] == null ? 'S' + (s + 1) : p.cur[s].toFixed(3); }
+  el.last.textContent = fmt(p.last); el.last.className = p.lastCls;
+  el.best.textContent = fmt(p.best);
+  const rec = records[T.def.id]; el.rec.textContent = rec ? fmt(rec.lap) : '—';
+  el.tyre.textContent = Math.round(p.tyre * 100) + ' %'; el.tyre.className = p.tyre > 0.6 ? 'g' : p.tyre > 0.35 ? 'y' : 'r';
+  el.wing.textContent = p.dmg < 0.15 ? 'OK' : p.dmg < 0.5 ? 'Abîmé' : 'Cassé'; el.wing.className = p.dmg < 0.15 ? 'g' : p.dmg < 0.5 ? 'y' : 'r';
+  el.pitDt.hidden = el.pit.hidden = !G.mandatory;
+  el.pit.textContent = p.pitted ? 'Fait' : 'À faire'; el.pit.className = p.pitted ? 'g' : 'y';
+  if (!G.hint && p.tyre < 0.45 && !p.fin) { G.hint = true; toast('Pneus usés · garage ' + TEAMS[p.box].name.toLowerCase(), 'y'); }
+  if (G.mode === 'race') {
+    G.order.sort(cmp);
+    const L = G.order[0];
+    if (G.sc && !p.fin) {
+      const ahead = new Set(G.order.slice(0, G.order.indexOf(p)));
+      if (G.scAhead && [...G.scAhead].some(c => !ahead.has(c) && !c.pz && !c.service && !c.fin)) { p.pen += 5; toast('Dépassement sous voiture de sécurité · +5 s', 'y'); }
+      G.scAhead = ahead;
+    } else G.scAhead = null;
+    el.tower.innerHTML = G.order.map((c, i) => '<li class="' + (c.isPlayer ? 'me' : '') + '"><span class="p">' + (i + 1) + '</span><span class="c" style="background:' + c.drv.color + '"></span><span>' + esc(c.drv.code) + '</span><span class="g num">' + gapText(c, L) + '</span></li>').join('');
+    if (G.over && G.t >= G.resAt && G.state !== 'paused') {
+      if (el.results.hidden && el.pause.hidden) { show('results'); tq.length = 0; toastT = 0; el.toast.className = ''; }
+      if (!el.results.hidden) renderResults();
+    }
+  } else el.tower.innerHTML = '';
+}
+
+// ---------- Home, setup and track list ----------
+const ui = { mode: 'race', tid: 'lac', laps: 3, diff: 'normal', weather: 'dry', team: 0, champ: null, quali: '1', sort: 'pop' };
+const MODE_NAMES = { race: 'Grand Prix', champ: 'Championnat', tt: 'Chrono' };
+const recTxt = id => { const r = records[id]; return r ? 'Record <b>' + fmt(r.lap) + '</b>' : 'Pas encore de record'; };
+
+$('teams').innerHTML = TEAMS.map((t, i) => '<button type="button" data-k="team" data-v="' + i + '" aria-label="Écurie ' + t.name + '" title="' + t.name + '" style="background:' + t.color + '"></button>').join('');
+$('rounds').innerHTML = DEFS.map((d, i) => '<li><span class="n">' + (i + 1) + '</span><span>' + esc(d.name) + '</span></li>').join('');
+
+// Illustrations on the three mode cards
+// Your best record on an official circuit (the selected one first), for the Chrono card.
+function bestRecord() {
+  const id = OFFICIAL_IDS.has(ui.tid) && records[ui.tid] ? ui.tid : DEFS.map(d => d.id).find(i => records[i]);
+  return id ? { t: records[id].lap, name: findDef(id).name } : null;
+}
+// Illustrations on the three mode cards, drawn in the top part of each card.
+const ART = {
+  race(g, w, h) {
+    const s = Math.min(w / 200, h / 290); g.save(); g.translate(w / 2, 14 + 22 * s); g.scale(s, s);
+    g.fillStyle = '#07080b'; g.fillRect(-80, -20, 160, 40); g.fillStyle = '#2a2e35'; g.fillRect(-80, 18, 160, 4);
+    g.shadowColor = '#ff2a17'; g.shadowBlur = 16 * s; g.fillStyle = '#ff2a17';
+    for (let i = 0; i < 5; i++) disc(g, (i - 2) * 29, 0, 10);
+    g.shadowBlur = 0;
+    for (let k = 0; k < 16; k++) for (let r = 0; r < 2; r++) { g.fillStyle = (k + r) % 2 ? '#15171b' : '#eef1f6'; g.fillRect(-80 + k * 10, 40 + r * 10, 10, 10); }
+    g.strokeStyle = 'rgba(238,241,246,.5)'; g.lineWidth = 2;
+    for (let k = 0; k < 6; k++) {
+      const x = k % 2 ? 30 : -30, y = 100 + k * 30;
+      g.beginPath(); g.moveTo(x - 15, y - 26); g.lineTo(x - 15, y - 30); g.lineTo(x + 15, y - 30); g.lineTo(x + 15, y - 26); g.stroke();
+      drawCar({ x, y, a: -Math.PI / 2, steer: 0, drv: TEAMS[k] }, g);
+    }
+    g.restore();
+  },
+  champ(g, w, h) {
+    const s = Math.min(w / 230, h / 280); g.save(); g.translate(w / 2, h - 4); g.scale(s, s); g.textAlign = 'center';
+    const rnd = rng(7);
+    for (let k = 0; k < 46; k++) { g.save(); g.translate((rnd() - 0.5) * 230, -192 - rnd() * 80); g.rotate(rnd() * 3); g.fillStyle = TEAMS[k % 6].color; g.fillRect(-4, -1.5, 8, 3); g.restore(); }
+    for (const [x, bh, n, t, pts] of [[-68, 72, '2', TEAMS[1], 18], [0, 104, '1', TEAMS[0], 25], [68, 52, '3', TEAMS[3], 15]]) {
+      const gr = g.createLinearGradient(0, -bh, 0, 0); gr.addColorStop(0, '#2c3442'); gr.addColorStop(1, '#151920');
+      g.fillStyle = gr; g.fillRect(x - 32, -bh, 64, bh);
+      g.fillStyle = '#f1c22e'; g.fillRect(x - 32, -bh, 64, 3);
+      g.font = '800 34px "Saira Condensed", sans-serif'; g.fillText(n, x, -bh + 40);
+      drawCar({ x, y: -bh - 28, a: -Math.PI / 2, steer: 0, drv: t }, g);
+      g.fillStyle = '#c2cad6'; g.font = '700 14px "Barlow Semi Condensed", sans-serif'; g.fillText(pts + ' pts', x, -bh - 60);
+    }
+    g.restore();
+  },
+  tt(g, w, h) {
+    const s = Math.min(w / 220, h / 250), R = 78, rec = bestRecord(); g.save(); g.translate(w / 2, 14 + 104 * s); g.scale(s, s);
+    g.fillStyle = '#2a2e35'; g.fillRect(-10, -R - 24, 20, 12); g.fillRect(-4, -R - 14, 8, 8);
+    g.lineWidth = 10; g.strokeStyle = '#1f2430'; g.beginPath(); g.arc(0, 0, R, 0, 7); g.stroke();
+    g.strokeStyle = '#a54cff'; g.shadowColor = '#a54cff'; g.shadowBlur = 14 * s;
+    g.beginPath(); g.arc(0, 0, R, -Math.PI / 2, Math.PI * 1.05); g.stroke(); g.shadowBlur = 0;
+    g.strokeStyle = 'rgba(238,241,246,.35)'; g.lineWidth = 2;
+    for (let k = 0; k < 12; k++) { const a = k / 12 * 2 * Math.PI; g.beginPath(); g.moveTo(Math.cos(a) * (R - 20), Math.sin(a) * (R - 20)); g.lineTo(Math.cos(a) * (R - 13), Math.sin(a) * (R - 13)); g.stroke(); }
+    g.fillStyle = '#eef1f6'; g.font = '800 30px "Saira Condensed", sans-serif'; g.textAlign = 'center'; g.fillText(rec ? fmt(rec.t) : '0:00.000', 0, 10);
+    ['#a54cff', '#1ec46b', '#f1c22e'].forEach((c, i) => { g.fillStyle = c; g.fillRect(-81 + i * 55, R + 26, 52, 10); });
+    g.restore();
+  },
+};
+function drawModeArts() {
+  const narrow = innerWidth <= 700, rec = bestRecord();
+  $('mfTt').innerHTML = rec ? 'Votre record <b>' + fmt(rec.t) + '</b> · ' + esc(rec.name) : 'Pas encore de record : à vous de l’établir';
+  document.querySelectorAll('.mode').forEach(b => {
+    const cnv = b.querySelector('canvas'), w = cnv.clientWidth, h = cnv.clientHeight, dpr = Math.min(2, devicePixelRatio || 1);
+    if (!w || !h) return;
+    cnv.width = Math.round(w * dpr); cnv.height = Math.round(h * dpr);
+    const g = cnv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ART[b.dataset.mode](g, w, h * (narrow ? 0.42 : 0.55));
+  });
+}
+
+function trackCard(def) {
+  const b = document.createElement('button'), cnv = document.createElement('canvas'), tx = document.createElement('span');
+  const nm = document.createElement('span'), meta = document.createElement('span'), rec = document.createElement('span'), O = outlineOf(def);
+  b.type = 'button'; b.className = 'tcard'; b.setAttribute('aria-pressed', def.id === ui.tid);
+  cnv.width = 176; cnv.height = 112; tx.className = 'tx';
+  nm.className = 'nm'; nm.textContent = def.name;
+  meta.className = 'meta'; meta.textContent = km(O.len) + ' km · ' + O.turns + ' virages' + (def.custom && !def.by ? ' · votre circuit' : '') + (likes.get(def.id) ? ' · ♥ ' + likes.get(def.id) : '');
+  if (def.by) meta.dataset.by = def.by;
+  rec.className = 'rec'; rec.innerHTML = recTxt(def.id);
+  tx.append(nm, meta, rec); b.append(cnv, tx);
+  drawOutline(cnv.getContext('2d'), O, 88, 56, 2.5);
+  if (!isOk(def)) {
+    meta.textContent = 'À corriger dans l’éditeur : ' + validate(def.verts).msg; rec.textContent = '';
+    b.addEventListener('click', () => openEditor(mine.find(c => c.id === def.id)));
+    return b;
+  }
+  b.addEventListener('click', () => { if (ui.tid !== def.id) { ui.tid = def.id; refreshSetup(); startAttract(); } });
+  return b;
+}
+let listTok = 0;
+function renderTrackList() {
+  const list = $('trackList'), raw = $('trackSearch').value.trim(), q = norm(raw), tok = ++listTok;
+  const match = d => !q || norm(d.name).includes(q);
+  const lk = c => likes.get(c.id) || 0;
+  const community = others.slice().sort((a, b) => (ui.sort === 'pop' ? lk(b) - lk(a) : 0) || b.at - a.at).map(customDef).filter(match);
+  $('sortSeg').hidden = !others.length;
+  const groups = [['Circuits officiels', DEFS.filter(match)], ['Vos circuits', mine.map(customDef).filter(match)], ['Circuits des joueurs', community.slice(0, q ? 40 : 6)]];
+  const nodes = [];
+  for (const [title, defs] of groups) {
+    if (!defs.length) continue;
+    const p = document.createElement('p'); p.className = 'lbl sub'; p.textContent = title; nodes.push(p);
+    defs.forEach(d => nodes.push(trackCard(d)));
+  }
+  const note = text => { const p = document.createElement('p'); p.className = 'note'; p.textContent = text; nodes.push(p); };
+  if (q && !nodes.length) note('Aucun circuit ne s’appelle « ' + raw + ' ».');
+  else if (!q && community.length > 6) note('Utilisez la recherche pour parcourir les ' + community.length + ' circuits des joueurs.');
+  const nb = document.createElement('button');
+  nb.type = 'button'; nb.className = 'tcard newc';
+  nb.innerHTML = '<span class="plus" aria-hidden="true">+</span><span class="tx"><span class="nm">Créer un circuit</span><span class="meta">Placez les virages, nommez-le, partagez-le</span></span>';
+  nb.addEventListener('click', () => openEditor(null));
+  nodes.push(nb);
+  list.replaceChildren(...nodes);
+  const metas = [...list.querySelectorAll('[data-by]')];
+  if (USER && metas.length) USER.profiles([...new Set(metas.map(m => m.dataset.by))]).then(ps => {
+    if (tok !== listTok) return;
+    metas.forEach(m => { const n = ps[m.dataset.by] && ps[m.dataset.by].name; m.textContent += ' · par ' + (n || 'un joueur'); });
+  });
+}
+$('trackSearch').addEventListener('input', renderTrackList);
+
+function refreshSetup() {
+  document.querySelectorAll('[data-k]').forEach(b => b.setAttribute('aria-pressed', String(ui[b.dataset.k]) === b.dataset.v));
+  if (!findDef(ui.tid)) ui.tid = 'lac';
+  const mode = ui.mode, champ = mode === 'champ', def = findDef(ui.tid), r = records[ui.tid];
+  $('setupTitle').textContent = MODE_NAMES[mode];
+  $('trackGrp').hidden = champ; $('champGrp').hidden = !champ;
+  $('raceOpts').hidden = $('qualiGrp').hidden = mode === 'tt';
+  $('pitNote').hidden = mode === 'tt';
+  $('ghostNote').hidden = true;
+  $('editBtn').hidden = champ || !mine.some(c => c.id === ui.tid);
+  refreshLike();
+  $('goTxt').textContent = champ ? 'Lancer le championnat' : mode === 'race' ? 'Course contre les bots' : 'Lancer le chrono';
+  $('netActions').hidden = $('netNote').hidden = mode !== 'race';
+  $('quickBtn').disabled = $('inviteBtn').disabled = !ROOM;
+  $('netNote').textContent = ROOM ? 'En ligne, on vous place avec les pilotes qui cherchent une partie ; les places libres sont prises par des bots.' : window.claude ? 'Le jeu en ligne demande d’être connecté à claude.ai et invité sur cette page.' : 'Le jeu en ligne n’a pas pu se charger : vérifiez votre connexion puis rechargez la page.';
+  $('nickRow').hidden = !(ROOM && ROOM.p2p) || mode !== 'race';
+  if (champ) {
+    $('capName').textContent = 'Championnat';
+    $('capMeta').textContent = DEFS.length + ' manches · 25, 18, 15, 12, 10, 8 points';
+    $('capBlurb').textContent = DEFS.map(d => d.name).join(', puis ') + '.';
+  } else {
+    const O = outlineOf(def);
+    $('capName').textContent = def.name;
+    $('capMeta').textContent = km(O.len) + ' km · ' + O.turns + ' virages' + (r ? ' · record ' + fmt(r.lap) : '');
+    $('capBlurb').textContent = def.blurb;
+  }
+  renderTrackList();
+  renderBoard();
+}
+document.querySelectorAll('[data-k]').forEach(b => b.addEventListener('click', () => {
+  const k = b.dataset.k, v = b.dataset.v;
+  ui[k] = k === 'laps' || k === 'team' ? +v : v;
+  refreshSetup();
+}));
+
+let boardTok = 0;
+async function renderBoard() {
+  const sec = $('boardSec'), def = findDef(ui.tid), id = def ? def.id : '', tok = ++boardTok;
+  if (boardState === 'off' || ui.mode === 'champ' || !OFFICIAL_IDS.has(id)) { sec.hidden = true; return; }
+  sec.hidden = false;
+  $('boardTitle').textContent = 'Classement des joueurs · ' + def.name;
+  const rows = Object.entries(board).map(([uid, d]) => [uid, d && d[lbKey(id)]])
+    .filter(([, e]) => e && typeof e.t === 'number' && e.t > 5 && e.t < 900).sort((a, b) => a[1].t - b[1].t).slice(0, 10);
+  const ps = USER && rows.length ? await USER.profiles(rows.map(r => r[0])) : {};
+  if (tok !== boardTok) return;
+  $('boardList').replaceChildren(...rows.map(([uid, e], i) => {
+    const li = document.createElement('li'), p = document.createElement('span'), c = document.createElement('span'), n = document.createElement('span'), t = document.createElement('span');
+    li.className = uid === ME ? 'me' : '';
+    p.className = 'p'; p.textContent = i + 1;
+    c.className = 'c'; c.style.background = /^#[0-9a-f]{6}$/i.test(e.c) ? e.c : 'var(--muted)';
+    n.className = 'n'; n.textContent = uid === ME ? 'Vous' : (ps[uid] && ps[uid].name) || 'Pilote';
+    t.className = 't'; t.textContent = fmt(e.t);
+    li.append(p, c, n, t); return li;
+  }));
+  $('boardNote').textContent = boardState === 'loading' ? 'Chargement du classement…' : boardState === 'slow' ? 'Le classement est injoignable pour le moment.' :
+    rows.length ? 'Votre meilleur tour sur ce circuit y est ajouté automatiquement, avec son fantôme.' : 'Aucun temps partagé ici. Votre meilleur tour s’affichera dans cette liste.';
+  const top = rows.find(([uid]) => uid !== ME);
+  $('ghostNote').hidden = ui.mode !== 'tt';
+  $('ghostNote').textContent = 'Fantômes en piste : votre record' + (top ? ' et celui de ' + ((ps[top[0]] && ps[top[0]].name) || 'un joueur') + ' (' + fmt(top[1].t) + '), le meilleur des joueurs.' : '.');
+}
+
+const weatherPick = () => ui.weather === 'rain' || (ui.weather === 'var' && Math.random() < 0.4);
+function startAttract() { ED = null; startSession({ mode: 'race', tid: ui.tid, laps: Infinity, attract: true }); }
+function goHome() { leaveGame(); startAttract(); show('home'); }
+function openSetup(mode) { ui.mode = mode; refreshSetup(); show('menu'); }
+function startRace(o) { leaveGame(); startSession(o); show(null); $('pauseTrack').textContent = $('resTrack').textContent = G.T.def.name + (G.rain ? ' · pluie' : ''); $('restartBtn').hidden = false; }
+function startChampRound() { launch({ mode: 'race', champ: true, tid: DEFS[ui.champ.round].id, laps: ui.laps, diff: ui.diff, rain: weatherPick(), team: ui.team }); }
+// A race with qualifying starts with one timed lap alone on track (weather already decided).
+function launch(o) { if (ui.quali === '1') startRace({ mode: 'tt', tid: o.tid, rain: o.rain, team: o.team, quali: o }); else startRace(o); }
+
+// Qualifying time of a bot: it drives a standing-start lap alone at its own skill (lap times don't scale linearly with skill).
+const REF = new Map();
+function refLap(T, rain, skill = 1) {
+  const key = defKey(T.def) + (rain ? ':pluie' : '') + ':' + skill.toFixed(3);
+  if (!REF.has(key)) {
+    const saved = G;
+    G = { mode: 'tt', T, rain, t: 0, n: 0, cars: [], state: 'race', attract: false, laps: Infinity, mandatory: false, rec: [], bestSec: [null, null, null], online: null, sc: null, sim: true, player: null };
+    const c = makeCar(T, 0, { ...TEAMS[0], code: 'REF', name: 'REF' }, false, skill, 0); G.cars = [c]; G.order = [c];
+    for (let k = 0; c.lap < 1 && k < 120 * 400; k++) step();
+    REF.set(key, c.last || 120); G = saved;
+  }
+  return REF.get(key);
+}
+function showQuali() {
+  const o = G.quali, T = G.T, d = DIFF[o.diff] || DIFF.normal;
+  const rows = [{ code: 'VOUS', name: 'Vous', color: TEAMS[o.team || 0].color, t: G.qTime, me: true }];
+  const others = TEAMS.filter((_, i) => i !== (o.team || 0));
+  RIVALS.forEach((r, k) => rows.push({ code: r.code, name: r.name, color: others[k].color, t: refLap(T, o.rain, d.skill - k * 0.012) * (1 + (Math.random() - 0.5) * 0.008) }));
+  rows.sort((a, b) => a.t - b.t);
+  G.grid = {}; rows.forEach((r, i) => { G.grid[r.code] = i; });
+  const pos = rows.findIndex(r => r.me) + 1;
+  $('qTitle').textContent = pos === 1 ? 'Pole position' : 'Départ en P' + pos;
+  $('qTrack').textContent = 'Qualifications · ' + T.def.name + (o.rain ? ' · pluie' : '');
+  $('qBody').innerHTML = rows.map((r, i) => row(r.me ? 'me' : '', [['num', i + 1], ['', chip(r)], ['r num', fmt(r.t)], ['r num', i ? gapF(r.t - rows[0].t) : '']])).join('');
+  tq.length = 0; toastT = 0; el.toast.className = '';
+  show('quali'); $('qGo').focus();
+}
+$('qGo').addEventListener('click', () => startRace({ ...G.quali, grid: G.grid }));
+$('qRetry').addEventListener('click', () => startRace(G.opts));
+$('qMenu').addEventListener('click', () => goHome());
+function pause() {
+  if (!G || G.attract || G.over || G.state === 'paused' || !el.lobby.hidden) return;
+  for (const k in keys) keys[k] = false;
+  const p = G.player, rec = records[G.T.def.id];
+  $('pauseInfo').textContent = (G.online ? 'Course en ligne : elle continue pendant la pause. ' : '') + 'Meilleur tour de la séance : ' + fmt(p.best) + ' · record du circuit : ' + (rec ? fmt(rec.lap) : '—') + ' · pneus ' + Math.round(p.tyre * 100) + ' %';
+  if (!G.online) { G.prev = G.state; G.state = 'paused'; }
+  show('pause'); $('resumeBtn').focus();
+}
+function resume() { if (G.state === 'paused') G.state = G.prev; show(null); }
+
+document.querySelectorAll('.mode').forEach(b => b.addEventListener('click', () => openSetup(b.dataset.mode)));
+$('backBtn').addEventListener('click', () => show('home'));
+$('go').addEventListener('click', () => {
+  if (ui.mode === 'champ') { ui.champ = { round: 0, pts: {} }; startChampRound(); }
+  else if (ui.mode === 'race') launch({ mode: 'race', tid: ui.tid, laps: ui.laps, diff: ui.diff, rain: weatherPick(), team: ui.team });
+  else startRace({ mode: 'tt', tid: ui.tid, rain: weatherPick(), team: ui.team });
+});
+$('pauseBtn').addEventListener('click', pause);
+$('resumeBtn').addEventListener('click', resume);
+$('restartBtn').addEventListener('click', () => startRace(G.opts));
+$('againBtn').addEventListener('click', () => {
+  if (!G.champ) return G.opts.grid ? launch({ ...G.opts, grid: null }) : startRace(G.opts);
+  if (ui.champ.round === DEFS.length - 1) { ui.champ = { round: 0, pts: {} }; return startChampRound(); }
+  for (const r of champRows()) ui.champ.pts[r.c.drv.code] = r.pts;
+  ui.champ.round++; startChampRound();
+});
+$('quitBtn').addEventListener('click', goHome);
+$('menuBtn').addEventListener('click', goHome);
+$('editBtn').addEventListener('click', () => openEditor(mine.find(c => c.id === ui.tid)));
+$('dupBtn').addEventListener('click', () => {
+  const d = findDef(ui.tid); if (!d) return;
+  openEditor({ id: null, name: ('Copie de ' + d.name).slice(0, 28), env: d.custom ? d.env : Math.max(0, DEFS.indexOf(d)), verts: d.verts });
+});
+// Likes are for other players' circuits: one per player, stored in their own votes document.
+function refreshLike() {
+  const d = findDef(ui.tid), b = $('likeBtn'), n = likes.get(ui.tid) || 0;
+  b.hidden = !DB || !ME || ui.mode === 'champ' || !d || !d.by;
+  b.setAttribute('aria-pressed', myVotes.has(ui.tid));
+  b.textContent = (myVotes.has(ui.tid) ? '♥ Vous aimez' : '♡ J’aime') + (n ? ' · ' + n : '');
+}
+$('likeBtn').addEventListener('click', () => toggleLike(ui.tid));
+
+// ---------- Online: lobby room, quick match, private games ----------
+// Everything travels in presence: each player publishes their own car; the host also publishes the game and the bots.
+let ROOM = null, MYPEER = null, NET = null, lobbyTimer = 0;
+const SAYS = ['Prêt !', 'Bonne chance', 'Attendez-moi', 'GG', 'Encore une ?'];
+let sayN = 0;
+const NAMES = {};
+document.querySelectorAll('[data-chat] .says').forEach(box => {
+  box.innerHTML = SAYS.map((m, i) => '<button type="button" data-say="' + i + '">' + m + '</button>').join('');
+  box.addEventListener('click', e => { const b = e.target.closest('[data-say]'); if (b && NET && NET.room) NET.room.presence({ say: { m: +b.dataset.say, n: ++sayN } }).catch(() => {}); });
+});
+// New messages from the room's presence, newest last; names come from profiles() and are shown as text only.
+function collectSays() {
+  if (!NET || !NET.room) return;
+  NET.seen = NET.seen || new Map(); NET.feed = NET.feed || []; NET.ready = NET.ready || new Set();
+  let changed = false;
+  for (const p of NET.room.peers()) {
+    const s = p.presence.say;
+    if (!s || typeof s !== 'object' || !Number.isInteger(s.m) || !SAYS[s.m] || !Number.isInteger(s.n) || NET.seen.get(p.peer) === s.n) continue;
+    NET.seen.set(p.peer, s.n); changed = true;
+    NET.feed.push({ by: p.by, nick: cleanNick(p.presence.nick), me: p.isMe && p.sameTab, m: s.m });
+    if (s.m === 0) NET.ready.add(p.peer); else if (s.m === 2) NET.ready.delete(p.peer);
+  }
+  NET.feed = NET.feed.slice(-5);
+  if (!changed) return;
+  const ids = NET.feed.map(f => f.by).filter(id => id && !(id in NAMES));
+  const draw = () => document.querySelectorAll('[data-chat] .feed').forEach(ul => ul.replaceChildren(...NET.feed.map(f => {
+    const li = document.createElement('li'), b = document.createElement('b');
+    b.textContent = f.me ? 'Vous' : NAMES[f.by] || f.nick || 'Pilote'; li.append(b, ' : ' + SAYS[f.m]); return li;
+  })));
+  draw();
+  if (USER && ids.length) USER.profiles(ids).then(ps => { ids.forEach(id => { NAMES[id] = (ps[id] && ps[id].name) || ''; }); if (NET && NET.feed) draw(); });
+}
+const GAME_RE = /^[qp]-[a-z0-9]{5,6}$/;
+const selfPeer = r => { const p = (r || ROOM).peers().find(x => x.isMe && x.sameTab); return p ? p.peer : MYPEER; };
+const isPlayerPeer = p => p.kind === 'viewer' && (p.presence.role === 'host' || p.presence.role === 'guest');
+
+// ---------- Direct connections (PeerJS), used when the page runs outside claude.ai ----------
+// A game is a star: the host owns the PeerJS id of the game's name and relays everyone's presence to every guest.
+// It mimics the parts of the room capability the game uses (peers, presence, join, leave).
+const P2P_PREFIX = 'monoplace-gp-v1-';
+const cleanNick = n => typeof n === 'string' ? n.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 16) : '';
+const myNick = () => cleanNick($('nick').value) || 'Pilote';
+function p2pLobby() {
+  return { p2p: true, peers: () => [], presence: () => Promise.resolve(), onPeers: () => () => {}, join: p2pJoin };
+}
+function p2pJoin(name, opts = {}) {
+  return new Promise((resolve, reject) => {
+    const host = !!opts.host, peer = host ? new Peer(P2P_PREFIX + name, { debug: 0 }) : new Peer({ debug: 0 });
+    const others = new Map();
+    let done = false, list = [], cache = null, timer = 0, conn = null, mine = Object.freeze({}), dirty = true;
+    const fail = code => { if (done) return; done = true; clearTimeout(limit); try { peer.destroy(); } catch (e) { /* already gone */ } reject({ code }); };
+    const limit = setTimeout(() => fail('upstream_error'), 12000);
+    const mk = (id, presence, me) => Object.freeze({ peer: id, by: null, isMe: me, sameTab: me, kind: 'viewer', guest: false, presence, updatedAt: Date.now() });
+    const room = {
+      name,
+      peers() {
+        if (!cache) cache = Object.freeze([mk(peer.id, mine, true)].concat(host ? [...others].filter(([, o]) => o.presence).map(([id, o]) => mk(id, o.presence, false))
+          : list.filter(x => x.peer !== peer.id).map(x => mk(x.peer, x.presence, false))));
+        return cache;
+      },
+      presence(patch) { const p = { ...mine }; for (const k in patch) { if (patch[k] === null) delete p[k]; else p[k] = patch[k]; } mine = Object.freeze(p); dirty = true; cache = null; return Promise.resolve(); },
+      connected: () => host || !!(conn && conn.open),
+      onPeers: () => () => {},
+      leave() { clearInterval(timer); try { peer.destroy(); } catch (e) { /* already gone */ } return Promise.resolve(); },
+    };
+    const ok = () => { if (done) return; done = true; clearTimeout(limit); resolve(room); timer = setInterval(host ? tickHost : tickGuest, 66); };
+    function tickHost() {
+      if (!dirty) return;
+      dirty = false;
+      const msg = { t: 'peers', l: room.peers().map(p => ({ peer: p.peer, presence: p.presence })) };
+      for (const [, o] of others) if (o.conn.open) { try { o.conn.send(msg); } catch (e) { /* dropped */ } }
+    }
+    function tickGuest() { if (dirty && conn && conn.open) { dirty = false; try { conn.send({ t: 'pres', p: mine }); } catch (e) { /* dropped */ } } }
+    if (host) {
+      peer.on('open', ok);
+      peer.on('connection', c => {
+        others.set(c.peer, { conn: c, presence: null });
+        c.on('data', d => { if (d && d.t === 'pres' && d.p && typeof d.p === 'object' && others.has(c.peer)) { others.get(c.peer).presence = Object.freeze(d.p); cache = null; dirty = true; } });
+        c.on('close', () => { others.delete(c.peer); cache = null; dirty = true; });
+        c.on('error', () => {});
+      });
+      peer.on('error', e => fail(e && e.type === 'unavailable-id' ? 'taken' : 'upstream_error'));
+    } else {
+      peer.on('open', () => {
+        conn = peer.connect(P2P_PREFIX + name, { serialization: 'json', reliable: true });
+        conn.on('open', ok);
+        conn.on('data', d => {
+          if (!d || d.t !== 'peers' || !Array.isArray(d.l)) return;
+          list = d.l.filter(x => x && typeof x.peer === 'string' && x.presence && typeof x.presence === 'object').slice(0, 8).map(x => ({ peer: x.peer, presence: Object.freeze(x.presence) }));
+          cache = null;
+        });
+        conn.on('close', () => { list = []; cache = null; }); // the host left: the lobby and the race notice its absence
+        conn.on('error', () => {});
+      });
+      peer.on('error', e => fail(e && e.type === 'peer-unavailable' ? 'not_found' : 'upstream_error'));
+    }
+  });
+}
+
+function initRoom(room) {
+  ROOM = room;
+  if (room.p2p) {
+    $('onlineCount').textContent = 'En ligne : course rapide ou partie entre amis';
+    $('nickRow').hidden = false;
+    $('nick').value = store.get('monoplace-gp.nick') || 'Pilote ' + (100 + Math.floor(Math.random() * 900));
+    $('nick').addEventListener('change', () => store.set('monoplace-gp.nick', myNick()));
+    $('codeBtn').hidden = false;
+    refreshSetup(); hashJoin();
+    return;
+  }
+  room.onPeers(ch => {
+    const me = ch.peers.find(p => p.isMe && p.sameTab); if (me) MYPEER = me.peer;
+    const ids = new Set(); ch.peers.forEach(p => { if (p.kind === 'viewer' && !p.isMe) ids.add(p.by || p.peer); });
+    const n = ids.size;
+    $('onlineCount').innerHTML = n ? '<b>' + n + '</b> pilote' + (n > 1 ? 's' : '') + ' en ligne' : 'Personne d’autre en ligne pour l’instant';
+    $('mfRace').innerHTML = n ? '<b>' + n + '</b> pilote' + (n > 1 ? 's' : '') + ' en ligne · les bots complètent la grille' : '<b>6</b> voitures · solo ou en ligne';
+  }, () => { ROOM = null; $('onlineCount').textContent = ''; $('codeBtn').hidden = true; refreshSetup(); });
+  room.presence({ st: 'menu' }).catch(() => {});
+  $('codeBtn').hidden = false;
+  refreshSetup();
+  hashJoin();
+}
+function hashJoin() { const m = location.hash.match(/^#partie-([a-z0-9]{5})$/); if (m && ROOM && !NET) joinGame('p-' + m[1]); }
+addEventListener('hashchange', hashJoin);
+
+const trackPayload = def => OFFICIAL_IDS.has(def.id) ? { id: def.id } : { id: def.id, name: def.name, env: def.env, verts: def.verts };
+function trackFromPayload(tp) {
+  if (!tp || typeof tp.id !== 'string') return null;
+  if (OFFICIAL_IDS.has(tp.id)) return getTrack(tp.id);
+  const c = cleanCircuit(tp);
+  return c && isOk(c) ? trackOf(customDef(c)) : null;
+}
+
+async function hostGame(pub, fixed) {
+  if (!ROOM || NET) return false;
+  const name = fixed || (pub ? 'q-' : 'p-') + randCode(pub ? 6 : 5), code = name.slice(2), T = getTrack(ui.tid) || getTrack('lac');
+  const net = NET = { name, code, pub, host: true, room: null, autoAt: Date.now() + 30000, n: 0,
+    cfg: { track: trackPayload(T.def), laps: ui.laps, diff: ui.diff, rain: weatherPick(), hold: 0.4 + Math.random() * 1.1, state: 'lobby', seq: 0 } };
+  showLobby('Création de la partie…');
+  try { net.room = await ROOM.join(name, { host: true }); }
+  catch (e) { if (e && e.code === 'taken' && fixed) { NET = null; return false; } lobbyFail('Impossible de créer la partie pour le moment. Réessayez dans un instant.'); return true; }
+  if (NET !== net) { net.room.leave().catch(() => {}); return true; }
+  net.room.presence({ role: 'host', team: ui.team, nick: myNick(), game: net.cfg }).catch(() => {});
+  ROOM.presence({ st: 'host', g: name, open: pub, n: 1 }).catch(() => {});
+  if (!pub) location.hash = 'partie-' + code;
+  startLobbyTick();
+  return true;
+}
+async function joinGame(name, probe) {
+  if (!ROOM || NET || !GAME_RE.test(name)) return false;
+  const net = NET = { name, code: name.slice(2), pub: name[0] === 'q', host: false, room: null, waitUntil: Date.now() + 8000, cfg: null };
+  showLobby('Connexion à la partie…');
+  try { net.room = await ROOM.join(name); }
+  catch (e) { if (probe) { NET = null; return false; } lobbyFail(e && e.code === 'not_found' ? 'Aucune partie avec ce code : vérifiez-le auprès de votre ami.' : 'Impossible de rejoindre cette partie.'); return false; }
+  if (NET !== net) { net.room.leave().catch(() => {}); return false; }
+  net.room.presence({ role: 'guest', team: ui.team, nick: myNick() }).catch(() => {});
+  ROOM.presence({ st: 'play', g: name, open: null, n: null }).catch(() => {});
+  if (probe) { // a public slot: stay only if its game is still waiting for players
+    let host = null;
+    for (const t0 = Date.now(); Date.now() - t0 < 4000 && !host; await new Promise(r => setTimeout(r, 150))) host = net.room.peers().find(p => p.presence.role === 'host' && p.presence.game);
+    if (NET !== net) return false;
+    if (!host || host.presence.game.state !== 'lobby' || net.room.peers().filter(isPlayerPeer).length > 6) { leaveGame(); return false; }
+  }
+  startLobbyTick();
+  return true;
+}
+// Direct connections have no directory of players: public games live on five fixed names; join the first that waits, else host one.
+async function quickMatchP2P() {
+  for (let k = 1; k <= 5; k++) {
+    const name = 'q-pub00' + k;
+    if (await hostGame(true, name) || await joinGame(name, true)) return;
+    if (NET) return;
+  }
+  NET = { pub: true }; showLobby(''); lobbyFail('Toutes les parties publiques sont pleines ou déjà lancées. Réessayez dans un instant.');
+}
+function quickMatch() {
+  if (!ROOM || NET) return;
+  if (ROOM.p2p) return quickMatchP2P();
+  const open = ROOM.peers().filter(p => !p.isMe && p.presence.st === 'host' && p.presence.open === true && typeof p.presence.g === 'string' && /^q-/.test(p.presence.g) && GAME_RE.test(p.presence.g) && (p.presence.n | 0) < 6);
+  if (open.length) joinGame(open[0].presence.g); else hostGame(true);
+}
+function leaveGame() {
+  stopLobbyTick();
+  if (NET && NET.room) NET.room.leave().catch(() => {});
+  const had = !!NET; NET = null;
+  if (G) G.online = null;
+  if (had && ROOM) ROOM.presence({ st: 'menu', g: null, open: null, n: null }).catch(() => {});
+  if (/^#partie-/.test(location.hash)) location.hash = '';
+}
+function startLobbyTick() { stopLobbyTick(); lobbyTimer = setInterval(lobbyTick, 300); lobbyTick(); }
+function stopLobbyTick() { clearInterval(lobbyTimer); lobbyTimer = 0; }
+
+function lobbyTick() {
+  const net = NET;
+  if (!net || !net.room) return;
+  collectSays();
+  const peers = net.room.peers(), humans = peers.filter(isPlayerPeer);
+  if (net.host) {
+    const me = selfPeer(net.room);
+    // Two players who hit "Course en ligne" at once: the newer lone host joins the older game.
+    if (net.pub && humans.length <= 1) {
+      const older = ROOM.peers().find(p => !p.isMe && p.presence.st === 'host' && p.presence.open === true && typeof p.presence.g === 'string' && /^q-/.test(p.presence.g) && GAME_RE.test(p.presence.g) && p.peer < me && (p.presence.n | 0) < 6);
+      if (older) { const g = older.presence.g; leaveGame(); return joinGame(g); }
+    }
+    if (humans.length !== net.n) { net.n = humans.length; ROOM.presence({ n: net.n }).catch(() => {}); }
+    if (humans.length >= 6 || (net.pub && Date.now() >= net.autoAt)) return hostStart();
+    renderLobby(humans);
+  } else {
+    const host = peers.find(p => p.kind === 'viewer' && p.presence.role === 'host');
+    if (!host) { if (Date.now() > net.waitUntil) lobbyFail('Partie introuvable : l’hôte l’a peut-être quittée.'); return; }
+    net.waitUntil = Date.now() + 5000;
+    const g = host.presence.game;
+    if (!g || typeof g !== 'object') return;
+    net.cfg = g;
+    if (g.state === 'go') {
+      const mySlot = Array.isArray(g.slots) && g.slots.some(s => s && s.p === selfPeer(net.room));
+      return mySlot ? startOnline(g) : lobbyFail('La course a déjà commencé sans vous.');
+    }
+    renderLobby(humans);
+  }
+}
+
+function hostStart() {
+  const net = NET, humans = net.room.peers().filter(isPlayerPeer);
+  humans.sort((a, b) => (b.presence.role === 'host') - (a.presence.role === 'host') || (a.peer < b.peer ? -1 : 1));
+  const usedT = new Set();
+  const slots = humans.slice(0, 6).map((p, i) => {
+    let t = clamp(p.presence.team | 0, 0, 5);
+    if (usedT.has(t)) t = [0, 1, 2, 3, 4, 5].find(x => !usedT.has(x));
+    usedT.add(t);
+    return { p: p.peer, by: typeof p.by === 'string' ? p.by : null, nick: cleanNick(p.presence.nick), t, s: 5 - i };
+  });
+  net.cfg = { ...net.cfg, state: 'go', seq: Date.now() % 1e9, slots };
+  net.room.presence({ game: net.cfg }).catch(() => {});
+  ROOM.presence({ st: 'play', open: false }).catch(() => {});
+  startOnline(net.cfg);
+}
+
+// The host's game object is another player's input: check every field before using it.
+function startOnline(g) {
+  stopLobbyTick();
+  const T = trackFromPayload(g.track), me = selfPeer(NET.room);
+  const slots = (Array.isArray(g.slots) ? g.slots : []).filter(s => s && typeof s.p === 'string' && Number.isInteger(s.s) && s.s >= 0 && s.s < 6)
+    .map(s => ({ p: s.p, by: typeof s.by === 'string' ? s.by : null, nick: cleanNick(s.nick), s: s.s, t: clamp(s.t | 0, 0, 5) })).slice(0, 6);
+  if (!T || !slots.some(s => s.p === me)) return lobbyFail('Cette course ne peut pas être chargée.');
+  startSession({ mode: 'race', T, laps: [3, 5, 10].includes(g.laps) ? g.laps : 3, diff: DIFF[g.diff] ? g.diff : 'normal', rain: g.rain === true,
+    hold: clamp(+g.hold || 1, 0.4, 1.5), team: 0, online: { slots, me, host: NET.host } });
+  show(null);
+  $('pauseTrack').textContent = $('resTrack').textContent = G.T.def.name + ' · en ligne' + (G.rain ? ' · pluie' : '');
+  $('restartBtn').hidden = true;
+  const remote = G.cars.filter(c => c.remote && !c.bot && c.by);
+  if (USER && remote.length) USER.profiles(remote.map(c => c.by)).then(ps => remote.forEach(c => {
+    const n = ps[c.by] && ps[c.by].name; if (!n) return;
+    c.drv.name = n; c.drv.code = (n.normalize('NFD').replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase()) || c.drv.code;
+  }));
+}
+
+const r1 = v => Math.round(v * 10) / 10, r3 = v => Math.round(v * 1000) / 1000;
+const pack = c => [r1(c.x), r1(c.y), r3(c.a), r1(c.vx), r1(c.vy), r3(c.steer), r1(c.dist), c.lap, c.fin ? 1 : 0, r3(c.finT), c.best == null ? 0 : r3(c.best), c.pitted ? 1 : 0, c.pen];
+function netPublish() {
+  const now = performance.now();
+  if (!NET || !NET.room || now - G.online.lastPub < 66) return;
+  G.online.lastPub = now;
+  const patch = { car: pack(G.player) };
+  if (G.online.host) patch.bots = G.cars.filter(c => c.bot).map(c => [c.slot, ...pack(c)]);
+  NET.room.presence(patch).catch(() => {});
+}
+function applyNet(c, a, o) {
+  if (a.length < o + 13) return;
+  const v = i => { const n = a[o + i]; return Number.isFinite(n) ? n : 0; };
+  c.tx = v(0); c.ty = v(1); c.a = v(2); c.vx = clamp(v(3), -900, 900); c.vy = clamp(v(4), -900, 900); c.steer = clamp(v(5), -1, 1);
+  c.dist = v(6); c.lap = v(7) | 0; c.best = v(10) || null; c.pitted = !!v(11); c.pen = v(12);
+  if (v(8) && !c.fin) { c.fin = true; c.finT = v(9); c.finLap = c.lap; G.leaderDone = true; }
+  if (!c.netOk || Math.hypot(c.tx - c.x, c.ty - c.y) > 80) { c.x = c.tx; c.y = c.ty; c.netOk = true; }
+}
+function netSync(dt) {
+  if (!NET || !NET.room) return;
+  const peers = NET.room.peers(), byPeer = new Map(peers.map(p => [p.peer, p]));
+  const host = G.online.host ? null : peers.find(p => p.kind === 'viewer' && p.presence.role === 'host');
+  const hostBots = host && Array.isArray(host.presence.bots) ? host.presence.bots : null;
+  for (const c of G.cars) {
+    if (!c.remote) continue;
+    let arr = null;
+    if (c.bot) { arr = hostBots && hostBots.find(b => Array.isArray(b) && b[0] === c.slot); c.goneT = host ? 0 : (c.goneT || 0) + dt; }
+    else { const p = byPeer.get(c.peer); arr = p && Array.isArray(p.presence.car) ? p.presence.car : null; c.goneT = p ? 0 : (c.goneT || 0) + dt; }
+    if (arr && arr !== c.lastNet) { c.lastNet = arr; applyNet(c, arr, c.bot ? 1 : 0); }
+  }
+  const gone = G.cars.filter(c => c.remote && c.goneT > 4);
+  if (gone.length) {
+    // shortcut: no host migration; if the host leaves, their bots leave too.
+    toast(gone.some(c => c.bot) ? 'L’hôte a quitté : ses bots se retirent' : 'Un pilote a quitté la course', 'y');
+    G.cars = G.cars.filter(c => !gone.includes(c)); G.order = G.order.filter(c => !gone.includes(c));
+  }
+}
+
+let lobbyFrom = 'home';
+function showLobby(msg) {
+  document.querySelectorAll('[data-chat] .feed').forEach(ul => ul.replaceChildren());
+  lobbyFrom = el.menu.hidden ? 'home' : 'menu';
+  $('lbKind').textContent = NET.pub ? 'Course en ligne' : 'Partie entre amis';
+  $('lbTitle').textContent = 'Salle d’attente';
+  $('lbTrack').textContent = msg;
+  $('lbCodeBox').hidden = true; $('lbStart').hidden = true;
+  $('lbPlayers').replaceChildren(); $('lbNote').textContent = '';
+  show('lobby');
+}
+function lobbyFail(msg) {
+  leaveGame();
+  $('lbTitle').textContent = 'Partie indisponible';
+  $('lbTrack').textContent = msg;
+  $('lbCodeBox').hidden = true; $('lbStart').hidden = true;
+  $('lbPlayers').replaceChildren(); $('lbNote').textContent = '';
+  show('lobby');
+}
+let lobbyTok = 0;
+function renderLobby(humans) {
+  const net = NET, g = net.cfg || {}, tok = ++lobbyTok;
+  const tname = g.track ? (OFFICIAL_IDS.has(g.track.id) ? findDef(g.track.id).name : String(g.track.name || 'Circuit perso').slice(0, 28)) : '…';
+  $('lbTrack').textContent = tname + ' · ' + ([3, 5, 10].includes(g.laps) ? g.laps : 3) + ' tours' + (g.rain === true ? ' · pluie' : '') + ' · bots ' + (DIFF[g.diff] ? g.diff : 'normal');
+  $('lbCodeBox').hidden = net.pub; $('lbCode').textContent = net.code.toUpperCase();
+  $('lbLink').hidden = !ROOM.p2p;
+  $('lbShare').textContent = ROOM.p2p ? 'Envoyez le lien à vos amis, ou le code à taper dans « Rejoindre avec un code » sur l’écran d’accueil.' : 'Vos amis touchent « Rejoindre avec un code » sur l’écran d’accueil et tapent ce code. Ils doivent avoir accès à cette page : invitez-les depuis le menu Partager.';
+  $('lbStart').hidden = !net.host;
+  const left = Math.ceil((net.autoAt - Date.now()) / 1000), bots = Math.max(0, 6 - humans.length);
+  $('lbNote').textContent = (net.host ? (net.pub ? 'Départ automatique dans ' + Math.max(0, left) + ' s. ' : 'Lancez la course quand vos amis sont là. ') : 'En attente du départ donné par l’hôte. ') +
+    (bots ? bots + ' bot' + (bots > 1 ? 's' : '') + ' compléteront la grille.' : 'Grille complète.');
+  const ids = humans.map(p => p.by).filter(Boolean);
+  const draw = ps => {
+    if (tok !== lobbyTok) return;
+    $('lbPlayers').replaceChildren(...humans.map((p, i) => {
+      const li = document.createElement('li'), n = document.createElement('span'), c = document.createElement('span'), nm = document.createElement('span'), r = document.createElement('span');
+      li.className = p.isMe && p.sameTab ? 'me' : '';
+      n.className = 'p'; n.textContent = i + 1;
+      c.className = 'c'; c.style.background = TEAMS[clamp(p.presence.team | 0, 0, 5)].color;
+      nm.className = 'n'; nm.textContent = p.isMe && p.sameTab ? 'Vous' : (p.by && ps[p.by] && ps[p.by].name) || cleanNick(p.presence.nick) || 'Pilote';
+      r.className = 't'; r.textContent = [p.presence.role === 'host' ? 'hôte' : '', net.ready && net.ready.has(p.peer) ? 'prêt' : ''].filter(Boolean).join(' · ');
+      li.append(n, c, nm, r); return li;
+    }));
+  };
+  if (USER && ids.length) USER.profiles(ids).then(draw); else draw({});
+}
+$('quickBtn').addEventListener('click', quickMatch);
+$('inviteBtn').addEventListener('click', () => hostGame(false));
+$('lbStart').addEventListener('click', () => { if (NET && NET.host && NET.room) hostStart(); });
+$('lbLeave').addEventListener('click', () => { leaveGame(); if (lobbyFrom === 'menu') openSetup(ui.mode); else show('home'); });
+$('lbLink').addEventListener('click', () => {
+  const link = location.origin + location.pathname + '#partie-' + $('lbCode').textContent.toLowerCase();
+  navigator.clipboard.writeText(link).then(() => { $('lbLink').textContent = 'Lien copié'; }, () => { $('lbShare').textContent = link; });
+});
+$('lbCopy').addEventListener('click', () => {
+  const code = $('lbCode').textContent;
+  navigator.clipboard.writeText(code).then(() => { $('lbCopy').textContent = 'Copié'; }, () => { const r = document.createRange(); r.selectNodeContents($('lbCode')); getSelection().removeAllRanges(); getSelection().addRange(r); });
+});
+$('codeBtn').addEventListener('click', () => { $('joinCode').value = ''; $('joinErr').textContent = ''; show('join'); $('joinCode').focus(); });
+$('joinCancel').addEventListener('click', () => show('home'));
+$('joinForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const code = $('joinCode').value.trim().toLowerCase();
+  if (!/^[a-z0-9]{5}$/.test(code)) { $('joinErr').textContent = 'Le code fait 5 lettres ou chiffres, comme ABC23.'; return; }
+  joinGame('p-' + code);
+});
+
+// ---------- Circuit editor ----------
+let ED = null;
+const AREA = { x0: -600, y0: -600, x1: 4600, y1: 3000 }; // editable area, in corner units
+const TEMPLATE = [[0, 0, 300], [2600, 0, 300], [2600, 1500, 300], [0, 1500, 300]];
+function openEditor(c) {
+  $('edShare').hidden = !DB;
+  ED = { id: c ? c.id : null, verts: (c ? c.verts : TEMPLATE).map(v => v.slice()), sel: 0, drag: false, env: c ? c.env : 0, armDel: false, view: null, past: [], future: [], sliding: false };
+  $('edName').value = c ? c.name : '';
+  $('edRemove').hidden = !(c && c.id); $('edRemove').textContent = 'Supprimer le circuit';
+  show('editor'); edCheck();
+}
+function edCheck() {
+  ED.v = validate(ED.verts);
+  const named = $('edName').value.trim().length > 0, ok = ED.v.ok && named;
+  const st = $('edStatus'); st.textContent = ED.v.ok && !named ? 'Donnez un nom au circuit pour pouvoir l’enregistrer.' : ED.v.msg; st.className = 'ed-status ' + (ok ? 'ok' : 'bad');
+  $('edSave').disabled = !ok;
+  $('edSel').textContent = ED.sel + 1;
+  $('edRadius').value = ED.verts[ED.sel][2];
+  $('edDel').disabled = ED.verts.length <= 3;
+  $('edUndo').disabled = !ED.past.length; $('edRedo').disabled = !ED.future.length;
+  document.querySelectorAll('[data-env]').forEach(b => b.setAttribute('aria-pressed', +b.dataset.env === ED.env));
+}
+// Undo history: a snapshot of the layout before each change.
+const edSnap = () => ({ verts: ED.verts.map(v => v.slice()), env: ED.env, sel: ED.sel });
+function edPush() { ED.past.push(edSnap()); if (ED.past.length > 100) ED.past.shift(); ED.future = []; }
+function edRestore(from, to) { if (!from.length) return; to.push(edSnap()); const st = from.pop(); ED.verts = st.verts; ED.env = st.env; ED.sel = Math.min(st.sel, st.verts.length - 1); edCheck(); }
+$('edUndo').addEventListener('click', () => edRestore(ED.past, ED.future));
+$('edRedo').addEventListener('click', () => edRestore(ED.future, ED.past));
+function edWorld(e) {
+  const v = ED.view;
+  return [clamp(Math.round((e.clientX - v.ox) / v.s / SCALE / 25) * 25, AREA.x0, AREA.x1), clamp(Math.round((e.clientY - v.oy) / v.s / SCALE / 25) * 25, AREA.y0, AREA.y1)];
+}
+cv.addEventListener('pointerdown', e => {
+  if (!ED || !ED.view) return;
+  const v = ED.view;
+  let hit = -1, bd = 22 * 22;
+  ED.verts.forEach((p, i) => { const dx = v.ox + p[0] * SCALE * v.s - e.clientX, dy = v.oy + p[1] * SCALE * v.s - e.clientY; if (dx * dx + dy * dy < bd) { bd = dx * dx + dy * dy; hit = i; } });
+  edPush();
+  if (hit < 0) {
+    if (ED.verts.length >= 30) { ED.past.pop(); return; }
+    const [x, y] = edWorld(e);
+    ED.verts.splice(ED.sel + 1, 0, [x, y, 250]); hit = ED.sel + 1;
+  }
+  ED.changed = ED.verts.length !== ED.past[ED.past.length - 1].verts.length; // a corner was added
+  ED.sel = hit; ED.drag = true; cv.setPointerCapture(e.pointerId); edCheck();
+});
+cv.addEventListener('pointermove', e => {
+  if (!ED || !ED.drag) return;
+  const [x, y] = edWorld(e), p = ED.verts[ED.sel];
+  if (p[0] !== x || p[1] !== y) { p[0] = x; p[1] = y; ED.changed = true; edCheck(); }
+});
+for (const ev of ['pointerup', 'pointercancel']) cv.addEventListener(ev, () => { if (!ED || !ED.drag) return; ED.drag = false; if (!ED.changed) { ED.past.pop(); edCheck(); } }); // a plain click on a corner is not a change
+function edDelCorner() { if (ED.verts.length <= 3) return; edPush(); ED.verts.splice(ED.sel, 1); ED.sel = Math.max(0, ED.sel - 1); edCheck(); }
+$('edName').addEventListener('input', () => ED && edCheck());
+$('edRadius').addEventListener('input', e => { if (!ED.sliding) { edPush(); ED.sliding = true; } ED.verts[ED.sel][2] = +e.target.value; edCheck(); });
+$('edRadius').addEventListener('change', () => { ED.sliding = false; });
+$('edDel').addEventListener('click', edDelCorner);
+document.querySelectorAll('[data-env]').forEach(b => b.addEventListener('click', () => { if (ED.env !== +b.dataset.env) { edPush(); ED.env = +b.dataset.env; edCheck(); } }));
+$('edBack').addEventListener('click', () => { startAttract(); openSetup(ui.mode); });
+$('edRemove').addEventListener('click', () => {
+  if (!ED.armDel) { ED.armDel = true; $('edRemove').textContent = 'Confirmer la suppression'; return; }
+  mine = mine.filter(c => c.id !== ED.id);
+  delete records[ED.id]; saveRecords(); store.del(GHOST_KEY + ED.id);
+  persistMine(); ui.tid = 'lac'; startAttract(); openSetup(ui.mode === 'champ' ? 'race' : ui.mode);
+});
+$('edSave').addEventListener('click', () => {
+  const name = $('edName').value.trim().slice(0, 28);
+  if (!ED.v.ok || !name) return;
+  const id = ED.id || 'c' + Date.now().toString(36) + randCode(3);
+  const c = { id, name, env: ED.env, verts: ED.verts.map(v => v.slice()), at: Date.now() };
+  if (ED.id) { delete records[id]; saveRecords(); store.del(GHOST_KEY + id); } // the old record no longer matches the new layout
+  const i = mine.findIndex(x => x.id === id);
+  if (i >= 0) mine[i] = c; else mine.unshift(c);
+  mine = mine.slice(0, 20);
+  persistMine();
+  ui.tid = id; $('trackSearch').value = '';
+  startAttract(); openSetup(ui.mode === 'champ' ? 'race' : ui.mode);
+});
+
+function renderEditor() {
+  const dpr = Math.min(2, devicePixelRatio || 1), W = innerWidth, Hh = innerHeight;
+  if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(Hh * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(Hh * dpr); }
+  const top = $('edTop').getBoundingClientRect().bottom + 8, bot = $('edBottom').getBoundingClientRect().top - 8;
+  const ax0 = AREA.x0 * SCALE, ay0 = AREA.y0 * SCALE, aw = (AREA.x1 - AREA.x0) * SCALE, ah = (AREA.y1 - AREA.y0) * SCALE;
+  const s = Math.max(0.01, Math.min((W - 32) / aw, (bot - top) / ah)), ox = W / 2 - (ax0 + aw / 2) * s, oy = (top + bot) / 2 - (ay0 + ah / 2) * s;
+  ED.view = { s, ox, oy };
+  const th = DEFS[ED.env].theme, v = ED.v;
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = th.out; ctx.fillRect(0, 0, cv.width, cv.height);
+  ctx.setTransform(dpr * s, 0, 0, dpr * s, dpr * ox, dpr * oy);
+  ctx.fillStyle = 'rgba(255,255,255,.05)'; ctx.fillRect(ax0, ay0, aw, ah);
+  ctx.strokeStyle = 'rgba(255,255,255,.08)'; ctx.lineWidth = 1 / s; ctx.beginPath();
+  for (let gx = AREA.x0; gx <= AREA.x1; gx += 250) { ctx.moveTo(gx * SCALE, ay0); ctx.lineTo(gx * SCALE, ay0 + ah); }
+  for (let gy = AREA.y0; gy <= AREA.y1; gy += 250) { ctx.moveTo(ax0, gy * SCALE); ctx.lineTo(ax0 + aw, gy * SCALE); }
+  ctx.stroke();
+  if (v.s && v.s.pitPoly) {
+    ctx.beginPath(); v.s.pitPoly.forEach(([x, y]) => ctx.lineTo(x, y)); ctx.closePath();
+    ctx.fillStyle = 'rgba(241,194,46,.35)'; ctx.fill();
+  }
+  if (v.s) {
+    ctx.lineJoin = 'round'; ctx.lineWidth = 2 * R0; ctx.strokeStyle = th.run; ctx.stroke(v.s.path);
+    ctx.lineWidth = 2 * HW; ctx.strokeStyle = th.asph; ctx.stroke(v.s.path);
+    const { X, Y, off } = v.s, i2 = Math.min(off + 6, X.length - 1), a = Math.atan2(Y[i2] - Y[off], X[i2] - X[off]);
+    ctx.save(); ctx.translate(X[off], Y[off]); ctx.rotate(a);
+    ctx.fillStyle = '#f4f5f7'; ctx.fillRect(-6, -HW, 12, 2 * HW);
+    ctx.beginPath(); ctx.moveTo(110, 0); ctx.lineTo(50, -30); ctx.lineTo(50, 30); ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+  if (v.close) {
+    ctx.strokeStyle = '#ff6a5c'; ctx.lineWidth = 6 / s;
+    for (let k = 0; k < 4; k += 2) { ctx.beginPath(); ctx.arc(v.close[k], v.close[k + 1], R0, 0, 7); ctx.stroke(); }
+  }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const pts = ED.verts.map(p => [ox + p[0] * SCALE * s, oy + p[1] * SCALE * s]);
+  ctx.setLineDash([5, 5]); ctx.strokeStyle = 'rgba(238,241,246,.5)'; ctx.lineWidth = 1.5; ctx.beginPath();
+  pts.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.closePath(); ctx.stroke(); ctx.setLineDash([]);
+  ctx.font = '700 12px "Barlow Semi Condensed", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  pts.forEach(([x, y], i) => {
+    ctx.fillStyle = i === ED.sel ? '#f1c22e' : v.bad && v.bad.includes(i) ? '#ff6a5c' : '#eef1f6';
+    disc(ctx, x, y, 11); ctx.fillStyle = '#0c0f14'; ctx.fillText(i + 1, x, y + 1);
+  });
+}
+
+// ---------- Sound: synthesised with Web Audio; browsers only allow it after the first click or key press ----------
+const SND = { on: store.get('monoplace-gp.sound') !== false, ctx: null };
+function sndLabel() { for (const id of ['sndHome', 'sndPause']) { const b = $(id); b.textContent = SND.on ? 'Son activé' : 'Son coupé'; b.setAttribute('aria-pressed', SND.on); } }
+function toggleSound() { SND.on = !SND.on; store.set('monoplace-gp.sound', SND.on); sndLabel(); if (SND.ctx) SND.master.gain.setTargetAtTime(SND.on ? 0.6 : 0, SND.ctx.currentTime, 0.05); }
+$('sndHome').addEventListener('click', toggleSound);
+$('sndPause').addEventListener('click', toggleSound);
+sndLabel();
+function audioInit() {
+  if (SND.ctx) { if (SND.ctx.state === 'suspended' && !document.hidden) SND.ctx.resume().catch(() => {}); return; }
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return;
+  try {
+    const ctx = SND.ctx = new AC(), comp = ctx.createDynamicsCompressor(), master = SND.master = ctx.createGain();
+    master.gain.value = SND.on ? 0.6 : 0; master.connect(comp); comp.connect(ctx.destination);
+    const noise = SND.noise = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate), nd = noise.getChannelData(0);
+    for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+    const loop = (type, freq, q) => {
+      const src = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
+      src.buffer = noise; src.loop = true; f.type = type; f.frequency.value = freq; if (q) f.Q.value = q; g.gain.value = 0;
+      src.connect(f); f.connect(g); g.connect(master); src.start(); return g;
+    };
+    SND.squeal = loop('bandpass', 2300, 9); SND.rumble = loop('lowpass', 260); SND.rain = loop('highpass', 2800);
+    // Engine: a sawtooth, a sub-octave square and a detuned upper sawtooth through a low-pass filter.
+    const engine = () => {
+      const g = ctx.createGain(), f = ctx.createBiquadFilter(), pan = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
+      g.gain.value = 0; f.type = 'lowpass'; f.frequency.value = 900;
+      const oscs = [['sawtooth', 1, 0], ['square', 0.5, 0], ['sawtooth', 2, 9]].map(([type, m, det]) => { const o = ctx.createOscillator(); o.type = type; o.detune.value = det; o.connect(f); o.start(); return { o, m }; });
+      f.connect(g); if (pan) { g.connect(pan); pan.connect(master); } else g.connect(master);
+      return { g, f, oscs, pan };
+    };
+    SND.me = engine(); SND.other = engine();
+  } catch (e) { SND.ctx = null; }
+}
+addEventListener('pointerdown', audioInit, true);
+addEventListener('keydown', audioInit, true);
+document.addEventListener('visibilitychange', () => { if (!SND.ctx) return; if (document.hidden) SND.ctx.suspend().catch(() => {}); else SND.ctx.resume().catch(() => {}); });
+
+const tgt = (param, v, tc = 0.06) => param.setTargetAtTime(v, SND.ctx.currentTime, tc);
+// Pitch follows the revs inside the current gear, so it drops at every upshift (8 gears, as on the HUD).
+function engineNote(e, sp, thr, vol) {
+  const ratio = sp / MAXV * 8, frac = sp < 8 ? 0 : ratio >= 7 ? Math.min(1, ratio - 7) : ratio - Math.floor(ratio);
+  const rpm = sp < 8 ? 0.12 : 0.32 + 0.68 * frac, f0 = 48 + rpm * 270;
+  e.oscs.forEach(({ o, m }) => tgt(o.frequency, f0 * m, 0.03));
+  tgt(e.f.frequency, 500 + 2800 * rpm * (0.35 + 0.65 * thr), 0.05);
+  tgt(e.g.gain, vol * (0.5 + 0.5 * thr) * (0.7 + 0.3 * rpm), 0.05);
+}
+function sfxUpdate() {
+  if (!SND.ctx) return;
+  const p = G && !ED && !G.attract && G.state !== 'paused' && el.lobby.hidden ? G.player : null;
+  if (!p) { [SND.me.g, SND.other.g, SND.squeal, SND.rumble, SND.rain].forEach(n => tgt(n.gain, 0, 0.1)); return; }
+  const sp = Math.hypot(p.vx, p.vy), grid = G.state === 'countdown';
+  const rev = grid && keys.gas ? (0.55 + 0.3 * Math.abs(Math.sin(performance.now() / 160))) * MAXV / 8 : 0; // revving on the grid
+  engineNote(SND.me, grid ? rev : sp, grid ? (keys.gas ? 1 : 0.15) : p.auto ? 0.7 : p.thr, 0.16);
+  let near = null, nd = 1e9;
+  for (const c of G.cars) { if (c === p) continue; const d = Math.hypot(c.x - p.x, c.y - p.y); if (d < nd) { nd = d; near = c; } }
+  if (near) { engineNote(SND.other, Math.hypot(near.vx, near.vy), 0.8, 0.12 * clamp(1 - nd / 650, 0, 1) ** 2); if (SND.other.pan) tgt(SND.other.pan.pan, clamp((near.x - p.x) / 400, -1, 1), 0.05); }
+  else tgt(SND.other.g.gain, 0);
+  tgt(SND.squeal.gain, !p.onGrass && sp > 60 ? clamp((p.slide - 70) / 260, 0, 1) * 0.22 : 0, 0.04);
+  tgt(SND.rumble.gain, p.onGrass ? 0.35 * Math.min(1, sp / 300) : 0, 0.05);
+  tgt(SND.rain.gain, G.rain ? 0.05 : 0, 0.3);
+}
+// Impact: a short burst of filtered noise, louder for harder hits and closer cars.
+function sfxHit(c, v) {
+  if (!SND.ctx || G.sim || G.attract || !G.player) return;
+  const vol = clamp((v - 50) / 400, 0, 1) * clamp(1 - Math.hypot(c.x - G.player.x, c.y - G.player.y) / 700, 0, 1), now = performance.now();
+  if (vol < 0.03 || now - (SND.lastHit || 0) < 70) return;
+  SND.lastHit = now;
+  const ctx = SND.ctx, t = ctx.currentTime, src = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
+  src.buffer = SND.noise; f.type = 'lowpass'; f.frequency.value = 500 + 1500 * vol;
+  g.gain.setValueAtTime(0.9 * vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.28);
+  src.connect(f); f.connect(g); g.connect(SND.master); src.start(t, Math.random()); src.stop(t + 0.3);
+}
+function tone(freq, start, dur, vol, type) {
+  const o = SND.ctx.createOscillator(), g = SND.ctx.createGain();
+  o.type = type; o.frequency.value = freq;
+  g.gain.setValueAtTime(0.0001, start); g.gain.exponentialRampToValueAtTime(vol, start + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, start + dur);
+  o.connect(g); g.connect(SND.master); o.start(start); o.stop(start + dur + 0.02);
+}
+function sfxBeep(freq) { if (SND.ctx) tone(freq, SND.ctx.currentTime, 0.18, 0.22, 'square'); }
+function sfxChime(notes) { if (!SND.ctx) return; const t = SND.ctx.currentTime; notes.forEach((f, i) => tone(f, t + i * 0.11, 0.35, 0.16, 'triangle')); }
+
+// ---------- Input ----------
+const KEYMAP = { ArrowUp: 'gas', KeyW: 'gas', ArrowDown: 'brake', KeyS: 'brake', ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right' };
+addEventListener('keydown', e => {
+  if (ED) {
+    if (e.target.tagName === 'INPUT' && e.target.type === 'text') return;
+    const z = (e.ctrlKey || e.metaKey) && e.code === 'KeyZ' && !e.shiftKey, y = (e.ctrlKey || e.metaKey) && (e.code === 'KeyY' || (e.code === 'KeyZ' && e.shiftKey));
+    if (z || y) { e.preventDefault(); z ? edRestore(ED.past, ED.future) : edRestore(ED.future, ED.past); }
+    else if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); edDelCorner(); }
+    return;
+  }
+  if (e.target.tagName === 'INPUT') return;
+  const k = KEYMAP[e.code];
+  if (k && !G.attract) { keys[k] = true; e.preventDefault(); }
+  if (e.code === 'Escape' || e.code === 'KeyP') { if (!el.pause.hidden) resume(); else pause(); }
+  if (e.code === 'KeyM') toggleSound();
+});
+addEventListener('keyup', e => { const k = KEYMAP[e.code]; if (k) keys[k] = false; });
+addEventListener('blur', pause);
+addEventListener('resize', () => { if (!el.home.hidden) drawModeArts(); });
+document.querySelectorAll('.tb').forEach(b => {
+  const k = b.dataset.key, set = v => e => { e.preventDefault(); keys[k] = v; b.classList.toggle('on', v); };
+  b.addEventListener('pointerdown', set(true));
+  for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) b.addEventListener(ev, set(false));
+});
+if (matchMedia('(pointer: coarse)').matches) document.body.classList.add('touch');
+
+// ---------- Loop ----------
+startAttract();
+show('home');
+if (document.fonts) document.fonts.ready.then(() => { if (!el.home.hidden) drawModeArts(); });
+initCloud();
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  if (ED) renderEditor(); else { update(dt); render(dt); hud(dt); }
+  sfxUpdate();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+window.GP = { getTrack, startSession, step, validate, openEditor, openSetup, safetyCar, refLap, get G() { return G; }, get ED() { return ED; }, get NET() { return NET; }, ui, SND };
+})();
+</script>
+
+</body>
+</html>
