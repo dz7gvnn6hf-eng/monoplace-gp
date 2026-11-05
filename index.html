@@ -288,6 +288,7 @@ kbd{display:inline-grid;place-items:center;min-width:24px;height:22px;padding:0 
   <header class="home-top">
     <h1>Monoplace <span>GP</span></h1>
     <p class="online" id="onlineCount"></p>
+    <button id="rankBtn" class="btn" type="button">Classement</button>
     <button id="sndHome" class="btn" type="button" aria-keyshortcuts="M">Son activé</button>
     <button id="codeBtn" class="btn" type="button" hidden>Rejoindre avec un code</button>
   </header>
@@ -355,6 +356,7 @@ kbd{display:inline-grid;place-items:center;min-width:24px;height:22px;padding:0 
       <div class="actions" id="netActions">
         <button id="quickBtn" class="btn" type="button">Course en ligne</button>
         <button id="inviteBtn" class="btn" type="button">Inviter des amis</button>
+        <button id="rankedBtn" class="btn" type="button">Partie classée</button>
       </div>
       <p class="note" id="netNote"></p>
       <p class="note" id="ghostNote" hidden></p>
@@ -372,7 +374,7 @@ kbd{display:inline-grid;place-items:center;min-width:24px;height:22px;padding:0 
       <dt><kbd>Échap</kbd></dt><dd>Pause</dd>
       <dt><kbd>M</kbd></dt><dd>Couper ou remettre le son</dd>
     </dl>
-    <p class="note">Sur clavier QWERTY, ZQSD devient WASD. Stands : la voie des stands part à gauche avant la ligne droite de départ, limitée à 80 km/h. Arrêtez-vous dans le garage de votre couleur, marqué VOUS, pour des pneus neufs. Rouler dans l’aspiration d’une voiture vous fait gagner de la vitesse. Secteur violet : record du circuit battu ; vert : votre meilleur de la séance. En chrono, une voiture fantôme rejoue votre record.</p>
+    <p class="note">Sur clavier QWERTY, ZQSD devient WASD. Stands : la voie des stands part à gauche avant la ligne droite de départ, limitée à 80 km/h. Arrêtez-vous dans le garage de votre couleur, marqué VOUS, pour des pneus neufs. Rouler dans l’aspiration d’une voiture vous fait gagner de la vitesse. Partie classée : uniquement entre 6 vrais joueurs, sans bots ; chaque course rapporte des points au classement. Secteur violet : record du circuit battu ; vert : votre meilleur de la séance. En chrono, une voiture fantôme rejoue votre record.</p>
   </div>
   <aside class="caption" aria-hidden="true">
     <p class="lbl" id="capMeta"></p>
@@ -424,6 +426,21 @@ kbd{display:inline-grid;place-items:center;min-width:24px;height:22px;padding:0 
       <button id="lbStart" class="go" type="button" hidden><span>Lancer la course</span><span aria-hidden="true">→</span></button>
       <button id="lbLeave" class="btn" type="button">Quitter</button>
     </div>
+  </div>
+</section>
+
+<section id="ranking" class="layer modal" hidden>
+  <div class="card">
+    <p class="lbl">Parties classées · 6 vrais pilotes, sans bots</p>
+    <h2>Classement</h2>
+    <div class="tblwrap">
+      <table class="res">
+        <thead><tr><th>Pos</th><th>Pilote</th><th class="r">Points</th><th class="r">Courses</th><th class="r">Victoires</th></tr></thead>
+        <tbody id="rkBody"></tbody>
+      </table>
+    </div>
+    <p class="note" id="rkNote"></p>
+    <div class="actions"><button id="rkClose" class="btn" type="button">Fermer</button></div>
   </div>
 </section>
 
@@ -483,6 +500,7 @@ kbd{display:inline-grid;place-items:center;min-width:24px;height:22px;padding:0 
         <tbody id="resBody"></tbody>
       </table>
     </div>
+    <p id="resRank" class="note" hidden></p>
     <div class="champ" id="champBox" hidden>
       <p class="lbl" id="champTitle"></p>
       <div class="tblwrap">
@@ -496,6 +514,7 @@ kbd{display:inline-grid;place-items:center;min-width:24px;height:22px;padding:0 
     <div class="actions">
       <button id="againBtn" class="go" type="button"><span id="againTxt">Rejouer</span><span aria-hidden="true">→</span></button>
       <button id="menuBtn" class="btn" type="button">Menu</button>
+      <button id="resRankBtn" class="btn" type="button" hidden>Voir le classement</button>
     </div>
   </div>
 </section>
@@ -663,10 +682,10 @@ function buildTrack(def, seed) {
     prof[i] = Math.min(prof[i], Math.sqrt(prof[j] * prof[j] + 2 * BRK_PROF * d));
   }
 
-  const path = new Path2D(), rpath = new Path2D(), kerbs = new Path2D();
-  path.moveTo(x[0], y[0]); rpath.moveTo(px[0], py[0]);
-  for (let i = 1; i < N; i++) { path.lineTo(x[i], y[i]); rpath.lineTo(px[i], py[i]); }
-  path.closePath(); rpath.closePath();
+  const path = new Path2D(), kerbs = new Path2D();
+  path.moveTo(x[0], y[0]);
+  for (let i = 1; i < N; i++) path.lineTo(x[i], y[i]);
+  path.closePath();
   const kb = i => { for (let k = -4; k <= 4; k++) if (curv[(i + k + N) % N] !== 0) return true; return false; };
   let prev = false;
   for (let i = 0; i < N; i++) { const on = kb(i); if (on) prev ? kerbs.lineTo(x[i], y[i]) : kerbs.moveTo(x[i], y[i]); prev = on; }
@@ -685,7 +704,7 @@ function buildTrack(def, seed) {
     if (dd > R0 + 24 + r) deco.push({ x: dx0, y: dy0, r, a });
   }
 
-  return { def, N, x, y, tx, ty, nx, ny, curv, ro, prof, len: S.len, turns: S.turns, path, rpath, kerbs, grid, deco, lake,
+  return { def, N, x, y, tx, ty, nx, ny, curv, ro, prof, len: S.len, turns: S.turns, path, kerbs, grid, deco, lake,
     cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, w: x1 - x0, h: y1 - y0 };
 }
 
@@ -764,6 +783,7 @@ async function initCloud() {
     else if (synced && myDoc) { mine = myDoc; store.set(CUST_KEY, mine); }
     if (!el.menu.hidden) renderTrackList();
   }, () => {});
+  db.collection('ranked').onSnapshot(snap => { RANKED = {}; snap.docs.forEach(d => { RANKED[d.id] = d.data(); }); if (!el.ranking.hidden) renderRanking(); }, () => {});
   db.collection('votes').onSnapshot(snap => {
     likes = new Map(); myVotes = new Set();
     snap.docs.forEach(d => { const ids = d.data().ids; if (!Array.isArray(ids)) return; new Set(ids.filter(x => typeof x === 'string').slice(0, 300)).forEach(id => { likes.set(id, (likes.get(id) || 0) + 1); if (d.id === ME) myVotes.add(id); }); });
@@ -880,7 +900,7 @@ function startSession(o) {
     }
     const freeT = TEAMS.map((_, i) => i).filter(i => !usedT.has(i));
     let k = 0;
-    for (let s = 0; s < 6; s++) {
+    for (let s = 0; s < 6 && !o.online.ranked; s++) {
       if (usedS.has(s)) continue;
       const c = makeCar(T, s, { ...TEAMS[freeT[k]], ...RIVALS[k] }, false, d.skill - k * 0.012, d.err);
       c.bot = true; if (!o.online.host) { c.remote = true; c.auto = false; }
@@ -1176,6 +1196,7 @@ function lapDone(c) {
       toast(G.pos === 1 ? 'Victoire' : 'Drapeau à damier', G.pos === 1 ? 'p' : '');
       if (G.pos !== 1) sfxChime([523, 659, 784]);
       if (c.pen) toast('Pénalité +15 s · arrêt non effectué', 'y');
+      if (G.ranked) awardRanked(G.pos);
     }
   } else if (c.isPlayer && G.mode === 'race' && c.lap === G.laps - 1) toast('Dernier tour');
   if (G.quali && c.isPlayer && !G.over) { G.over = true; G.qTime = lt; G.resAt = G.t + 1.4; c.auto = true; c.ai.skill = 0.8; toast('Tour de qualification · ' + fmt(lt), c.lastCls); }
@@ -1266,7 +1287,6 @@ function drawWorld(T, x0, y0, x1, y1) {
   ctx.setLineDash([15, 15]); ctx.strokeStyle = '#d93226'; ctx.stroke(T.kerbs); ctx.setLineDash([]);
   ctx.lineWidth = 2 * HW + 4; ctx.strokeStyle = '#e9ecf0'; ctx.stroke(T.path);
   ctx.lineWidth = 2 * HW - 4; ctx.strokeStyle = th.asph; ctx.stroke(T.path);
-  ctx.lineWidth = 30; ctx.strokeStyle = 'rgba(0,0,0,.14)'; ctx.stroke(T.rpath);
   // Chequered start/finish line and grid slots
   ctx.save(); ctx.translate(T.x[0], T.y[0]); ctx.rotate(Math.atan2(T.ty[0], T.tx[0]));
   const w = 2 * (HW - 2) / 12;
@@ -1407,11 +1427,11 @@ function drawOutline(g, O, w, h, lw) {
 
 // ---------- HUD ----------
 const $ = id => document.getElementById(id);
-const el = { hud: $('hud'), home: $('home'), menu: $('menu'), pause: $('pause'), results: $('results'), quali: $('quali'), editor: $('editor'), lobby: $('lobby'), join: $('join'),
+const el = { hud: $('hud'), home: $('home'), menu: $('menu'), pause: $('pause'), results: $('results'), quali: $('quali'), ranking: $('ranking'), editor: $('editor'), lobby: $('lobby'), join: $('join'),
   tower: $('tower'), lapNo: $('lapNo'), lapLbl: $('lapLbl'), cur: $('cur'), last: $('lastLap'), best: $('bestLap'), rec: $('recLap'),
   tyre: $('tyreTxt'), wing: $('wingTxt'), pitDt: $('pitDt'), pit: $('pitTxt'), tag: $('tag'), spd: $('spd'), gear: $('gear'), lights: $('lights'), toast: $('toast'), mini: $('mini') };
 const secEls = [$('s0'), $('s1'), $('s2')], lightEls = [...el.lights.children], mctx = el.mini.getContext('2d');
-const SCREENS = ['home', 'menu', 'pause', 'results', 'quali', 'editor', 'lobby', 'join'];
+const SCREENS = ['home', 'menu', 'pause', 'results', 'quali', 'editor', 'lobby', 'join', 'ranking'];
 
 function show(id) {
   for (const s of SCREENS) el[s].hidden = s !== id;
@@ -1452,6 +1472,8 @@ function renderResults() {
   }).join('');
   $('champBox').hidden = !G.champ;
   $('againBtn').hidden = !!G.online;
+  $('resRank').hidden = $('resRankBtn').hidden = !G.ranked;
+  if (G.ranked) $('resRank').textContent = G.rankPts != null ? 'Partie classée : +' + G.rankPts + ' points au classement.' : 'Partie classée : vos points sont comptés quand vous franchissez la ligne.';
   $('resChat').hidden = !G.online;
   if (G.online) collectSays();
   if (G.champ) {
@@ -1651,7 +1673,7 @@ function refreshSetup() {
   refreshLike();
   $('goTxt').textContent = champ ? 'Lancer le championnat' : mode === 'race' ? 'Course contre les bots' : 'Lancer le chrono';
   $('netActions').hidden = $('netNote').hidden = mode !== 'race';
-  $('quickBtn').disabled = $('inviteBtn').disabled = !ROOM;
+  $('quickBtn').disabled = $('inviteBtn').disabled = $('rankedBtn').disabled = !ROOM;
   $('netNote').textContent = ROOM ? 'En ligne, on vous place avec les pilotes qui cherchent une partie ; les places libres sont prises par des bots.' : window.claude ? 'Le jeu en ligne demande d’être connecté à claude.ai et invité sur cette page.' : 'Le jeu en ligne n’a pas pu se charger : vérifiez votre connexion puis rechargez la page.';
   $('nickRow').hidden = !(ROOM && ROOM.p2p) || mode !== 'race';
   if (champ) {
@@ -1812,7 +1834,7 @@ function collectSays() {
   draw();
   if (USER && ids.length) USER.profiles(ids).then(ps => { ids.forEach(id => { NAMES[id] = (ps[id] && ps[id].name) || ''; }); if (NET && NET.feed) draw(); });
 }
-const GAME_RE = /^[qp]-[a-z0-9]{5,6}$/;
+const GAME_RE = /^[qpr]-[a-z0-9]{5,6}$/; // q: public, p: private (code), r: ranked
 const selfPeer = r => { const p = (r || ROOM).peers().find(x => x.isMe && x.sameTab); return p ? p.peer : MYPEER; };
 const isPlayerPeer = p => p.kind === 'viewer' && (p.presence.role === 'host' || p.presence.role === 'guest');
 
@@ -1913,29 +1935,30 @@ function trackFromPayload(tp) {
   return c && isOk(c) ? trackOf(customDef(c)) : null;
 }
 
-async function hostGame(pub, fixed) {
+async function hostGame(pub, fixed, rankedWanted) {
   if (!ROOM || NET) return false;
-  const name = fixed || (pub ? 'q-' : 'p-') + randCode(pub ? 6 : 5), code = name.slice(2), T = getTrack(ui.tid) || getTrack('lac');
-  const net = NET = { name, code, pub, host: true, room: null, autoAt: Date.now() + 30000, n: 0,
-    cfg: { track: trackPayload(T.def), laps: ui.laps, diff: ui.diff, rain: weatherPick(), hold: 0.4 + Math.random() * 1.1, state: 'lobby', seq: 0 } };
+  const name = fixed || (rankedWanted ? 'r-' : pub ? 'q-' : 'p-') + randCode(pub ? 6 : 5), code = name.slice(2), ranked = name[0] === 'r';
+  const T = ranked ? getTrack(DEFS[Math.floor(Math.random() * DEFS.length)].id) : getTrack(ui.tid) || getTrack('lac'); // ranked: official circuit, 3 laps, dry
+  const net = NET = { name, code, pub, ranked, host: true, room: null, autoAt: Date.now() + 30000, n: 0,
+    cfg: { track: trackPayload(T.def), laps: ranked ? 3 : ui.laps, diff: ui.diff, rain: ranked ? false : weatherPick(), hold: 0.4 + Math.random() * 1.1, state: 'lobby', seq: 0, ranked } };
   showLobby('Création de la partie…');
   try { net.room = await ROOM.join(name, { host: true }); }
   catch (e) { if (e && e.code === 'taken' && fixed) { NET = null; return false; } lobbyFail('Impossible de créer la partie pour le moment. Réessayez dans un instant.'); return true; }
   if (NET !== net) { net.room.leave().catch(() => {}); return true; }
-  net.room.presence({ role: 'host', team: ui.team, nick: myNick(), game: net.cfg }).catch(() => {});
-  ROOM.presence({ st: 'host', g: name, open: pub, n: 1 }).catch(() => {});
+  net.room.presence({ role: 'host', team: ui.team, nick: myNick(), game: net.cfg, ...(ROOM.p2p ? { rk: rankShare() } : {}) }).catch(() => {});
+  ROOM.presence({ st: 'host', g: name, open: pub, ranked, n: 1 }).catch(() => {});
   if (!pub) location.hash = 'partie-' + code;
   startLobbyTick();
   return true;
 }
 async function joinGame(name, probe) {
   if (!ROOM || NET || !GAME_RE.test(name)) return false;
-  const net = NET = { name, code: name.slice(2), pub: name[0] === 'q', host: false, room: null, waitUntil: Date.now() + 8000, cfg: null };
+  const net = NET = { name, code: name.slice(2), pub: name[0] !== 'p', ranked: name[0] === 'r', host: false, room: null, waitUntil: Date.now() + 8000, cfg: null };
   showLobby('Connexion à la partie…');
   try { net.room = await ROOM.join(name); }
   catch (e) { if (probe) { NET = null; return false; } lobbyFail(e && e.code === 'not_found' ? 'Aucune partie avec ce code : vérifiez-le auprès de votre ami.' : 'Impossible de rejoindre cette partie.'); return false; }
   if (NET !== net) { net.room.leave().catch(() => {}); return false; }
-  net.room.presence({ role: 'guest', team: ui.team, nick: myNick() }).catch(() => {});
+  net.room.presence({ role: 'guest', team: ui.team, nick: myNick(), ...(ROOM.p2p ? { rk: rankShare() } : {}) }).catch(() => {});
   ROOM.presence({ st: 'play', g: name, open: null, n: null }).catch(() => {});
   if (probe) { // a public slot: stay only if its game is still waiting for players
     let host = null;
@@ -1947,19 +1970,20 @@ async function joinGame(name, probe) {
   return true;
 }
 // Direct connections have no directory of players: public games live on five fixed names; join the first that waits, else host one.
-async function quickMatchP2P() {
+async function quickMatchP2P(ranked) {
   for (let k = 1; k <= 5; k++) {
-    const name = 'q-pub00' + k;
+    const name = (ranked ? 'r-pub00' : 'q-pub00') + k;
     if (await hostGame(true, name) || await joinGame(name, true)) return;
     if (NET) return;
   }
   NET = { pub: true }; showLobby(''); lobbyFail('Toutes les parties publiques sont pleines ou déjà lancées. Réessayez dans un instant.');
 }
-function quickMatch() {
+function quickMatch(ranked) {
   if (!ROOM || NET) return;
-  if (ROOM.p2p) return quickMatchP2P();
-  const open = ROOM.peers().filter(p => !p.isMe && p.presence.st === 'host' && p.presence.open === true && typeof p.presence.g === 'string' && /^q-/.test(p.presence.g) && GAME_RE.test(p.presence.g) && (p.presence.n | 0) < 6);
-  if (open.length) joinGame(open[0].presence.g); else hostGame(true);
+  if (ROOM.p2p) return quickMatchP2P(ranked);
+  const prefix = ranked ? 'r-' : 'q-';
+  const open = ROOM.peers().filter(p => !p.isMe && p.presence.st === 'host' && p.presence.open === true && typeof p.presence.g === 'string' && p.presence.g.startsWith(prefix) && GAME_RE.test(p.presence.g) && (p.presence.n | 0) < 6);
+  if (open.length) joinGame(open[0].presence.g); else hostGame(true, null, ranked);
 }
 function leaveGame() {
   stopLobbyTick();
@@ -1977,15 +2001,16 @@ function lobbyTick() {
   if (!net || !net.room) return;
   collectSays();
   const peers = net.room.peers(), humans = peers.filter(isPlayerPeer);
+  if (ROOM.p2p) for (const p of peers) if (!p.isMe) rankMerge(p.presence.rk);
   if (net.host) {
     const me = selfPeer(net.room);
     // Two players who hit "Course en ligne" at once: the newer lone host joins the older game.
     if (net.pub && humans.length <= 1) {
-      const older = ROOM.peers().find(p => !p.isMe && p.presence.st === 'host' && p.presence.open === true && typeof p.presence.g === 'string' && /^q-/.test(p.presence.g) && GAME_RE.test(p.presence.g) && p.peer < me && (p.presence.n | 0) < 6);
+      const older = ROOM.peers().find(p => !p.isMe && p.presence.st === 'host' && p.presence.open === true && typeof p.presence.g === 'string' && p.presence.g[0] === net.name[0] && GAME_RE.test(p.presence.g) && p.peer < me && (p.presence.n | 0) < 6);
       if (older) { const g = older.presence.g; leaveGame(); return joinGame(g); }
     }
     if (humans.length !== net.n) { net.n = humans.length; ROOM.presence({ n: net.n }).catch(() => {}); }
-    if (humans.length >= 6 || (net.pub && Date.now() >= net.autoAt)) return hostStart();
+    if (humans.length >= 6 || (net.pub && !net.ranked && Date.now() >= net.autoAt)) return hostStart(); // ranked: only a full grid of six humans starts
     renderLobby(humans);
   } else {
     const host = peers.find(p => p.kind === 'viewer' && p.presence.role === 'host');
@@ -2026,7 +2051,9 @@ function startOnline(g) {
     .map(s => ({ p: s.p, by: typeof s.by === 'string' ? s.by : null, nick: cleanNick(s.nick), s: s.s, t: clamp(s.t | 0, 0, 5) })).slice(0, 6);
   if (!T || !slots.some(s => s.p === me)) return lobbyFail('Cette course ne peut pas être chargée.');
   startSession({ mode: 'race', T, laps: [3, 5, 10].includes(g.laps) ? g.laps : 3, diff: DIFF[g.diff] ? g.diff : 'normal', rain: g.rain === true,
-    hold: clamp(+g.hold || 1, 0.4, 1.5), team: 0, online: { slots, me, host: NET.host } });
+    hold: clamp(+g.hold || 1, 0.4, 1.5), team: 0, online: { slots, me, host: NET.host, ranked: g.ranked === true } });
+  G.ranked = g.ranked === true;
+  if (ROOM.p2p) NET.room.presence({ rk: null }).catch(() => {}); // the shared table travels in the lobby only
   show(null);
   $('pauseTrack').textContent = $('resTrack').textContent = G.T.def.name + ' · en ligne' + (G.rain ? ' · pluie' : '');
   $('restartBtn').hidden = true;
@@ -2079,7 +2106,7 @@ let lobbyFrom = 'home';
 function showLobby(msg) {
   document.querySelectorAll('[data-chat] .feed').forEach(ul => ul.replaceChildren());
   lobbyFrom = el.menu.hidden ? 'home' : 'menu';
-  $('lbKind').textContent = NET.pub ? 'Course en ligne' : 'Partie entre amis';
+  $('lbKind').textContent = NET.ranked ? 'Partie classée' : NET.pub ? 'Course en ligne' : 'Partie entre amis';
   $('lbTitle').textContent = 'Salle d’attente';
   $('lbTrack').textContent = msg;
   $('lbCodeBox').hidden = true; $('lbStart').hidden = true;
@@ -2098,13 +2125,14 @@ let lobbyTok = 0;
 function renderLobby(humans) {
   const net = NET, g = net.cfg || {}, tok = ++lobbyTok;
   const tname = g.track ? (OFFICIAL_IDS.has(g.track.id) ? findDef(g.track.id).name : String(g.track.name || 'Circuit perso').slice(0, 28)) : '…';
-  $('lbTrack').textContent = tname + ' · ' + ([3, 5, 10].includes(g.laps) ? g.laps : 3) + ' tours' + (g.rain === true ? ' · pluie' : '') + ' · bots ' + (DIFF[g.diff] ? g.diff : 'normal');
+  $('lbTrack').textContent = tname + ' · ' + ([3, 5, 10].includes(g.laps) ? g.laps : 3) + ' tours' + (g.rain === true ? ' · pluie' : '') + (net.ranked ? ' · sans bots' : ' · bots ' + (DIFF[g.diff] ? g.diff : 'normal'));
   $('lbCodeBox').hidden = net.pub; $('lbCode').textContent = net.code.toUpperCase();
   $('lbLink').hidden = !ROOM.p2p;
   $('lbShare').textContent = ROOM.p2p ? 'Envoyez le lien à vos amis, ou le code à taper dans « Rejoindre avec un code » sur l’écran d’accueil.' : 'Vos amis touchent « Rejoindre avec un code » sur l’écran d’accueil et tapent ce code. Ils doivent avoir accès à cette page : invitez-les depuis le menu Partager.';
-  $('lbStart').hidden = !net.host;
+  $('lbStart').hidden = !net.host || net.ranked;
   const left = Math.ceil((net.autoAt - Date.now()) / 1000), bots = Math.max(0, 6 - humans.length);
-  $('lbNote').textContent = (net.host ? (net.pub ? 'Départ automatique dans ' + Math.max(0, left) + ' s. ' : 'Lancez la course quand vos amis sont là. ') : 'En attente du départ donné par l’hôte. ') +
+  $('lbNote').textContent = net.ranked ? 'Partie classée : la course part dès que 6 pilotes sont là (' + humans.length + '/6). Pas de bots. Points : 25, 18, 15, 12, 10, 8.' :
+    (net.host ? (net.pub ? 'Départ automatique dans ' + Math.max(0, left) + ' s. ' : 'Lancez la course quand vos amis sont là. ') : 'En attente du départ donné par l’hôte. ') +
     (bots ? bots + ' bot' + (bots > 1 ? 's' : '') + ' compléteront la grille.' : 'Grille complète.');
   const ids = humans.map(p => p.by).filter(Boolean);
   const draw = ps => {
@@ -2121,7 +2149,65 @@ function renderLobby(humans) {
   };
   if (USER && ids.length) USER.profiles(ids).then(draw); else draw({});
 }
-$('quickBtn').addEventListener('click', quickMatch);
+$('quickBtn').addEventListener('click', () => quickMatch(false));
+$('rankedBtn').addEventListener('click', () => quickMatch(true));
+
+// ---------- Ranking: points per finishing place in ranked races ----------
+// On claude.ai one shared table in the db; elsewhere each player keeps a table that is passed on in every online lobby.
+const RANK_KEY = 'monoplace-gp.ranking';
+const PID = store.get('monoplace-gp.pid') || (() => { const id = 'u' + randCode(10); store.set('monoplace-gp.pid', id); return id; })();
+let RANKED = {}, rankLocal = store.get(RANK_KEY) || {};
+const rnum = v => Number.isInteger(v) && v >= 0 && v < 1e7 ? v : 0;
+function rankRows() {
+  if (DB) return Object.entries(RANKED).map(([id, d]) => ({ id, me: id === ME, name: '', p: rnum(d && d.pts), r: rnum(d && d.races), w: rnum(d && d.wins) }));
+  return Object.entries(rankLocal).map(([id, d]) => ({ id, me: id === PID, name: id === PID ? myNick() : d.n, p: d.p, r: d.r, w: d.w }));
+}
+const rankShare = () => Object.entries(rankLocal).sort((a, b) => b[1].p - a[1].p).slice(0, 40).map(([id, d]) => [id, d.n, d.p, d.r, d.w, d.t]);
+// Entries from other players are untrusted: shape-checked, newest wins, and nobody can overwrite your own line.
+function rankMerge(list) {
+  if (!Array.isArray(list)) return;
+  let changed = false;
+  for (const e of list.slice(0, 60)) {
+    if (!Array.isArray(e) || typeof e[0] !== 'string' || !/^u[a-z0-9]{10}$/.test(e[0]) || e[0] === PID || !Number.isFinite(e[5])) continue;
+    if (rankLocal[e[0]] && rankLocal[e[0]].t >= e[5]) continue;
+    rankLocal[e[0]] = { n: cleanNick(e[1]) || 'Pilote', p: rnum(e[2]), r: rnum(e[3]), w: rnum(e[4]), t: e[5] };
+    changed = true;
+  }
+  if (changed) store.set(RANK_KEY, rankLocal);
+}
+function awardRanked(pos) {
+  const pts = POINTS[pos - 1] || 0;
+  if (DB && ME) {
+    const cur = RANKED[ME] || {}, body = { pts: rnum(cur.pts) + pts, races: rnum(cur.races) + 1, wins: rnum(cur.wins) + (pos === 1 ? 1 : 0) };
+    RANKED = { ...RANKED, [ME]: body };
+    cloudQ = cloudQ.then(() => DB.doc('ranked/' + ME).set(body)).catch(() => {});
+  } else {
+    const cur = rankLocal[PID] || { p: 0, r: 0, w: 0 };
+    rankLocal[PID] = { n: myNick(), p: cur.p + pts, r: cur.r + 1, w: cur.w + (pos === 1 ? 1 : 0), t: Date.now() };
+    store.set(RANK_KEY, rankLocal);
+  }
+  G.rankPts = pts;
+  toast('Partie classée · +' + pts + ' points', 'g');
+}
+let rkTok = 0, rkFrom = 'home';
+async function renderRanking() {
+  const tok = ++rkTok, rows = rankRows().filter(r => r.r > 0).sort((a, b) => b.p - a.p || b.w - a.w || a.r - b.r).slice(0, 50);
+  const ps = DB && USER && rows.length ? await USER.profiles(rows.map(r => r.id)) : {};
+  if (tok !== rkTok) return;
+  $('rkBody').replaceChildren(...rows.map((r, i) => {
+    const tr = document.createElement('tr'); tr.className = r.me ? 'me' : '';
+    [i + 1, r.me ? 'Vous' : (DB ? ps[r.id] && ps[r.id].name : r.name) || 'Pilote', r.p, r.r, r.w].forEach((v, k) => {
+      const td = document.createElement('td'); td.className = k === 0 ? 'num' : k === 1 ? '' : 'r num'; td.textContent = v; tr.append(td);
+    });
+    return tr;
+  }));
+  $('rkNote').textContent = !rows.length ? 'Aucune partie classée terminée pour l’instant. Lancez « Partie classée » dans Grand Prix : la course part dès que 6 pilotes sont là.'
+    : 'Points par place : 25, 18, 15, 12, 10, 8.' + (DB ? '' : ' Ce classement se transmet entre les joueurs qui se retrouvent en ligne.');
+}
+function openRanking() { rkFrom = !el.results.hidden ? 'results' : !el.menu.hidden ? 'menu' : 'home'; renderRanking(); show('ranking'); }
+$('rankBtn').addEventListener('click', openRanking);
+$('resRankBtn').addEventListener('click', openRanking);
+$('rkClose').addEventListener('click', () => show(rkFrom));
 $('inviteBtn').addEventListener('click', () => hostGame(false));
 $('lbStart').addEventListener('click', () => { if (NET && NET.host && NET.room) hostStart(); });
 $('lbLeave').addEventListener('click', () => { leaveGame(); if (lobbyFrom === 'menu') openSetup(ui.mode); else show('home'); });
