@@ -730,14 +730,14 @@ function cleanCircuit(c) {
 const cleanList = l => Array.isArray(l) ? l.map(cleanCircuit).filter(Boolean).slice(0, 20) : [];
 let mine = cleanList(store.get(CUST_KEY)), others = [];
 
-const customDef = c => ({ id: c.id, name: c.name, env: c.env, by: c.by || null, at: c.at, verts: c.verts, custom: true, theme: DEFS[c.env].theme,
+const customDef = c => ({ id: c.id, name: c.name, env: c.env, by: c.by || null, nick: c.nick || '', at: c.at, verts: c.verts, custom: true, theme: DEFS[c.env].theme,
   blurb: c.by ? 'Circuit créé par un joueur.' : 'Circuit créé dans l’éditeur.' });
 const defKey = d => OFFICIAL_IDS.has(d.id) ? d.id : d.id + ':' + hashId(JSON.stringify(d.verts));
 const BUILT = new Map(), OUTL = new Map();
 DEFS.forEach((d, i) => BUILT.set(d.id, buildTrack(d, i)));
 function findDef(id) {
   const d = DEFS.find(x => x.id === id); if (d) return d;
-  const c = mine.find(x => x.id === id && isOk(x)) || others.find(x => x.id === id);
+  const c = mine.find(x => x.id === id && isOk(x)) || others.find(x => x.id === id && isOk(x));
   return c ? customDef(c) : null;
 }
 function trackOf(def) { const k = defKey(def); if (!BUILT.has(k)) BUILT.set(k, buildTrack(def, hashId(def.id) % 997)); return BUILT.get(k); }
@@ -759,7 +759,7 @@ let DB = null, USER = null, ME = null, board = {}, boardState = 'off', myLaps = 
 let myGhosts = null, likes = new Map(), myVotes = new Set();
 const GHOST_CACHE = new Map();
 async function initCloud() {
-  if (!window.claude || !window.claude.use) { if (window.Peer) initRoom(p2pLobby()); return; }
+  if (!window.claude || !window.claude.use) { if (window.Peer) { initRoom(p2pLobby()); refreshOthers(); hubStart(); } return; }
   const [db, user, room] = await Promise.all(['db', 'user', 'room'].map(n => window.claude.use(n)));
   USER = user; ME = user ? await user.id() : null;
   if (room) initRoom(room);
@@ -834,6 +834,7 @@ async function syncMine(myDoc) {
 function persistMine() {
   store.set(CUST_KEY, mine);
   if (DB && ME) { const body = { list: mine }; cloudQ = cloudQ.then(() => DB.doc('circuits/' + ME).set(body)).catch(() => {}); }
+  if (hub) hub.share();
 }
 function shareLap(trackId, t, color, rec) {
   if (!DB || !ME || !OFFICIAL_IDS.has(trackId)) return;
@@ -1618,7 +1619,7 @@ function trackCard(def) {
   cnv.width = 176; cnv.height = 112; tx.className = 'tx';
   nm.className = 'nm'; nm.textContent = def.name;
   meta.className = 'meta'; meta.textContent = km(O.len) + ' km · ' + O.turns + ' virages' + (def.custom && !def.by ? ' · votre circuit' : '') + (likes.get(def.id) ? ' · ♥ ' + likes.get(def.id) : '');
-  if (def.by) meta.dataset.by = def.by;
+  if (def.by) { if (DB) meta.dataset.by = def.by; else meta.textContent += ' · par ' + (def.nick || 'un joueur'); }
   rec.className = 'rec'; rec.innerHTML = recTxt(def.id);
   tx.append(nm, meta, rec); b.append(cnv, tx);
   drawOutline(cnv.getContext('2d'), O, 88, 56, 2.5);
@@ -1635,9 +1636,13 @@ function renderTrackList() {
   const list = $('trackList'), raw = $('trackSearch').value.trim(), q = norm(raw), tok = ++listTok;
   const match = d => !q || norm(d.name).includes(q);
   const lk = c => likes.get(c.id) || 0;
-  const community = others.slice().sort((a, b) => (ui.sort === 'pop' ? lk(b) - lk(a) : 0) || b.at - a.at).map(customDef).filter(match);
+  const community = [], limit = q ? 40 : 6;
+  for (const c of others.slice().sort((a, b) => (ui.sort === 'pop' ? lk(b) - lk(a) : 0) || b.at - a.at)) {
+    if (community.length >= limit) break;
+    const d = customDef(c); if (match(d) && isOk(d)) community.push(d); // layouts are checked only when shown
+  }
   $('sortSeg').hidden = !others.length;
-  const groups = [['Circuits officiels', DEFS.filter(match)], ['Vos circuits', mine.map(customDef).filter(match)], ['Circuits des joueurs', community.slice(0, q ? 40 : 6)]];
+  const groups = [['Circuits officiels', DEFS.filter(match)], ['Vos circuits', mine.map(customDef).filter(match)], ['Circuits des joueurs', community]];
   const nodes = [];
   for (const [title, defs] of groups) {
     if (!defs.length) continue;
@@ -1646,7 +1651,7 @@ function renderTrackList() {
   }
   const note = text => { const p = document.createElement('p'); p.className = 'note'; p.textContent = text; nodes.push(p); };
   if (q && !nodes.length) note('Aucun circuit ne s’appelle « ' + raw + ' ».');
-  else if (!q && community.length > 6) note('Utilisez la recherche pour parcourir les ' + community.length + ' circuits des joueurs.');
+  else if (!q && others.length > 6) note('Utilisez la recherche pour parcourir les ' + others.length + ' circuits des joueurs.');
   const nb = document.createElement('button');
   nb.type = 'button'; nb.className = 'tcard newc';
   nb.innerHTML = '<span class="plus" aria-hidden="true">+</span><span class="tx"><span class="nm">Créer un circuit</span><span class="meta">Placez les virages, nommez-le, partagez-le</span></span>';
@@ -2244,6 +2249,7 @@ function awardRanked(pos) {
     store.set(RANK_KEY, rankLocal);
   }
   G.rankPts = pts;
+  if (hub) hub.share();
   toast('Partie classée · +' + pts + ' points', 'g');
 }
 let rkTok = 0, rkFrom = 'home';
@@ -2265,6 +2271,72 @@ function openRanking() { rkFrom = !el.results.hidden ? 'results' : !el.menu.hidd
 $('rankBtn').addEventListener('click', openRanking);
 $('resRankBtn').addEventListener('click', openRanking);
 $('rkClose').addEventListener('click', () => show(rkFrom));
+
+// ---------- Outside claude.ai: a "hub" peer shares circuits, the ranking and the online count ----------
+// The first open page claims a fixed PeerJS id and serves everyone else; when it closes, another page takes over.
+// Each page keeps the gallery in its own storage, so circuits survive between hubs.
+const HUB_ID = P2P_PREFIX + 'hub', GAL_KEY = 'monoplace-gp.gallery';
+let gallery = Array.isArray(store.get(GAL_KEY)) ? store.get(GAL_KEY) : [], hub = null;
+const myShared = () => mine.map(c => ({ ...c, by: PID, nick: myNick() }));
+function refreshOthers() { if (DB) return; others = gallery.filter(c => c.by !== PID); if (!el.menu.hidden) renderTrackList(); }
+// Circuits from other players are untrusted: shape-checked here, layout checked before use; the first author keeps an id.
+function galleryMerge(list) {
+  if (!Array.isArray(list)) return;
+  const byId = new Map(gallery.map(c => [c.id, c]));
+  let changed = false;
+  for (const raw of list.slice(0, 300)) {
+    const c = cleanCircuit(raw), by = raw && typeof raw.by === 'string' && /^u[a-z0-9]{10}$/.test(raw.by) ? raw.by : null;
+    if (!c || !by) continue;
+    const cur = byId.get(c.id);
+    if (cur && (cur.by !== by || cur.at >= c.at)) continue;
+    byId.set(c.id, { ...c, by, nick: cleanNick(raw.nick) || 'Pilote' }); changed = true;
+  }
+  if (!changed) return;
+  gallery = [...byId.values()].sort((a, b) => b.at - a.at).slice(0, 150);
+  store.set(GAL_KEY, gallery); refreshOthers();
+}
+function setOnline(n) {
+  const k = Math.max(0, n - 1);
+  $('onlineCount').innerHTML = k ? '<b>' + k + '</b> autre' + (k > 1 ? 's' : '') + ' pilote' + (k > 1 ? 's' : '') + ' en ligne' : 'Personne d’autre en ligne pour l’instant';
+  $('mfRace').innerHTML = k ? '<b>' + k + '</b> pilote' + (k > 1 ? 's' : '') + ' en ligne · solo ou en ligne' : '<b>6</b> voitures · solo ou en ligne';
+}
+function hubStart() {
+  const h = hub = { conns: new Map(), isHub: false, conn: null, t: 0 };
+  const send = (c, msg) => { if (c && c.open) { try { c.send(msg); } catch (e) { /* dropped */ } } };
+  const broadcast = () => {
+    galleryMerge(myShared());
+    const msg = { t: 'all', c: gallery, rk: rankShare(), n: h.conns.size + 1 };
+    for (const c of h.conns.values()) send(c, msg);
+    setOnline(h.conns.size + 1);
+  };
+  const dirty = () => { clearTimeout(h.t); h.t = setTimeout(broadcast, 400); };
+  const retry = () => setTimeout(asHub, 1000 + Math.random() * 3000);
+  function asHub() {
+    const peer = new Peer(HUB_ID, { debug: 0 });
+    peer.on('open', () => { h.isHub = true; broadcast(); });
+    peer.on('connection', c => {
+      c.on('data', d => { if (d && (d.t === 'hello' || d.t === 'c')) { h.conns.set(c.peer, c); galleryMerge(d.c); rankMerge(d.rk); dirty(); } });
+      c.on('close', () => { h.conns.delete(c.peer); dirty(); });
+      c.on('error', () => {});
+    });
+    peer.on('disconnected', () => { try { peer.reconnect(); } catch (e) { /* retried by PeerJS */ } });
+    peer.on('error', e => { if (h.isHub) return; try { peer.destroy(); } catch (x) { /* gone */ } if (e && e.type === 'unavailable-id') asClient(); else retry(); });
+    h.peer = peer;
+  }
+  function asClient() {
+    const peer = new Peer({ debug: 0 });
+    peer.on('open', () => {
+      const c = peer.connect(HUB_ID, { serialization: 'json', reliable: true });
+      c.on('open', () => { h.conn = c; send(c, { t: 'hello', c: myShared(), rk: rankShare() }); });
+      c.on('data', d => { if (d && d.t === 'all') { galleryMerge(d.c); rankMerge(d.rk); if (Number.isInteger(d.n)) setOnline(d.n); } });
+      c.on('close', () => { h.conn = null; try { peer.destroy(); } catch (e) { /* gone */ } retry(); }); // the hub left: someone takes over
+    });
+    peer.on('error', () => { if (h.conn) return; try { peer.destroy(); } catch (e) { /* gone */ } retry(); });
+    h.peer = peer;
+  }
+  h.share = () => { if (h.isHub) dirty(); else send(h.conn, { t: 'c', c: myShared(), rk: rankShare() }); };
+  asHub();
+}
 $('inviteBtn').addEventListener('click', () => hostGame(false));
 $('lbStart').addEventListener('click', () => { if (NET && NET.host && NET.room) hostStart(); });
 $('lbLeave').addEventListener('click', () => { leaveGame(); if (lobbyFrom === 'menu') openSetup(ui.mode); else show('home'); });
@@ -2290,7 +2362,7 @@ let ED = null;
 const AREA = { x0: -600, y0: -600, x1: 4600, y1: 3000 }; // editable area, in corner units
 const TEMPLATE = [[0, 0, 300], [2600, 0, 300], [2600, 1500, 300], [0, 1500, 300]];
 function openEditor(c) {
-  $('edShare').hidden = !DB;
+  $('edShare').hidden = !DB && !hub;
   ED = { id: c ? c.id : null, verts: (c ? c.verts : TEMPLATE).map(v => v.slice()), sel: 0, drag: false, env: c ? c.env : 0, armDel: false, view: null, past: [], future: [], sliding: false };
   $('edName').value = c ? c.name : '';
   $('edRemove').hidden = !(c && c.id); $('edRemove').textContent = 'Supprimer le circuit';
@@ -2528,7 +2600,7 @@ function frame(now) {
 }
 requestAnimationFrame(frame);
 
-window.GP = { getTrack, startSession, step, validate, openEditor, openSetup, safetyCar, refLap, get G() { return G; }, get ED() { return ED; }, get NET() { return NET; }, ui, SND };
+window.GP = { getTrack, startSession, step, validate, openEditor, openSetup, safetyCar, refLap, get G() { return G; }, get ED() { return ED; }, get NET() { return NET; }, get hub() { return hub; }, ui, SND };
 })();
 </script>
 
