@@ -374,7 +374,7 @@ kbd{display:inline-grid;place-items:center;min-width:24px;height:22px;padding:0 
       <dt><kbd>Échap</kbd></dt><dd>Pause</dd>
       <dt><kbd>M</kbd></dt><dd>Couper ou remettre le son</dd>
     </dl>
-    <p class="note">Sur clavier QWERTY, ZQSD devient WASD. Stands : la voie des stands part à gauche avant la ligne droite de départ, limitée à 80 km/h. Arrêtez-vous dans le garage de votre couleur, marqué VOUS, pour des pneus neufs. Rouler dans l’aspiration d’une voiture vous fait gagner de la vitesse. Partie classée : uniquement entre 6 vrais joueurs, sans bots ; chaque course rapporte des points au classement. Secteur violet : record du circuit battu ; vert : votre meilleur de la séance. En chrono, une voiture fantôme rejoue votre record.</p>
+    <p class="note">Sur clavier QWERTY, ZQSD devient WASD. Stands : la voie des stands part à gauche avant la ligne droite de départ, limitée à 80 km/h. Arrêtez-vous dans le garage de votre couleur, marqué VOUS, pour des pneus neufs. Rouler dans l’aspiration d’une voiture vous fait gagner de la vitesse. Partie classée : uniquement entre 6 vrais joueurs, sans bots ; un tour de qualification fixe la grille, puis 5 tours avec arrêt au stand obligatoire, et chaque course rapporte des points au classement. Secteur violet : record du circuit battu ; vert : votre meilleur de la séance. En chrono, une voiture fantôme rejoue votre record.</p>
   </div>
   <aside class="caption" aria-hidden="true">
     <p class="lbl" id="capMeta"></p>
@@ -431,7 +431,7 @@ kbd{display:inline-grid;place-items:center;min-width:24px;height:22px;padding:0 
 
 <section id="ranking" class="layer modal" hidden>
   <div class="card">
-    <p class="lbl">Parties classées · 6 vrais pilotes, sans bots</p>
+    <p class="lbl">Parties classées · 6 vrais pilotes, qualifs puis 5 tours, sans bots</p>
     <h2>Classement</h2>
     <div class="tblwrap">
       <table class="res">
@@ -468,6 +468,7 @@ kbd{display:inline-grid;place-items:center;min-width:24px;height:22px;padding:0 
         <tbody id="qBody"></tbody>
       </table>
     </div>
+    <p class="note" id="qNote" hidden></p>
     <div class="actions">
       <button id="qGo" class="go" type="button"><span>Lancer la course</span><span aria-hidden="true">→</span></button>
       <button id="qRetry" class="btn" type="button">Refaire le tour</button>
@@ -1745,6 +1746,14 @@ function refLap(T, rain, skill = 1) {
 }
 function showQuali() {
   const o = G.quali, T = G.T, d = DIFF[o.diff] || DIFF.normal;
+  $('qGo').hidden = $('qRetry').hidden = !!o.online; $('qNote').hidden = !o.online;
+  if (o.online) {
+    if (!G.qSent && NET && NET.room) { G.qSent = true; NET.room.presence({ q: Math.round(G.qTime * 1000) / 1000 }).catch(() => {}); }
+    $('qTitle').textContent = 'Qualifications'; $('qTrack').textContent = 'Partie classée · ' + T.def.name;
+    tq.length = 0; toastT = 0; el.toast.className = '';
+    show('quali'); renderOnlineQuali();
+    return;
+  }
   const rows = [{ code: 'VOUS', name: 'Vous', color: TEAMS[o.team || 0].color, t: G.qTime, me: true }];
   const others = TEAMS.filter((_, i) => i !== (o.team || 0));
   RIVALS.forEach((r, k) => rows.push({ code: r.code, name: r.name, color: others[k].color, t: refLap(T, o.rain, d.skill - k * 0.012) * (1 + (Math.random() - 0.5) * 0.008) }));
@@ -1940,7 +1949,7 @@ async function hostGame(pub, fixed, rankedWanted) {
   const name = fixed || (rankedWanted ? 'r-' : pub ? 'q-' : 'p-') + randCode(pub ? 6 : 5), code = name.slice(2), ranked = name[0] === 'r';
   const T = ranked ? getTrack(DEFS[Math.floor(Math.random() * DEFS.length)].id) : getTrack(ui.tid) || getTrack('lac'); // ranked: official circuit, 3 laps, dry
   const net = NET = { name, code, pub, ranked, host: true, room: null, autoAt: Date.now() + 30000, n: 0,
-    cfg: { track: trackPayload(T.def), laps: ranked ? 3 : ui.laps, diff: ui.diff, rain: ranked ? false : weatherPick(), hold: 0.4 + Math.random() * 1.1, state: 'lobby', seq: 0, ranked } };
+    cfg: { track: trackPayload(T.def), laps: ranked ? 5 : ui.laps, diff: ui.diff, rain: ranked ? false : weatherPick(), hold: 0.4 + Math.random() * 1.1, state: 'lobby', seq: 0, ranked } };
   showLobby('Création de la partie…');
   try { net.room = await ROOM.join(name, { host: true }); }
   catch (e) { if (e && e.code === 'taken' && fixed) { NET = null; return false; } lobbyFail('Impossible de créer la partie pour le moment. Réessayez dans un instant.'); return true; }
@@ -2010,7 +2019,13 @@ function lobbyTick() {
       if (older) { const g = older.presence.g; leaveGame(); return joinGame(g); }
     }
     if (humans.length !== net.n) { net.n = humans.length; ROOM.presence({ n: net.n }).catch(() => {}); }
-    if (humans.length >= 6 || (net.pub && !net.ranked && Date.now() >= net.autoAt)) return hostStart(); // ranked: only a full grid of six humans starts
+    if (net.qAt) { // ranked qualifying under way: start once every driver has a time, or after 2 minutes
+      renderOnlineQuali();
+      if (humans.every(p => Number.isFinite(p.presence.q)) || Date.now() - net.qAt > 120000) return hostStart();
+      return;
+    }
+    if (humans.length >= 6 && net.ranked) return hostQuali(); // ranked: only a full grid of six humans starts
+    if (humans.length >= 6 || (net.pub && !net.ranked && Date.now() >= net.autoAt)) return hostStart();
     renderLobby(humans);
   } else {
     const host = peers.find(p => p.kind === 'viewer' && p.presence.role === 'host');
@@ -2019,6 +2034,11 @@ function lobbyTick() {
     const g = host.presence.game;
     if (!g || typeof g !== 'object') return;
     net.cfg = g;
+    if (g.state === 'quali') {
+      if (!Array.isArray(g.players) || !g.players.includes(selfPeer(net.room))) return lobbyFail('La partie classée a déjà commencé sans vous.');
+      if (!net.qStarted) startOnlineQuali(g);
+      return renderOnlineQuali();
+    }
     if (g.state === 'go') {
       const mySlot = Array.isArray(g.slots) && g.slots.some(s => s && s.p === selfPeer(net.room));
       return mySlot ? startOnline(g) : lobbyFail('La course a déjà commencé sans vous.');
@@ -2027,15 +2047,52 @@ function lobbyTick() {
   }
 }
 
+function hostQuali() {
+  const net = NET, humans = net.room.peers().filter(isPlayerPeer).slice(0, 6);
+  net.qAt = Date.now();
+  net.cfg = { ...net.cfg, state: 'quali', seq: Date.now() % 1e9, players: humans.map(p => p.peer) };
+  net.room.presence({ game: net.cfg }).catch(() => {});
+  ROOM.presence({ st: 'play', open: false }).catch(() => {});
+  startOnlineQuali(net.cfg);
+}
+// Each driver of a ranked game runs one timed lap alone; the time travels in presence as `q`.
+function startOnlineQuali(g) {
+  const T = trackFromPayload(g.track);
+  if (!T) return lobbyFail('Ce circuit ne peut pas être chargé.');
+  NET.qStarted = true;
+  NET.room.presence({ q: null }).catch(() => {});
+  startSession({ mode: 'tt', T, rain: g.rain === true, team: ui.team, quali: { online: true } });
+  show(null);
+  $('pauseTrack').textContent = 'Qualifications · ' + T.def.name;
+  $('restartBtn').hidden = true;
+}
+const qTime = p => Number.isFinite(p.presence.q) && p.presence.q > 5 ? p.presence.q : Infinity;
+function renderOnlineQuali() {
+  if (!NET || !NET.room || el.quali.hidden) return;
+  const humans = NET.room.peers().filter(isPlayerPeer).sort((a, b) => qTime(a) - qTime(b)), best = qTime(humans[0] || { presence: {} });
+  const ids = humans.map(p => p.by).filter(id => id && !(id in NAMES));
+  if (USER && ids.length) USER.profiles(ids).then(ps => ids.forEach(id => { NAMES[id] = (ps[id] && ps[id].name) || ''; }));
+  $('qBody').replaceChildren(...humans.map((p, i) => {
+    const tr = document.createElement('tr'), t = qTime(p), me = p.isMe && p.sameTab;
+    tr.className = me ? 'me' : '';
+    const cells = [i + 1, me ? 'Vous' : (p.by && NAMES[p.by]) || cleanNick(p.presence.nick) || 'Pilote', isFinite(t) ? fmt(t) : 'en piste', isFinite(t) && i ? gapF(t - best) : ''];
+    cells.forEach((v, k) => { const td = document.createElement('td'); td.className = k === 0 ? 'num' : k === 1 ? '' : 'r num'; td.textContent = v; tr.append(td); });
+    return tr;
+  }));
+  const done = humans.filter(p => isFinite(qTime(p))).length;
+  $('qNote').textContent = done < humans.length ? 'En attente des autres pilotes : ' + done + '/' + humans.length + ' ont fini leur tour. La course part dès que tout le monde a un temps (2 minutes au plus).' : 'Tous les temps sont là : la course va partir.';
+}
+
 function hostStart() {
   const net = NET, humans = net.room.peers().filter(isPlayerPeer);
   humans.sort((a, b) => (b.presence.role === 'host') - (a.presence.role === 'host') || (a.peer < b.peer ? -1 : 1));
+  if (net.ranked) humans.sort((a, b) => qTime(a) - qTime(b)); // ranked grid: qualifying order, pole first
   const usedT = new Set();
   const slots = humans.slice(0, 6).map((p, i) => {
     let t = clamp(p.presence.team | 0, 0, 5);
     if (usedT.has(t)) t = [0, 1, 2, 3, 4, 5].find(x => !usedT.has(x));
     usedT.add(t);
-    return { p: p.peer, by: typeof p.by === 'string' ? p.by : null, nick: cleanNick(p.presence.nick), t, s: 5 - i };
+    return { p: p.peer, by: typeof p.by === 'string' ? p.by : null, nick: cleanNick(p.presence.nick), t, s: net.ranked ? i : 5 - i };
   });
   net.cfg = { ...net.cfg, state: 'go', seq: Date.now() % 1e9, slots };
   net.room.presence({ game: net.cfg }).catch(() => {});
@@ -2131,7 +2188,7 @@ function renderLobby(humans) {
   $('lbShare').textContent = ROOM.p2p ? 'Envoyez le lien à vos amis, ou le code à taper dans « Rejoindre avec un code » sur l’écran d’accueil.' : 'Vos amis touchent « Rejoindre avec un code » sur l’écran d’accueil et tapent ce code. Ils doivent avoir accès à cette page : invitez-les depuis le menu Partager.';
   $('lbStart').hidden = !net.host || net.ranked;
   const left = Math.ceil((net.autoAt - Date.now()) / 1000), bots = Math.max(0, 6 - humans.length);
-  $('lbNote').textContent = net.ranked ? 'Partie classée : la course part dès que 6 pilotes sont là (' + humans.length + '/6). Pas de bots. Points : 25, 18, 15, 12, 10, 8.' :
+  $('lbNote').textContent = net.ranked ? 'Partie classée : dès que 6 pilotes sont là (' + humans.length + '/6), chacun fait un tour de qualification, puis course de 5 tours avec arrêt au stand obligatoire. Pas de bots. Points : 25, 18, 15, 12, 10, 8.' :
     (net.host ? (net.pub ? 'Départ automatique dans ' + Math.max(0, left) + ' s. ' : 'Lancez la course quand vos amis sont là. ') : 'En attente du départ donné par l’hôte. ') +
     (bots ? bots + ' bot' + (bots > 1 ? 's' : '') + ' compléteront la grille.' : 'Grille complète.');
   const ids = humans.map(p => p.by).filter(Boolean);
