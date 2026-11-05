@@ -180,6 +180,10 @@ h1 span{color:var(--red)}
 .board .c{height:14px}
 .board .n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .board .t{font-variant-numeric:tabular-nums;font-weight:600;color:var(--muted)}
+.opengames{list-style:none;margin:0;padding:0;display:grid;gap:4px}
+.opengames li{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 8px 8px 12px;background:var(--panel-hi);font-size:14px}
+.opengames li span{min-width:0;overflow-wrap:anywhere}
+.opengames .btn{padding:9px 14px;font-size:15px}
 .keys{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;margin:0;font-size:14px;color:var(--muted);align-items:center}
 .keys dt{display:flex;gap:4px}
 .keys dd{margin:0}
@@ -360,6 +364,7 @@ kbd{display:inline-grid;place-items:center;min-width:24px;height:22px;padding:0 
         <button id="rankedBtn" class="btn" type="button">Partie classée</button>
       </div>
       <p class="note" id="netNote"></p>
+      <div class="grp" id="openGrp" hidden><p class="lbl">Parties ouvertes</p><ul class="opengames" id="openGames"></ul></div>
       <p class="note" id="ghostNote" hidden></p>
       <p class="note" id="pitNote">À partir de 5 tours, un arrêt au stand est obligatoire (sinon +15 s).</p>
     </div>
@@ -1971,6 +1976,7 @@ async function hostGame(pub, fixed, rankedWanted) {
   net.room.presence({ role: 'host', team: ui.team, nick: myNick(), game: net.cfg, ...(ROOM.p2p ? { rk: rankShare() } : {}) }).catch(() => {});
   ROOM.presence({ st: 'host', g: name, open: pub, ranked, n: 1 }).catch(() => {});
   if (!pub) location.hash = 'partie-' + code;
+  hubGame();
   startLobbyTick();
   return true;
 }
@@ -1993,13 +1999,24 @@ async function joinGame(name, probe) {
   return true;
 }
 // Direct connections have no directory of players: public games live on five fixed names; join the first that waits, else host one.
+// Joining comes before hosting, so two players never end up waiting in two different games.
 async function quickMatchP2P(ranked) {
   lastJoinErr = null;
+  const kind = ranked ? 'r' : 'q', fail = () => { NET = { pub: true }; showLobby(''); lobbyFail(NETMSG[lastJoinErr]); };
+  for (const x of openGames().filter(x => x.g[0] === kind).sort((a, b) => b.n - a.n)) { // games announced through the hub
+    if (await joinGame(x.g, true)) return;
+    if (NET) return;
+  }
+  for (let k = 1; k <= 5; k++) { // without the hub: waiting games on the fixed public names
+    if (await joinGame(kind + '-pub00' + k, true)) return;
+    if (NET) return;
+    if (NETMSG[lastJoinErr]) return fail(); // a game exists but cannot be reached: don't hide it by hosting another
+  }
   for (let k = 1; k <= 5; k++) {
-    const name = (ranked ? 'r-pub00' : 'q-pub00') + k;
+    const name = kind + '-pub00' + k;
     if (await hostGame(true, name) || await joinGame(name, true)) return;
     if (NET) return;
-    if (NETMSG[lastJoinErr]) { NET = { pub: true }; showLobby(''); return lobbyFail(NETMSG[lastJoinErr]); } // a game exists but cannot be reached: don't hide it by hosting another
+    if (NETMSG[lastJoinErr]) return fail();
   }
   NET = { pub: true }; showLobby(''); lobbyFail('Toutes les parties publiques sont pleines ou déjà lancées. Réessayez dans un instant.');
 }
@@ -2015,6 +2032,7 @@ function leaveGame() {
   if (NET && NET.room) NET.room.leave().catch(() => {});
   const had = !!NET; NET = null;
   if (G) G.online = null;
+  if (had) hubGame();
   if (had && ROOM) ROOM.presence({ st: 'menu', g: null, open: null, n: null }).catch(() => {});
   if (/^#partie-/.test(location.hash)) location.hash = '';
 }
@@ -2034,7 +2052,7 @@ function lobbyTick() {
       const older = ROOM.peers().find(p => !p.isMe && p.presence.st === 'host' && p.presence.open === true && typeof p.presence.g === 'string' && p.presence.g[0] === net.name[0] && GAME_RE.test(p.presence.g) && p.peer < me && (p.presence.n | 0) < 6);
       if (older) { const g = older.presence.g; leaveGame(); return joinGame(g); }
     }
-    if (humans.length !== net.n) { net.n = humans.length; ROOM.presence({ n: net.n }).catch(() => {}); }
+    if (humans.length !== net.n) { net.n = humans.length; ROOM.presence({ n: net.n }).catch(() => {}); hubGame(); }
     if (net.qAt) { // ranked qualifying under way: start once every driver has a time, or after 2 minutes
       renderOnlineQuali();
       if (humans.every(p => Number.isFinite(p.presence.q)) || Date.now() - net.qAt > 120000) return hostStart();
@@ -2065,7 +2083,7 @@ function lobbyTick() {
 
 function hostQuali() {
   const net = NET, humans = net.room.peers().filter(isPlayerPeer).slice(0, 6);
-  net.qAt = Date.now();
+  net.qAt = Date.now(); net.closed = true; hubGame();
   net.cfg = { ...net.cfg, state: 'quali', seq: Date.now() % 1e9, players: humans.map(p => p.peer) };
   net.room.presence({ game: net.cfg }).catch(() => {});
   ROOM.presence({ st: 'play', open: false }).catch(() => {});
@@ -2111,6 +2129,7 @@ function hostStart() {
     return { p: p.peer, by: typeof p.by === 'string' ? p.by : null, nick: cleanNick(p.presence.nick), t, s: net.ranked ? i : 5 - i };
   });
   net.cfg = { ...net.cfg, state: 'go', seq: Date.now() % 1e9, slots };
+  net.closed = true; hubGame();
   net.room.presence({ game: net.cfg }).catch(() => {});
   ROOM.presence({ st: 'play', open: false }).catch(() => {});
   startOnline(net.cfg);
@@ -2311,6 +2330,36 @@ function setOnline(n) {
   $('onlineCount').innerHTML = k ? '<b>' + k + '</b> autre' + (k > 1 ? 's' : '') + ' pilote' + (k > 1 ? 's' : '') + ' en ligne' : 'Personne d’autre en ligne pour l’instant';
   $('mfRace').innerHTML = k ? '<b>' + k + '</b> pilote' + (k > 1 ? 's' : '') + ' en ligne · solo ou en ligne' : '<b>6</b> voitures · solo ou en ligne';
 }
+// Open games, as the hub lists them (direct play) or as the lobby room shows them (claude.ai).
+let HUB_GAMES = [];
+const myGame = () => NET && NET.host && NET.pub && !NET.closed && NET.room ? { g: NET.name, nick: myNick(), n: NET.n || 1, state: 'lobby' } : null;
+function hubGame() { if (hub && hub.game) hub.game(); }
+// Announcements come from other players: keep only well-formed ones, never our own.
+function cleanGames(list) {
+  if (!Array.isArray(list)) return [];
+  return list.filter(x => x && typeof x.g === 'string' && GAME_RE.test(x.g) && x.g[0] !== 'p' && (!NET || x.g !== NET.name) && x.state === 'lobby')
+    .map(x => ({ g: x.g, nick: cleanNick(x.nick) || 'Pilote', n: clamp(x.n | 0, 1, 6), by: null, state: 'lobby' })).slice(0, 20);
+}
+function openGames() {
+  if (!ROOM) return [];
+  if (ROOM.p2p) return HUB_GAMES;
+  return ROOM.peers().filter(p => !p.isMe && p.presence.st === 'host' && p.presence.open === true && typeof p.presence.g === 'string' && GAME_RE.test(p.presence.g))
+    .map(p => ({ g: p.presence.g, nick: '', by: p.by, n: clamp(p.presence.n | 0, 1, 6) }));
+}
+function renderOpenGames() {
+  if (el.menu.hidden) return;
+  const list = ui.mode === 'race' && !NET ? openGames().filter(x => x.n < 6) : [];
+  $('openGrp').hidden = !list.length;
+  $('openGames').replaceChildren(...list.slice(0, 8).map(x => {
+    const li = document.createElement('li'), t = document.createElement('span'), b = document.createElement('button');
+    t.textContent = (x.g[0] === 'r' ? 'Partie classée de ' : 'Course de ') + ((x.by && NAMES[x.by]) || x.nick || 'un joueur') + ' · ' + x.n + '/6 pilotes';
+    b.type = 'button'; b.className = 'btn'; b.textContent = 'Rejoindre';
+    b.addEventListener('click', () => joinGame(x.g));
+    li.append(t, b); return li;
+  }));
+}
+setInterval(renderOpenGames, 1000);
+
 function hubStatus(kind) {
   const o = $('onlineCount');
   o.classList.toggle('warn', kind !== 'ok');
@@ -2318,11 +2367,12 @@ function hubStatus(kind) {
   if (kind === 'blocked') o.textContent = 'Un autre joueur est en ligne, mais la connexion directe échoue sur ce réseau : essayez un autre réseau (Wi-Fi ou 4G).';
 }
 function hubStart() {
-  const h = hub = { conns: new Map(), isHub: false, conn: null, t: 0, gen: 0, fails: 0 };
+  const h = hub = { conns: new Map(), games: new Map(), isHub: false, conn: null, t: 0, gen: 0, fails: 0 };
   const send = (c, msg) => { if (c && c.open) { try { c.send(msg); } catch (e) { /* dropped */ } } };
   const broadcast = () => {
     galleryMerge(myShared());
-    const msg = { t: 'all', c: gallery, rk: rankShare(), n: h.conns.size + 1 };
+    const msg = { t: 'all', c: gallery, rk: rankShare(), n: h.conns.size + 1, g: [...h.games.values(), myGame()].filter(Boolean) };
+    HUB_GAMES = cleanGames(msg.g);
     for (const c of h.conns.values()) send(c, msg);
     setOnline(h.conns.size + 1);
   };
@@ -2334,8 +2384,11 @@ function hubStart() {
     const peer = h.peer = new Peer(HUB_ID, { debug: 0 });
     peer.on('open', () => { if (g !== h.gen) return; h.isHub = true; hubStatus('ok'); broadcast(); });
     peer.on('connection', c => {
-      c.on('data', d => { if (d && (d.t === 'hello' || d.t === 'c')) { h.conns.set(c.peer, c); galleryMerge(d.c); rankMerge(d.rk); dirty(); } });
-      c.on('close', () => { h.conns.delete(c.peer); dirty(); });
+      c.on('data', d => {
+        if (d && (d.t === 'hello' || d.t === 'c')) { h.conns.set(c.peer, c); galleryMerge(d.c); rankMerge(d.rk); dirty(); }
+        if (d && 'game' in d) { const x = cleanGames([d.game])[0]; if (x) h.games.set(c.peer, x); else h.games.delete(c.peer); dirty(); }
+      });
+      c.on('close', () => { h.conns.delete(c.peer); h.games.delete(c.peer); dirty(); });
       c.on('error', () => {});
     });
     peer.on('disconnected', () => { try { peer.reconnect(); } catch (e) { /* retried by PeerJS */ } });
@@ -2352,13 +2405,14 @@ function hubStart() {
     const limit = setTimeout(() => { if (g !== h.gen || h.conn) return; if (++h.fails >= 2) hubStatus('blocked'); giveUp(); }, 10000);
     peer.on('open', () => {
       const c = peer.connect(HUB_ID, { serialization: 'json', reliable: true });
-      c.on('open', () => { if (g !== h.gen) return; clearTimeout(limit); h.fails = 0; h.conn = c; hubStatus('ok'); send(c, { t: 'hello', c: myShared(), rk: rankShare() }); });
-      c.on('data', d => { if (d && d.t === 'all') { galleryMerge(d.c); rankMerge(d.rk); if (Number.isInteger(d.n)) setOnline(d.n); } });
+      c.on('open', () => { if (g !== h.gen) return; clearTimeout(limit); h.fails = 0; h.conn = c; hubStatus('ok'); send(c, { t: 'hello', c: myShared(), rk: rankShare(), game: myGame() }); });
+      c.on('data', d => { if (d && d.t === 'all') { galleryMerge(d.c); rankMerge(d.rk); if (Number.isInteger(d.n)) setOnline(d.n); HUB_GAMES = cleanGames(d.g); } });
       c.on('close', giveUp); // the hub left: someone takes over
       c.on('error', () => {});
     });
     peer.on('error', e => { if (g !== h.gen || h.conn) return; clearTimeout(limit); if (netErr(e)) hubStatus('noserver'); giveUp(); });
   }
+  h.game = () => { if (h.isHub) dirty(); else send(h.conn, { t: 'g', game: myGame() }); };
   h.share = () => { if (h.isHub) dirty(); else send(h.conn, { t: 'c', c: myShared(), rk: rankShare() }); };
   asHub(0);
 }
