@@ -1862,9 +1862,9 @@ const isPlayerPeer = p => p.kind === 'viewer' && (p.presence.role === 'host' || 
 // ---------- Direct connections (PeerJS), used when the page runs outside claude.ai ----------
 // A game is a star: the host owns the PeerJS id of the game's name and relays everyone's presence to every guest.
 // It mimics the parts of the room capability the game uses (peers, presence, join, leave).
-const P2P_PREFIX = 'monoplace-gp-v1-';
+const P2P_PREFIX = 'monoplace-gp-v2-'; // v2: tabs still open on older versions can't hold the names
 const NETMSG = {
-  timeout: 'La connexion directe avec l’autre joueur a échoué : votre réseau, ou le sien, la bloque. Essayez un autre réseau, par exemple le Wi-Fi au lieu de la 4G, ou la version claude.ai du jeu.',
+  timeout: 'L’autre joueur ne répond pas : il a peut-être fermé le jeu ou mis son appareil en veille. Si cela se répète, essayez un autre réseau (Wi-Fi au lieu de la 4G) ou la version claude.ai du jeu.',
   noserver: 'Le serveur de connexion en ligne est injoignable : vérifiez votre connexion internet puis réessayez.',
 };
 let lastJoinErr = null, retryAction = null;
@@ -1905,7 +1905,7 @@ function p2pJoin(name, opts = {}) {
       if (host) { try { peer && peer.destroy(); } catch (e) { /* already gone */ } } else if (conn) { try { conn.close(); } catch (e) { /* already gone */ } }
     };
     const fail = code => { if (done) return; done = true; clearTimeout(limit); close(); reject({ code }); };
-    const limit = setTimeout(() => fail(opened ? 'timeout' : 'noserver'), 20000);
+    const limit = setTimeout(() => fail(opened ? 'timeout' : 'noserver'), opts.wait || 20000);
     const mk = (id, presence, me) => Object.freeze({ peer: id, by: null, isMe: me, sameTab: me, kind: 'viewer', guest: false, presence, updatedAt: Date.now() });
     const room = {
       name,
@@ -2013,7 +2013,7 @@ async function joinGame(name, probe) {
   if (!probe) retryAction = () => joinGame(name);
   const net = NET = { name, code: name.slice(2), pub: name[0] !== 'p', ranked: name[0] === 'r', host: false, room: null, waitUntil: Date.now() + 8000, cfg: null };
   showLobby('Connexion à la partie…');
-  try { net.room = await ROOM.join(name); }
+  try { net.room = await (probe && ROOM.p2p ? ROOM.join(name, { wait: 10000 }) : ROOM.join(name)); }
   catch (e) { lastJoinErr = e && e.code; if (probe) { NET = null; return false; } lobbyFail(lastJoinErr === 'not_found' ? 'Cette partie n’existe plus, ou le code est faux : vérifiez-le auprès de votre ami.' : NETMSG[lastJoinErr] || 'Impossible de rejoindre cette partie.', lastJoinErr); return false; }
   if (NET !== net) { net.room.leave().catch(() => {}); return false; }
   net.room.presence({ role: 'guest', team: ui.team, nick: myNick(), ...(ROOM.p2p ? { rk: rankShare() } : {}) }).catch(() => {});
@@ -2029,9 +2029,10 @@ async function joinGame(name, probe) {
 }
 // Direct connections have no directory of players: public games live on five fixed names; join the first that waits, else host one.
 // Joining comes before hosting, so two players never end up waiting in two different games.
+// A game that doesn't answer (its host's phone went to sleep) is skipped, not reported.
 async function quickMatchP2P(ranked) {
   lastJoinErr = null;
-  const kind = ranked ? 'r' : 'q', fail = () => { NET = { pub: true }; showLobby(''); lobbyFail(NETMSG[lastJoinErr], lastJoinErr); };
+  const kind = ranked ? 'r' : 'q';
   for (const x of openGames().filter(x => x.g[0] === kind).sort((a, b) => b.n - a.n)) { // games announced through the hub
     if (await joinGame(x.g, true)) return;
     if (NET) return;
@@ -2040,16 +2041,14 @@ async function quickMatchP2P(ranked) {
   for (let k = 1; k <= 5 && !hubUp; k++) { // without the hub: waiting games on the fixed public names
     if (await joinGame(kind + '-pub00' + k, true)) return;
     if (NET) return;
-    if (NETMSG[lastJoinErr]) return fail(); // a game exists but cannot be reached: don't hide it by hosting another
   }
   for (let k = 1; k <= 5; k++) {
     const name = kind + '-pub00' + k;
     if (await hostGame(true, name) || await joinGame(name, true)) return;
     if (NET) return;
-    if (NETMSG[lastJoinErr]) return fail();
   }
   if (hub && (hub.isHub || hub.conn) && await hostGame(true, kind + '-' + randCode(6))) return; // fixed names all busy: the hub still lists this one
-  NET = { pub: true }; showLobby(''); lobbyFail('Toutes les parties publiques sont pleines ou déjà lancées. Réessayez dans un instant.', lastJoinErr);
+  NET = { pub: true }; showLobby(''); lobbyFail(NETMSG[lastJoinErr] || 'Toutes les parties publiques sont pleines ou déjà lancées. Réessayez dans un instant.', lastJoinErr);
 }
 function quickMatch(ranked) {
   if (!ROOM || NET) return;
@@ -2396,10 +2395,13 @@ function hubStatus(kind) {
   const o = $('onlineCount');
   o.classList.toggle('warn', kind !== 'ok');
   if (kind === 'noserver') o.textContent = 'Serveur du jeu en ligne injoignable : vérifiez votre connexion internet.';
-  if (kind === 'blocked') o.textContent = 'Un autre joueur est en ligne, mais la connexion directe échoue sur ce réseau : essayez un autre réseau (Wi-Fi ou 4G).';
+  if (kind === 'blocked') o.textContent = 'Aucune connexion directe avec les autres joueurs depuis cet appareil : essayez un autre navigateur ou un autre réseau.';
 }
+// The hub's name has two backups. A name held by a tab that no longer answers (a phone put to sleep, a browser
+// without direct connections) is skipped, and a hub on a backup name moves back down once a lower name is free or answered.
+const HUBS = [0, 1, 2].map(k => HUB_ID + k);
 function hubStart() {
-  const h = hub = { conns: new Map(), games: new Map(), isHub: false, conn: null, t: 0, gen: 0, fails: 0 };
+  const h = hub = { conns: new Map(), games: new Map(), isHub: false, conn: null, peer: null, t: 0, up: 0, gen: 0, stopped: false };
   const send = (c, msg) => { if (c && c.open) { try { c.send(msg); } catch (e) { /* dropped */ } } };
   const broadcast = () => {
     galleryMerge(myShared());
@@ -2410,34 +2412,70 @@ function hubStart() {
   };
   const dirty = () => { clearTimeout(h.t); h.t = setTimeout(broadcast, 400); };
   // Each attempt has a generation number, so the leftovers of a failed attempt never start a second one.
-  const retry = g => { if (g !== h.gen) return; const ng = ++h.gen; setTimeout(() => asHub(ng), 1000 + Math.random() * 3000); };
-  function asHub(g) {
-    const peer = h.peer = new Peer(HUB_ID, { debug: 0 });
-    peer.on('open', () => { if (g !== h.gen) return; h.isHub = true; hubStatus('ok'); broadcast(); });
+  const retry = g => { if (g !== h.gen) return; const ng = ++h.gen; setTimeout(() => asHub(ng, 0), 1000 + Math.random() * 3000); };
+  const drop = () => { // call after ++h.gen
+    clearInterval(h.up); clearTimeout(h.t); h.isHub = false; h.conns.clear(); h.games.clear();
+    try { h.peer && h.peer.destroy(); } catch (e) { /* gone */ }
+    if (h.conn) { try { h.conn.close(); } catch (e) { /* gone */ } h.conn = null; }
+  };
+  // 'free' (nobody has the name), 'live' (a hub answers) or 'dead' (the name is held but nobody answers)
+  const probe = id => clientPeer().then(cp => new Promise(res => {
+    const c = cp.connect(id, { serialization: 'json', reliable: true });
+    const end = s => { clearTimeout(t); WAIT.delete(id); try { c.close(); } catch (e) { /* gone */ } res(s); };
+    const t = setTimeout(() => end('dead'), 10000);
+    WAIT.set(id, () => end('free'));
+    c.on('open', () => end('live'));
+    c.on('error', () => {});
+  }), () => 'dead');
+  async function lookDown(g, k) {
+    for (let j = 0; j < k; j++) {
+      const s = await probe(HUBS[j]);
+      if (g !== h.gen) return;
+      if (s === 'dead') continue;
+      const ng = ++h.gen; drop();
+      return s === 'free' ? asHub(ng, j) : asClient(ng, j);
+    }
+  }
+  function asHub(g, k) {
+    const peer = h.peer = new Peer(HUBS[k], { debug: 0 });
+    peer.on('open', () => {
+      if (g !== h.gen) { try { peer.destroy(); } catch (e) { /* gone */ } return; } // given up meanwhile: don't hold the name
+      h.isHub = true; hubStatus('ok'); broadcast();
+      if (k) h.up = setInterval(() => lookDown(g, k), 30000);
+    });
     peer.on('connection', c => {
       c.on('data', d => {
+        if (g !== h.gen) return;
         if (d && (d.t === 'hello' || d.t === 'c')) { h.conns.set(c.peer, c); galleryMerge(d.c); rankMerge(d.rk); dirty(); }
         if (d && 'game' in d) { const x = cleanGames([d.game])[0]; if (x) h.games.set(c.peer, x); else h.games.delete(c.peer); dirty(); }
       });
-      c.on('close', () => { h.conns.delete(c.peer); h.games.delete(c.peer); dirty(); });
+      c.on('close', () => { if (g === h.gen) { h.conns.delete(c.peer); h.games.delete(c.peer); dirty(); } });
       c.on('error', () => {});
     });
-    peer.on('disconnected', () => { try { peer.reconnect(); } catch (e) { /* retried by PeerJS */ } });
+    peer.on('disconnected', () => { if (g === h.gen && !peer.destroyed) { try { peer.reconnect(); } catch (e) { /* retried by PeerJS */ } } });
     peer.on('error', e => {
-      if (g !== h.gen || h.isHub) return;
+      if (g !== h.gen) return;
+      if (h.isHub) { if (e && e.type === 'unavailable-id') { const ng = ++h.gen; drop(); asClient(ng, k); } return; } // lost the name while away
       try { peer.destroy(); } catch (x) { /* gone */ }
-      if (e && e.type === 'unavailable-id') asClient(g); else { if (netErr(e)) hubStatus('noserver'); retry(g); }
+      if (e && e.type === 'unavailable-id') asClient(g, k); else { if (netErr(e)) hubStatus('noserver'); retry(g); }
     });
   }
-  function asClient(g) {
+  function asClient(g, k) {
     clientPeer().then(cp => {
       if (g !== h.gen) return;
-      const c = cp.connect(HUB_ID, { serialization: 'json', reliable: true });
-      const giveUp = () => { if (g !== h.gen) return; clearTimeout(limit); h.conn = null; WAIT.delete(HUB_ID); try { c.close(); } catch (e) { /* gone */ } retry(g); };
-      WAIT.set(HUB_ID, giveUp); // the hub vanished in the meantime
-      // The hub exists but its connection never opens: the network blocks direct connections.
-      const limit = setTimeout(() => { if (g !== h.gen || h.conn) return; if (++h.fails >= 2) hubStatus('blocked'); giveUp(); }, 12000);
-      c.on('open', () => { if (g !== h.gen) return; clearTimeout(limit); WAIT.delete(HUB_ID); h.fails = 0; h.conn = c; hubStatus('ok'); send(c, { t: 'hello', c: myShared(), rk: rankShare(), game: myGame() }); });
+      const id = HUBS[k], c = cp.connect(id, { serialization: 'json', reliable: true });
+      const end = () => { clearTimeout(limit); WAIT.delete(id); if (h.conn === c) h.conn = null; try { c.close(); } catch (e) { /* gone */ } };
+      const giveUp = () => { if (g !== h.gen) return; end(); retry(g); }; // the hub left or vanished: someone takes over
+      WAIT.set(id, giveUp);
+      const limit = setTimeout(() => { // the name is held but nobody answers: try the next one
+        if (g !== h.gen || h.conn) return;
+        const ng = ++h.gen; end();
+        if (k + 1 < HUBS.length) asHub(ng, k + 1); else { hubStatus('blocked'); retry(ng); }
+      }, 10000);
+      c.on('open', () => {
+        if (g !== h.gen) { try { c.close(); } catch (e) { /* gone */ } return; }
+        clearTimeout(limit); WAIT.delete(id); h.conn = c; hubStatus('ok'); send(c, { t: 'hello', c: myShared(), rk: rankShare(), game: myGame() });
+      });
       c.on('data', d => { if (d && d.t === 'all') { galleryMerge(d.c); rankMerge(d.rk); if (Number.isInteger(d.n)) setOnline(d.n); HUB_GAMES = cleanGames(d.g); } });
       c.on('close', giveUp); // the hub left: someone takes over
       c.on('error', () => {});
@@ -2445,8 +2483,17 @@ function hubStart() {
   }
   h.game = () => { if (h.isHub) dirty(); else send(h.conn, { t: 'g', game: myGame() }); };
   h.share = () => { if (h.isHub) dirty(); else send(h.conn, { t: 'c', c: myShared(), rk: rankShare() }); };
-  asHub(0);
+  h.stop = () => { ++h.gen; drop(); h.stopped = true; };
+  asHub(0, 0);
 }
+// A hidden tab (phone locked, app in the background) soon stops answering: it lets go of the hub instead of blocking everyone.
+let hubHide = 0;
+document.addEventListener('visibilitychange', () => {
+  clearTimeout(hubHide);
+  if (!hub) return;
+  if (document.hidden) hubHide = setTimeout(() => hub.stop(), 15000);
+  else if (hub.stopped) hubStart();
+});
 $('inviteBtn').addEventListener('click', () => { retryAction = () => hostGame(false); hostGame(false); });
 $('lbStart').addEventListener('click', () => { if (NET && NET.host && NET.room) hostStart(); });
 $('lbRetry').addEventListener('click', () => { const f = retryAction; leaveGame(); if (f) f(); });
