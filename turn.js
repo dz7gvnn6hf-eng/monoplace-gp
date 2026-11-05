@@ -3,6 +3,6 @@
 // Ces deux valeurs seront visibles par tous les joueurs : n'utilisez pas le mot de passe de votre compte.
 window.TURN_CONFIG = {
   urls: ['turn:free.expressturn.com:3478', 'turn:free.expressturn.com:3478?transport=tcp'],
-  username: '',
-  credential: '',
+  username: '000000002109350614',
+  credential: 'EISoO7Th6Pu+sVYPaLX3CnC+pN4=',
 };
