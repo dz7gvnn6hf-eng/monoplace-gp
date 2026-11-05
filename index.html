@@ -1862,7 +1862,8 @@ const isPlayerPeer = p => p.kind === 'viewer' && (p.presence.role === 'host' || 
 // ---------- Direct connections (PeerJS), used when the page runs outside claude.ai ----------
 // A game is a star: the host owns the PeerJS id of the game's name and relays everyone's presence to every guest.
 // It mimics the parts of the room capability the game uses (peers, presence, join, leave).
-const P2P_PREFIX = 'monoplace-gp-v2-'; // v2: tabs still open on older versions can't hold the names
+const P2P_PREFIX = 'monoplace-gp-v1-'; // the names every version so far has used: old and new pages still find each other
+const VERSION = 18; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
 const NETMSG = {
   timeout: 'L’autre joueur ne répond pas : il a peut-être fermé le jeu ou mis son appareil en veille. Si cela se répète, essayez un autre réseau (Wi-Fi au lieu de la 4G) ou la version claude.ai du jeu.',
   noserver: 'Le serveur de connexion en ligne est injoignable : vérifiez votre connexion internet puis réessayez.',
@@ -2029,12 +2030,15 @@ async function joinGame(name, probe) {
 // Public games live on five fixed names: host the first free one or join it if it waits for players.
 // A name whose game is full, already racing or not answering (its host's phone went to sleep) is skipped.
 async function quickMatchP2P(ranked) {
-  lastJoinErr = null;
+  const dead = []; // rooms that exist but never answered
   for (let k = 1; k <= 5; k++) {
     const name = (ranked ? 'r-pub00' : 'q-pub00') + k;
-    if (await hostGame(true, name) || await joinGame(name, true)) return;
+    lastJoinErr = null;
+    if (await hostGame(true, name) || await joinGame(name, true)) { if (NET && dead.length) NET.dead = dead; return; }
     if (NET) return;
+    if (lastJoinErr === 'timeout') dead.push(k);
   }
+  if (dead.length) lastJoinErr = 'timeout';
   NET = { pub: true }; showLobby(''); lobbyFail(NETMSG[lastJoinErr] || 'Toutes les parties publiques sont pleines ou déjà lancées. Réessayez dans un instant.', lastJoinErr);
 }
 function quickMatch(ranked) {
@@ -2216,7 +2220,8 @@ let lobbyFrom = 'home';
 function showLobby(msg) {
   document.querySelectorAll('[data-chat] .feed').forEach(ul => ul.replaceChildren());
   lobbyFrom = el.menu.hidden ? 'home' : 'menu';
-  $('lbKind').textContent = NET.ranked ? 'Partie classée' : NET.pub ? 'Course en ligne' : 'Partie entre amis';
+  $('lbKind').textContent = (NET.ranked ? 'Partie classée' : NET.pub ? 'Course en ligne' : 'Partie entre amis') +
+    (/-pub00\d$/.test(NET.name || '') ? ' · salle ' + NET.name.slice(-1) : '') + (ROOM && ROOM.p2p ? ' · version ' + VERSION : '');
   $('lbTitle').textContent = 'Salle d’attente';
   $('lbTrack').textContent = msg;
   $('lbCodeBox').hidden = true; $('lbStart').hidden = true; $('lbRetry').hidden = true;
@@ -2241,9 +2246,10 @@ function renderLobby(humans) {
   $('lbShare').textContent = ROOM.p2p ? 'Envoyez le lien à vos amis, ou le code à taper dans « Rejoindre avec un code » sur l’écran d’accueil.' : 'Vos amis touchent « Rejoindre avec un code » sur l’écran d’accueil et tapent ce code. Ils doivent avoir accès à cette page : invitez-les depuis le menu Partager.';
   $('lbStart').hidden = !net.host || net.ranked;
   const left = Math.ceil((net.autoAt - Date.now()) / 1000), bots = Math.max(0, 6 - humans.length);
-  $('lbNote').textContent = net.ranked ? 'Partie classée : dès que 6 pilotes sont là (' + humans.length + '/6), chacun fait un tour de qualification, puis course de 5 tours avec arrêt au stand obligatoire. Pas de bots. Points : 25, 18, 15, 12, 10, 8.' :
+  $('lbNote').textContent = (net.ranked ? 'Partie classée : dès que 6 pilotes sont là (' + humans.length + '/6), chacun fait un tour de qualification, puis course de 5 tours avec arrêt au stand obligatoire. Pas de bots. Points : 25, 18, 15, 12, 10, 8.' :
     (net.host ? (net.pub ? 'Départ automatique dans ' + Math.max(0, left) + ' s. ' : 'Lancez la course quand vos amis sont là. ') : 'En attente du départ donné par l’hôte. ') +
-    (bots ? bots + ' bot' + (bots > 1 ? 's' : '') + ' compléteront la grille.' : 'Grille complète.');
+    (bots ? bots + ' bot' + (bots > 1 ? 's' : '') + ' compléteront la grille.' : 'Grille complète.')) +
+    (net.dead ? ' Attention : la salle ' + net.dead.join(', ') + ' existe mais ne répond pas. Si votre ami y est, vos deux appareils n’arrivent pas à se connecter directement.' : '');
   const ids = humans.map(p => p.by).filter(Boolean);
   const draw = ps => {
     if (tok !== lobbyTok) return;
