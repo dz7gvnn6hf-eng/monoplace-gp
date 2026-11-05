@@ -253,7 +253,7 @@ kbd{display:inline-grid;place-items:center;min-width:24px;height:22px;padding:0 
 @media (prefers-reduced-motion:reduce){#toast{transition:none}}
 </style>
 
-<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script><script src="turn.js"></script>
 </head>
 <body>
 <canvas id="game" aria-label="Circuit vu de dessus"></canvas>
@@ -1863,7 +1863,10 @@ const isPlayerPeer = p => p.kind === 'viewer' && (p.presence.role === 'host' || 
 // A game is a star: the host owns the PeerJS id of the game's name and relays everyone's presence to every guest.
 // It mimics the parts of the room capability the game uses (peers, presence, join, leave).
 const P2P_PREFIX = 'monoplace-gp-v1-'; // the names every version so far has used: old and new pages still find each other
-const VERSION = 18; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
+const VERSION = 19; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
+// Relay for players whose networks refuse direct connections: turn.js, next to the page, holds the owner's own TURN account.
+const RELAY = window.TURN_CONFIG && TURN_CONFIG.username && TURN_CONFIG.credential ? TURN_CONFIG : null;
+const PEER_OPTS = RELAY ? { debug: 0, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, RELAY] } } : { debug: 0 };
 const NETMSG = {
   timeout: 'L’autre joueur ne répond pas : il a peut-être fermé le jeu ou mis son appareil en veille. Si cela se répète, essayez un autre réseau (Wi-Fi au lieu de la 4G) ou la version claude.ai du jeu.',
   noserver: 'Le serveur de connexion en ligne est injoignable : vérifiez votre connexion internet puis réessayez.',
@@ -1882,7 +1885,7 @@ function clientPeer() {
   if (CPEER && !CPEER.destroyed) return Promise.resolve(CPEER);
   if (CPEER_P) return CPEER_P;
   return CPEER_P = new Promise((resolve, reject) => {
-    const p = new Peer({ debug: 0 });
+    const p = new Peer(PEER_OPTS);
     const giveUp = code => { clearTimeout(limit); CPEER_P = null; try { p.destroy(); } catch (e) { /* gone */ } reject({ code }); };
     const limit = setTimeout(() => giveUp('noserver'), 15000);
     p.on('open', () => { clearTimeout(limit); CPEER = p; CPEER_P = null; resolve(p); });
@@ -1925,7 +1928,7 @@ function p2pJoin(name, opts = {}) {
     }
     function tickGuest() { if (dirty && conn && conn.open) { dirty = false; try { conn.send({ t: 'pres', p: mine }); } catch (e) { /* dropped */ } } }
     if (host) {
-      peer = new Peer(target, { debug: 0 });
+      peer = new Peer(target, PEER_OPTS);
       peer.on('open', ok);
       peer.on('connection', c => {
         others.set(c.peer, { conn: c, presence: null });
@@ -1936,7 +1939,7 @@ function p2pJoin(name, opts = {}) {
       peer.on('disconnected', () => { if (!peer.destroyed) { try { peer.reconnect(); } catch (e) { /* PeerJS retries */ } } }); // stay reachable for new players
       peer.on('error', e => fail(e && e.type === 'unavailable-id' ? 'taken' : netErr(e) ? 'noserver' : 'upstream_error'));
     } else {
-      peer = new Peer({ debug: 0 });
+      peer = new Peer(PEER_OPTS);
       peer.on('open', () => {
         opened = true; selfId = peer.id;
         conn = peer.connect(target, { serialization: 'json', reliable: true });
@@ -2430,7 +2433,7 @@ function hubStart() {
     }
   }
   function asHub(g, k) {
-    const peer = h.peer = new Peer(HUBS[k], { debug: 0 });
+    const peer = h.peer = new Peer(HUBS[k], PEER_OPTS);
     peer.on('open', () => {
       if (g !== h.gen) { try { peer.destroy(); } catch (e) { /* gone */ } return; } // given up meanwhile: don't hold the name
       h.isHub = true; hubStatus('ok'); broadcast();
