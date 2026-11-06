@@ -39,7 +39,7 @@ h1 span{color:var(--red)}
 .go:hover:not(:disabled){filter:brightness(1.08)}
 .note{margin:0;font-size:13px;color:var(--muted)}
 .actions{display:flex;flex-wrap:wrap;gap:10px}
-.input{width:100%;min-width:0;background:var(--panel-hi);border:1px solid var(--line);color:var(--fg);font:600 16px var(--f-body);padding:10px 12px}
+.input{box-sizing:border-box;width:100%;min-width:0;background:var(--panel-hi);border:1px solid var(--line);color:var(--fg);font:600 16px var(--f-body);padding:10px 12px}
 
 /* ---------- HUD ---------- */
 #hud{pointer-events:none}
@@ -218,6 +218,13 @@ kbd{display:inline-grid;place-items:center;min-width:24px;height:22px;padding:0 
 .join-row{display:flex;gap:10px}
 .join-row .input{font:800 26px/1 var(--f-display);letter-spacing:.2em;text-transform:uppercase}
 .tblwrap{overflow-x:auto}
+.pf{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.avatar{width:96px;height:96px;border-radius:50%;overflow:hidden;background:var(--panel-hi);display:grid;place-items:center;font:800 40px/1 var(--f-display);color:var(--muted);flex:none}
+.avatar img,.prof img{width:100%;height:100%;object-fit:cover}
+.prof{display:inline-flex;align-items:center;gap:8px}.prof img{width:20px;height:20px;border-radius:50%;margin:-3px 0}
+label.btn{cursor:pointer;display:inline-block}
+.vol{display:grid;gap:6px}.vol input{width:100%;accent-color:var(--red)}
+.btn.danger{color:var(--red-text)}
 .card>*,.card .grp>*{min-width:0}
 .picks{display:flex;flex-wrap:wrap;gap:6px}.picks:empty{display:none} /* a wide table scrolls inside the card instead of widening it */
 .res{width:100%;border-collapse:collapse;font-size:15px}
@@ -283,7 +290,7 @@ kbd{display:inline-grid;place-items:center;min-width:24px;height:22px;padding:0 
     <div id="lights" aria-hidden="true" hidden><i></i><i></i><i></i><i></i><i></i></div>
     <div id="toast" role="status"></div>
     <div id="tag" hidden></div>
-    <div class="speedo"><div class="v"><b id="spd" class="num">0</b><span class="lbl">km/h</span></div><div class="gear" id="gear">N</div></div>
+    <div class="speedo"><div class="v"><b id="spd" class="num">0</b><span class="lbl" id="spdUnit">km/h</span></div><div class="gear" id="gear">N</div></div>
     <div id="touch">
       <div><button class="tb" data-key="left" type="button" aria-label="Tourner à gauche">◀</button><button class="tb" data-key="right" type="button" aria-label="Tourner à droite">▶</button></div>
       <div><button class="tb" data-key="brake" type="button">FREIN</button><button class="tb gas" data-key="gas" type="button">GAZ</button></div>
@@ -295,9 +302,9 @@ kbd{display:inline-grid;place-items:center;min-width:24px;height:22px;padding:0 
   <header class="home-top">
     <h1>Monoplace <span>GP</span></h1>
     <p class="online" id="onlineCount"></p>
+    <button id="profileBtn" class="btn prof" type="button" aria-label="Profil"><img id="profImg" alt="" hidden><span id="profName">Profil</span></button>
     <button id="rankBtn" class="btn" type="button">Classement</button>
-    <button id="sndHome" class="btn" type="button" aria-keyshortcuts="M">Son activé</button>
-    <button id="langBtn" class="btn" type="button" lang="en">English</button>
+    <button id="settingsBtn" class="btn" type="button">Réglages</button>
     <button id="codeBtn" class="btn" type="button" hidden>Rejoindre avec un code</button>
   </header>
   <div class="modes">
@@ -361,7 +368,6 @@ kbd{display:inline-grid;place-items:center;min-width:24px;height:22px;padding:0 
     </div>
     <div class="grp">
       <button id="go" class="go" type="button"><span id="goTxt">Course contre les bots</span><span aria-hidden="true">→</span></button>
-      <label class="note" id="nickRow" hidden>Votre pseudo en ligne <input id="nick" class="input" maxlength="16" autocomplete="off" spellcheck="false"></label>
       <div class="actions" id="netActions">
         <button id="quickBtn" class="btn" type="button">Course en ligne</button>
         <button id="inviteBtn" class="btn" type="button">Inviter des amis</button>
@@ -437,6 +443,36 @@ kbd{display:inline-grid;place-items:center;min-width:24px;height:22px;padding:0 
       <button id="lbRetry" class="go" type="button" hidden><span>Réessayer</span><span aria-hidden="true">→</span></button>
       <button id="lbLeave" class="btn" type="button">Quitter</button>
     </div>
+  </div>
+</section>
+
+<section id="profile" class="layer modal" hidden>
+  <div class="card">
+    <h2>Profil</h2>
+    <div class="pf">
+      <div class="avatar" aria-hidden="true"><img id="pfImg" alt="" hidden><span id="pfInit">P</span></div>
+      <div class="actions">
+        <label class="btn" for="pfFile">Choisir une photo</label><input id="pfFile" type="file" accept="image/*" hidden>
+        <button id="pfRemove" class="btn" type="button" hidden>Retirer la photo</button>
+      </div>
+    </div>
+    <label class="grp"><span class="lbl">Pseudo</span><input id="nick" class="input" maxlength="16" autocomplete="off" spellcheck="false"></label>
+    <p class="note">Votre pseudo s’affiche pour les autres joueurs en ligne. Votre photo reste sur cet appareil : les autres ne la voient pas.</p>
+    <div class="actions"><button id="pfClose" class="btn" type="button">Fermer</button></div>
+  </div>
+</section>
+
+<section id="settings" class="layer modal" hidden>
+  <div class="card">
+    <h2>Réglages</h2>
+    <div class="grp"><p class="lbl">Langue</p><div class="seg"><button type="button" data-set="lang" data-v="en" lang="en">English</button><button type="button" data-set="lang" data-v="fr" lang="fr">Français</button></div></div>
+    <div class="grp"><p class="lbl">Son</p><div class="seg"><button type="button" data-set="sound" data-v="on">Activé</button><button type="button" data-set="sound" data-v="off">Coupé</button></div>
+      <label class="vol"><span class="lbl">Volume</span><input id="volume" type="range" min="0" max="100" step="5"></label></div>
+    <div class="grp"><p class="lbl">Vitesse</p><div class="seg"><button type="button" data-set="unit" data-v="kmh">km/h</button><button type="button" data-set="unit" data-v="mph">mph</button></div></div>
+    <div class="grp"><p class="lbl">Compte</p>
+      <p class="note">Supprime de cet appareil votre profil, vos records, vos fantômes, vos circuits, vos points et vos favoris. Les temps et les points déjà transmis aux autres joueurs restent chez eux.</p>
+      <div class="actions"><button id="delAcc" class="btn danger" type="button">Supprimer mon compte</button></div></div>
+    <div class="actions"><button id="setClose" class="btn" type="button">Fermer</button></div>
   </div>
 </section>
 
@@ -1521,11 +1557,11 @@ function drawOutline(g, O, w, h, lw) {
 
 // ---------- HUD ----------
 const $ = id => document.getElementById(id);
-const el = { hud: $('hud'), home: $('home'), menu: $('menu'), pause: $('pause'), results: $('results'), quali: $('quali'), ranking: $('ranking'), editor: $('editor'), lobby: $('lobby'), join: $('join'),
+const el = { profile: $('profile'), settings: $('settings'), hud: $('hud'), home: $('home'), menu: $('menu'), pause: $('pause'), results: $('results'), quali: $('quali'), ranking: $('ranking'), editor: $('editor'), lobby: $('lobby'), join: $('join'),
   tower: $('tower'), lapNo: $('lapNo'), lapLbl: $('lapLbl'), cur: $('cur'), last: $('lastLap'), best: $('bestLap'), rec: $('recLap'),
   tyre: $('tyreTxt'), wing: $('wingTxt'), pitDt: $('pitDt'), pit: $('pitTxt'), tag: $('tag'), spd: $('spd'), gear: $('gear'), lights: $('lights'), toast: $('toast'), mini: $('mini') };
 const secEls = [$('s0'), $('s1'), $('s2')], lightEls = [...el.lights.children], mctx = el.mini.getContext('2d');
-const SCREENS = ['home', 'menu', 'pause', 'results', 'quali', 'editor', 'lobby', 'join', 'ranking'];
+const SCREENS = ['home', 'menu', 'pause', 'results', 'quali', 'editor', 'lobby', 'join', 'ranking', 'profile', 'settings'];
 
 function show(id) {
   for (const s of SCREENS) el[s].hidden = s !== id;
@@ -1596,7 +1632,7 @@ function hud(dt) {
   if (G.attract) return;
   const p = G.player, T = G.T, sp = Math.hypot(p.vx, p.vy), vf = p.vx * Math.cos(p.a) + p.vy * Math.sin(p.a);
   const st = G.state === 'paused' ? G.prev : G.state;
-  el.spd.textContent = Math.round(sp / PX_M * 3.6);
+  el.spd.textContent = Math.round(sp / PX_M * (UNIT === 'mph' ? 2.237 : 3.6));
   el.gear.textContent = sp < 8 ? 'N' : vf < 0 ? 'R' : Math.min(8, 1 + Math.floor(sp / MAXV * 8));
   el.cur.textContent = fmt(st === 'race' ? (p.fin ? p.last : G.t - p.lapStart) : 0);
   const lit = st === 'countdown' ? Math.min(5, Math.floor(G.cd / 0.8)) : 0;
@@ -1786,7 +1822,6 @@ function refreshSetup() {
   $('inviteBtn').textContent = champ ? 'Championnat entre amis' : 'Inviter des amis';
   $('quickBtn').disabled = $('inviteBtn').disabled = $('rankedBtn').disabled = !ROOM;
   $('netNote').textContent = ROOM && champ ? 'Invitez vos amis avec un code : les ' + DEFS.length + ' manches s’enchaînent et les points s’additionnent. Les places libres sont prises par des bots.' : ROOM ? 'En ligne, on vous place avec les pilotes qui cherchent une partie ; les places libres sont prises par des bots.' : window.claude ? 'Le jeu en ligne demande d’être connecté à claude.ai et invité sur cette page.' : 'Le jeu en ligne n’a pas pu se charger : vérifiez votre connexion puis rechargez la page.';
-  $('nickRow').hidden = !(ROOM && ROOM.p2p) || mode === 'tt';
   if (champ) {
     $('capName').textContent = 'Championnat';
     $('capMeta').textContent = DEFS.length + ' manches · 25, 18, 15, 12, 10, 8 points';
@@ -1966,7 +2001,7 @@ const isPlayerPeer = p => p.kind === 'viewer' && (p.presence.role === 'host' || 
 // A game is a star: the host owns the PeerJS id of the game's name and relays everyone's presence to every guest.
 // It mimics the parts of the room capability the game uses (peers, presence, join, leave).
 const P2P_PREFIX = 'monoplace-gp-v1-'; // the names every version so far has used: old and new pages still find each other
-const VERSION = 27; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
+const VERSION = 28; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
 // Relay for players whose networks refuse direct connections: turn.js, next to the page, holds the owner's own TURN account.
 const RELAY = window.TURN_CONFIG && TURN_CONFIG.username && TURN_CONFIG.credential ? TURN_CONFIG : null;
 const PEER_OPTS = RELAY ? { debug: 0, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, RELAY] } } : { debug: 0 };
@@ -2064,9 +2099,6 @@ function initRoom(room) {
   ROOM = room;
   if (room.p2p) {
     $('onlineCount').textContent = 'En ligne : course rapide ou partie entre amis';
-    $('nickRow').hidden = false;
-    $('nick').value = store.get('monoplace-gp.nick') || 'Pilote ' + (100 + Math.floor(Math.random() * 900));
-    $('nick').addEventListener('change', () => store.set('monoplace-gp.nick', myNick()));
     $('codeBtn').hidden = false;
     refreshSetup(); hashJoin();
     return;
@@ -2857,19 +2889,74 @@ function renderEditor() {
 }
 
 // ---------- Sound: synthesised with Web Audio; browsers only allow it after the first click or key press ----------
-const SND = { on: store.get('monoplace-gp.sound') !== false, ctx: null };
-function sndLabel() { for (const id of ['sndHome', 'sndPause']) { const b = $(id); b.textContent = SND.on ? 'Son activé' : 'Son coupé'; b.setAttribute('aria-pressed', SND.on); } }
-function toggleSound() { SND.on = !SND.on; store.set('monoplace-gp.sound', SND.on); sndLabel(); if (SND.ctx) SND.master.gain.setTargetAtTime(SND.on ? 0.6 : 0, SND.ctx.currentTime, 0.05); }
-$('sndHome').addEventListener('click', toggleSound);
+const SND = { on: store.get('monoplace-gp.sound') !== false, vol: Number.isFinite(store.get('monoplace-gp.volume')) ? clamp(store.get('monoplace-gp.volume'), 0, 100) : 100, ctx: null };
+const sndGain = () => SND.on ? 0.6 * SND.vol / 100 : 0;
+function sndLabel() { for (const id of ['sndPause']) { const b = $(id); b.textContent = SND.on ? 'Son activé' : 'Son coupé'; b.setAttribute('aria-pressed', SND.on); } }
+function toggleSound() { SND.on = !SND.on; store.set('monoplace-gp.sound', SND.on); sndLabel(); if (SND.ctx) SND.master.gain.setTargetAtTime(sndGain(), SND.ctx.currentTime, 0.05); refreshSettings(); }
 $('sndPause').addEventListener('click', toggleSound);
 sndLabel();
+
+// ---------- Profile and settings ----------
+const PHOTO_KEY = 'monoplace-gp.photo', UNIT_KEY = 'monoplace-gp.unit';
+let UNIT = store.get(UNIT_KEY) === 'mph' ? 'mph' : 'kmh';
+$('spdUnit').textContent = UNIT === 'mph' ? 'mph' : 'km/h';
+if (!store.get('monoplace-gp.nick')) store.set('monoplace-gp.nick', L('Pilote ', 'Driver ') + (100 + Math.floor(Math.random() * 900)));
+$('nick').value = store.get('monoplace-gp.nick');
+function refreshProfile() {
+  const ph = store.get(PHOTO_KEY), nm = myNick();
+  for (const img of [$('pfImg'), $('profImg')]) { img.hidden = !ph; if (ph) img.src = ph; }
+  $('pfInit').hidden = !!ph; $('pfInit').textContent = nm.slice(0, 1).toUpperCase();
+  $('pfRemove').hidden = !ph; $('profName').textContent = nm;
+}
+$('nick').addEventListener('change', () => { $('nick').value = myNick(); store.set('monoplace-gp.nick', myNick()); refreshProfile(); if (hub) hub.share(); });
+// A chosen photo is cut to a 160 px square and kept on this device only.
+$('pfFile').addEventListener('change', () => {
+  const f = $('pfFile').files[0]; $('pfFile').value = '';
+  if (!f || !/^image\//.test(f.type)) return;
+  const url = URL.createObjectURL(f), im = new Image();
+  im.onload = () => {
+    const c = document.createElement('canvas'), S = 160, k = Math.min(im.width, im.height); c.width = c.height = S;
+    c.getContext('2d').drawImage(im, (im.width - k) / 2, (im.height - k) / 2, k, k, 0, 0, S, S); URL.revokeObjectURL(url);
+    store.set(PHOTO_KEY, c.toDataURL('image/jpeg', 0.85)); refreshProfile();
+  };
+  im.onerror = () => URL.revokeObjectURL(url);
+  im.src = url;
+});
+$('pfRemove').addEventListener('click', () => { store.del(PHOTO_KEY); refreshProfile(); });
+$('profileBtn').addEventListener('click', () => { refreshProfile(); show('profile'); });
+$('pfClose').addEventListener('click', () => show('home'));
+function refreshSettings() {
+  document.querySelectorAll('[data-set]').forEach(b => b.setAttribute('aria-pressed', b.dataset.set === 'lang' ? b.dataset.v === LANG : b.dataset.set === 'sound' ? (b.dataset.v === 'on') === SND.on : b.dataset.v === UNIT));
+  $('volume').value = SND.vol;
+}
+document.querySelectorAll('[data-set]').forEach(b => b.addEventListener('click', () => {
+  const k = b.dataset.set, v = b.dataset.v;
+  if (k === 'lang') { if (v !== LANG) { store.set('monoplace-gp.lang', v); location.reload(); } return; }
+  if (k === 'sound' && (v === 'on') !== SND.on) toggleSound();
+  if (k === 'unit') { UNIT = v; store.set(UNIT_KEY, v); $('spdUnit').textContent = v === 'mph' ? 'mph' : 'km/h'; }
+  refreshSettings();
+}));
+$('volume').addEventListener('input', () => { SND.vol = +$('volume').value; store.set('monoplace-gp.volume', SND.vol); if (SND.ctx) SND.master.gain.setTargetAtTime(sndGain(), SND.ctx.currentTime, 0.05); });
+const delArm = on => { const b = $('delAcc'); b.dataset.armed = on ? '1' : ''; b.textContent = on ? 'Confirmer : tout supprimer' : 'Supprimer mon compte'; };
+// Deleting the account: this device's data, and on claude.ai the player's own shared documents; then a fresh start.
+$('delAcc').addEventListener('click', async () => {
+  if (!$('delAcc').dataset.armed) return delArm(true);
+  $('delAcc').disabled = true;
+  if (DB && ME) await Promise.allSettled(['laps', 'ghosts', 'votes', 'ranked', 'circuits'].map(c => DB.doc(c + '/' + ME).delete()));
+  try { for (const key of Object.keys(localStorage)) if (key.startsWith('monoplace-gp.')) localStorage.removeItem(key); } catch (e) { /* storage blocked: nothing kept anyway */ }
+  location.reload();
+});
+$('settingsBtn').addEventListener('click', () => { delArm(false); refreshSettings(); show('settings'); });
+$('setClose').addEventListener('click', () => show('home'));
+refreshProfile();
+
 function audioInit() {
   if (SND.ctx) { if (SND.ctx.state === 'suspended' && !document.hidden) SND.ctx.resume().catch(() => {}); return; }
   const AC = window.AudioContext || window.webkitAudioContext;
   if (!AC) return;
   try {
     const ctx = SND.ctx = new AC(), comp = ctx.createDynamicsCompressor(), master = SND.master = ctx.createGain();
-    master.gain.value = SND.on ? 0.6 : 0; master.connect(comp); comp.connect(ctx.destination);
+    master.gain.value = sndGain(); master.connect(comp); comp.connect(ctx.destination);
     const noise = SND.noise = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate), nd = noise.getChannelData(0);
     for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
     const loop = (type, freq, q) => {
@@ -2975,6 +3062,11 @@ if (matchMedia('(pointer: coarse)').matches) document.body.classList.add('touch'
 // ---------- Language: English unless the player picked French ----------
 // Texts are written in French; this dictionary turns every text the page shows into English as it appears.
 const EN = new Map([
+["Profil", "Profile"], ["Réglages", "Settings"], ["Choisir une photo", "Choose a photo"], ["Retirer la photo", "Remove the photo"], ["Pseudo", "Nickname"],
+["Votre pseudo s’affiche pour les autres joueurs en ligne. Votre photo reste sur cet appareil : les autres ne la voient pas.", "Your nickname is shown to other players online. Your photo stays on this device: others don’t see it."],
+["Langue", "Language"], ["Son", "Sound"], ["Activé", "On"], ["Coupé", "Off"], ["Volume", "Volume"], ["Vitesse", "Speed"], ["Compte", "Account"],
+["Supprime de cet appareil votre profil, vos records, vos fantômes, vos circuits, vos points et vos favoris. Les temps et les points déjà transmis aux autres joueurs restent chez eux.", "Deletes your profile, records, ghosts, circuits, points and favourites from this device. Times and points already passed to other players stay with them."],
+["Supprimer mon compte", "Delete my account"], ["Confirmer : tout supprimer", "Confirm: delete everything"],
 ["Circuit vu de dessus", "Circuit from above"],
 ["Classement en direct", "Live standings"],
 ["Tour", "Lap"],
@@ -3273,8 +3365,6 @@ if (LANG === 'en') {
   new MutationObserver(ms => { for (const m of ms) { if (m.type === 'attributes') trAttrs(m.target); else if (m.type === 'characterData') trNode(m.target); else m.addedNodes.forEach(trNode); } })
     .observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: TR_ATTRS });
 } else document.documentElement.lang = 'fr';
-$('langBtn').textContent = LANG === 'en' ? 'Français' : 'English'; $('langBtn').lang = LANG === 'en' ? 'fr' : 'en';
-$('langBtn').addEventListener('click', () => { store.set('monoplace-gp.lang', LANG === 'en' ? 'fr' : 'en'); location.reload(); });
 
 // ---------- Loop ----------
 startAttract();
