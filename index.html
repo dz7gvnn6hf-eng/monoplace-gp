@@ -329,6 +329,7 @@ kbd{display:inline-grid;place-items:center;min-width:24px;height:22px;padding:0 
       <div id="trackList" class="tracks"></div>
       <div class="actions">
         <button id="likeBtn" class="btn" type="button" hidden aria-pressed="false">♥ J’aime</button>
+        <button id="favBtn" class="btn" type="button" hidden aria-pressed="false">☆ Ajouter aux favoris</button>
         <button id="editBtn" class="btn" type="button" hidden>Modifier ce circuit</button>
         <button id="dupBtn" class="btn" type="button">Copier dans l’éditeur</button>
       </div>
@@ -822,13 +823,19 @@ async function fetchTopGhost(id, sess) {
   G.ghosts.push({ d: g.d, hz: 15, drv: { color: '#f4f5f7', alt: '#a54cff', helmet: '#a54cff' }, label: ((ps[uid] && ps[uid].name) || 'Meilleur joueur') + ' · ' + fmt(g.t) });
 }
 function toggleLike(id) {
-  if (!DB || !ME) return;
+  if (DB && !ME) return;
   if (myVotes.has(id)) myVotes.delete(id); else myVotes.add(id);
-  likes.set(id, Math.max(0, (likes.get(id) || 0) + (myVotes.has(id) ? 1 : -1)));
-  const body = { ids: [...myVotes].slice(-300) };
-  cloudQ = cloudQ.then(() => DB.doc('votes/' + ME).set(body)).catch(() => {});
+  if (DB) {
+    likes.set(id, Math.max(0, (likes.get(id) || 0) + (myVotes.has(id) ? 1 : -1)));
+    const body = { ids: [...myVotes].slice(-300) };
+    cloudQ = cloudQ.then(() => DB.doc('votes/' + ME).set(body)).catch(() => {});
+  } else { likeLocal[PID] = { ids: [...myVotes].slice(-40), t: Date.now() }; store.set(LIKE_KEY, likeLocal); likeCount(); if (hub) hub.share(); }
   renderTrackList(); refreshLike();
 }
+// Favourites stay on this device and come first in the list of circuits.
+const FAV_KEY = 'monoplace-gp.favs';
+const favs = new Set((store.get(FAV_KEY) || []).filter(x => typeof x === 'string'));
+function toggleFav(id) { if (favs.has(id)) favs.delete(id); else favs.add(id); store.set(FAV_KEY, [...favs]); renderTrackList(); refreshLike(); }
 // First contact: merge this browser's circuits (and the older private copy) into the shared document.
 async function syncMine(myDoc) {
   let list = myDoc || [];
@@ -1022,20 +1029,30 @@ function boom(c) {
   debris(c, 10); debris(c, 3, c.drv.alt); debris(c, 1, '#111317');
   sfxBoom(c);
   if (c.remote) return;
-  c.wreck = 3; c.vx *= 0.15; c.vy *= 0.15; c.steer = 0;
-  if (c.isPlayer) toast('Voiture détruite !', 'r');
+  c.wreck = G.mode === 'race' ? 3 : 2; c.vx *= 0.15; c.vy *= 0.15; c.steer = 0;
+  if (c.isPlayer) toast(G.mode === 'race' ? 'Voiture détruite · abandon' : 'Voiture détruite', 'r');
   safetyCar();
 }
-function respawn(c) { // back on the track where it blew up, repaired, from standstill
-  const T = G.T, i = c.idx;
-  c.x = T.x[i]; c.y = T.y[i]; c.a = Math.atan2(T.ty[i], T.tx[i]); c.vx = c.vy = 0; c.steer = 0; c.dmg = 0; c.pull = 0; c.wreck = 0;
-  if (c.isPlayer) toast('Retour en piste', 'g');
+// Once the wreck has burnt: in a race the car retires (taken off the track, classified last);
+// in Chrono and qualifying it starts again from the start line, on a new lap.
+function afterWreck(c) {
+  c.wreck = 0;
+  if (G.mode === 'race') {
+    c.out = true; c.vx = c.vy = 0;
+    if (c.isPlayer) { G.order.sort(cmp); G.over = true; G.resAt = G.t + 0.4; if (G.ranked) awardRanked(99); }
+    return;
+  }
+  const T = G.T, N = T.N, g = T.grid[0];
+  c.x = g.x; c.y = g.y; c.a = g.a; c.vx = c.vy = 0; c.steer = 0; c.dmg = 0; c.pull = 0; c.idx = g.i;
+  c.dist = c.lap * N + g.i - N; c.passed = Math.floor(c.dist / (N / NSPLIT)); c.sec = 3 * c.lap; // the line itself ends no lap and no sector
+  c.lapStart = c.secStart = G.t; c.cur = [null, null, null]; c.curCls = ['', '', ''];
+  if (c.isPlayer) { G.rec = []; toast('Retour à la ligne de départ', 'y'); }
 }
 function sparks(x, y, nx, ny) { for (let k = 0; k < 7; k++) spawn('spark', x, y, (-nx * 0.6 + Math.random() - 0.5) * 380, (-ny * 0.6 + Math.random() - 0.5) * 380); }
 function addSkid(x1, y1, x2, y2) { skids.set([x1, y1, x2, y2], skidI * 4); skidI = (skidI + 1) % SKN; skidC = Math.min(SKN, skidC + 1); }
 
 function hurt(c, amt, side) {
-  if (c.remote || G.attract || G.sim || amt <= 0 || c.wreck > 0) return;
+  if (c.remote || G.attract || G.sim || amt <= 0 || c.wreck > 0 || c.out) return;
   const before = c.dmg; c.dmg = Math.min(1, c.dmg + amt); c.pull = side;
   debris(c, Math.min(8, 1 + amt * 14 | 0));
   if (before <= 0.5 && c.dmg > 0.5) debris(c, 2, c.drv.alt); // the front wing flies off
@@ -1088,7 +1105,7 @@ function netStep(c) {
 }
 
 function physics(c) {
-  if (c.wreck > 0) { c.x += c.vx * H; c.y += c.vy * H; c.vx *= 1 - 3 * H; c.vy *= 1 - 3 * H; if ((c.wreck -= H) <= 0) respawn(c); return; }
+  if (c.wreck > 0) { c.x += c.vx * H; c.y += c.vy * H; c.vx *= 1 - 3 * H; c.vy *= 1 - 3 * H; if ((c.wreck -= H) <= 0) afterWreck(c); return; }
   if (c.service > 0) {
     c.vx = c.vy = 0;
     if ((c.service -= H) <= 0) { if (c.isPlayer) toast(c.dmg > 0.15 ? 'Pneus neufs · voiture réparée' : 'Pneus neufs', 'g'); c.tyre = 1; c.dmg = 0; c.pitted = true; c.ai.pit = c.ai.pit ? 2 : 0; }
@@ -1244,6 +1261,7 @@ function lapDone(c) {
 }
 
 function cmp(a, b) {
+  if (!!a.out !== !!b.out) return a.out ? 1 : -1; // retired cars at the back, the one that went furthest first
   const N = G.T.N, da = a.fin ? a.finLap * N : a.dist, db = b.fin ? b.finLap * N : b.dist;
   if (da !== db) return db - da;
   if (a.fin && b.fin) return a.finT - b.finT;
@@ -1261,6 +1279,7 @@ function step() {
   collide();
   if (G.sc) scStep();
   for (const c of G.cars) progress(c);
+  if (G.cars.some(c => c.out)) G.cars = G.cars.filter(c => !c.out); // retired cars stay in G.order, classified last
   const p = G.player;
   if (p && G.state === 'race' && !p.fin && (G.n & 3) === 0) G.rec.push(Math.round(p.x * 10) / 10, Math.round(p.y * 10) / 10, Math.round(p.a * 1000) / 1000);
 }
@@ -1500,6 +1519,7 @@ function show(id) {
 }
 
 function gapText(c, L) {
+  if (c.out) return 'Abd.';
   if (c === L) return c.fin ? fmt(c.finT) : 'Tête';
   if (c.fin && L.fin && c.finLap === L.finLap) return gapF(c.finT - L.finT);
   const N = G.T.N, ld = L.fin ? L.finLap * N : L.dist;
@@ -1514,16 +1534,17 @@ const esc = s => String(s).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;
 const row = (cls, cells) => '<tr class="' + cls + '">' + cells.map(([c, v]) => '<td class="' + c + '">' + v + '</td>').join('') + '</tr>';
 const chip = d => '<span class="chip" style="background:' + d.color + '"></span>' + esc(d.name);
 function champRows() {
-  const add = {}; G.order.forEach((c, i) => { add[c.drv.code] = POINTS[i] || 0; });
-  return G.cars.map(c => ({ c, add: add[c.drv.code], pts: (ui.champ.pts[c.drv.code] || 0) + add[c.drv.code] })).sort((a, b) => b.pts - a.pts);
+  const add = {}; G.order.forEach((c, i) => { add[c.drv.code] = c.out ? 0 : POINTS[i] || 0; });
+  return G.order.map(c => ({ c, add: add[c.drv.code], pts: (ui.champ.pts[c.drv.code] || 0) + add[c.drv.code] })).sort((a, b) => b.pts - a.pts);
 }
 function renderResults() {
   const o = G.order, L = o[0], fast = Math.min(...o.map(c => c.best ?? Infinity));
   G.pos = o.indexOf(G.player) + 1;
-  $('resTitle').textContent = G.pos === 1 ? 'Victoire' : 'Arrivée en P' + G.pos;
+  $('resTitle').textContent = G.player.out ? 'Abandon' : G.pos === 1 ? 'Victoire' : 'Arrivée en P' + G.pos;
   $('resBody').innerHTML = o.map((c, i) => {
     let t;
-    if (!c.fin) t = 'En piste';
+    if (c.out) t = 'Abandon';
+    else if (!c.fin) t = 'En piste';
     else if (c === L) t = fmt(c.finT);
     else if (c.finLap < L.finLap) { const n = L.finLap - c.finLap; t = '+' + n + ' tour' + (n > 1 ? 's' : ''); }
     else t = gapF(c.finT - L.finT);
@@ -1697,10 +1718,11 @@ function renderTrackList() {
   const community = [], limit = q ? 40 : 6;
   for (const c of others.slice().sort((a, b) => (ui.sort === 'pop' ? lk(b) - lk(a) : 0) || b.at - a.at)) {
     if (community.length >= limit) break;
-    const d = customDef(c); if (match(d) && isOk(d)) community.push(d); // layouts are checked only when shown
+    const d = customDef(c); if (match(d) && !favs.has(d.id) && isOk(d)) community.push(d); // layouts are checked only when shown
   }
   $('sortSeg').hidden = !others.length;
-  const groups = [['Circuits officiels', DEFS.filter(match)], ['Vos circuits', mine.map(customDef).filter(match)], ['Circuits des joueurs', community]];
+  const notFav = d => !favs.has(d.id), favDefs = [...favs].map(findDef).filter(d => d && match(d) && isOk(d));
+  const groups = [['Vos favoris', favDefs], ['Circuits officiels', DEFS.filter(match).filter(notFav)], ['Vos circuits', mine.map(customDef).filter(match).filter(notFav)], ['Circuits des joueurs', community]];
   const nodes = [];
   for (const [title, defs] of groups) {
     if (!defs.length) continue;
@@ -1865,14 +1887,18 @@ $('dupBtn').addEventListener('click', () => {
   const d = findDef(ui.tid); if (!d) return;
   openEditor({ id: null, name: ('Copie de ' + d.name).slice(0, 28), env: d.custom ? d.env : Math.max(0, DEFS.indexOf(d)), verts: d.verts });
 });
-// Likes are for other players' circuits: one per player, stored in their own votes document.
+// Likes: one per player and circuit, for any circuit but your own (claude.ai: votes documents; elsewhere: the hub's gossip).
 function refreshLike() {
-  const d = findDef(ui.tid), b = $('likeBtn'), n = likes.get(ui.tid) || 0;
-  b.hidden = !DB || !ME || ui.mode === 'champ' || !d || !d.by;
+  const d = findDef(ui.tid), b = $('likeBtn'), f = $('favBtn'), n = likes.get(ui.tid) || 0;
+  b.hidden = (DB && !ME) || ui.mode === 'champ' || !d || (d.custom && !d.by);
   b.setAttribute('aria-pressed', myVotes.has(ui.tid));
   b.textContent = (myVotes.has(ui.tid) ? '♥ Vous aimez' : '♡ J’aime') + (n ? ' · ' + n : '');
+  f.hidden = ui.mode === 'champ' || !d;
+  f.setAttribute('aria-pressed', favs.has(ui.tid));
+  f.textContent = favs.has(ui.tid) ? '★ Favori' : '☆ Ajouter aux favoris';
 }
 $('likeBtn').addEventListener('click', () => toggleLike(ui.tid));
+$('favBtn').addEventListener('click', () => toggleFav(ui.tid));
 
 // ---------- Online: lobby room, quick match, private games ----------
 // Everything travels in presence: each player publishes their own car; the host also publishes the game and the bots.
@@ -1914,7 +1940,7 @@ const isPlayerPeer = p => p.kind === 'viewer' && (p.presence.role === 'host' || 
 // A game is a star: the host owns the PeerJS id of the game's name and relays everyone's presence to every guest.
 // It mimics the parts of the room capability the game uses (peers, presence, join, leave).
 const P2P_PREFIX = 'monoplace-gp-v1-'; // the names every version so far has used: old and new pages still find each other
-const VERSION = 22; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
+const VERSION = 23; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
 // Relay for players whose networks refuse direct connections: turn.js, next to the page, holds the owner's own TURN account.
 const RELAY = window.TURN_CONFIG && TURN_CONFIG.username && TURN_CONFIG.credential ? TURN_CONFIG : null;
 const PEER_OPTS = RELAY ? { debug: 0, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, RELAY] } } : { debug: 0 };
@@ -2233,7 +2259,7 @@ function startOnline(g) {
 }
 
 const r1 = v => Math.round(v * 10) / 10, r3 = v => Math.round(v * 1000) / 1000;
-const pack = c => [r1(c.x), r1(c.y), r3(c.a), r1(c.vx), r1(c.vy), r3(c.steer), r1(c.dist), c.lap, c.fin ? 1 : 0, r3(c.finT), c.best == null ? 0 : r3(c.best), c.pitted ? 1 : 0, c.pen, r3(c.dmg), c.pull > 0 ? 1 : 0, c.wreck > 0 ? 1 : 0];
+const pack = c => [r1(c.x), r1(c.y), r3(c.a), r1(c.vx), r1(c.vy), r3(c.steer), r1(c.dist), c.lap, c.fin ? 1 : 0, r3(c.finT), c.best == null ? 0 : r3(c.best), c.pitted ? 1 : 0, c.pen, r3(c.dmg), c.pull > 0 ? 1 : 0, c.wreck > 0 ? 1 : 0, c.out ? 1 : 0];
 function netPublish() {
   const now = performance.now();
   if (!NET || !NET.room || now - G.online.lastPub < 66) return;
@@ -2248,7 +2274,8 @@ function applyNet(c, a, o) {
   c.tx = v(0); c.ty = v(1); c.a = v(2); c.vx = clamp(v(3), -900, 900); c.vy = clamp(v(4), -900, 900); c.steer = clamp(v(5), -1, 1);
   c.dist = v(6); c.lap = v(7) | 0; c.best = v(10) || null; c.pitted = !!v(11); c.pen = v(12);
   if (v(8) && !c.fin) { c.fin = true; c.finT = v(9); c.finLap = c.lap; G.leaderDone = true; }
-  if (a.length >= o + 16) { const w = v(15) > 0; c.dmg = clamp(v(13), 0, 1); c.pull = v(14) > 0 ? 1 : -1; if (w && !(c.wreck > 0)) boom(c); c.wreck = w ? 1 : 0; } // pages from before damage was shared send 13
+  if (a.length >= o + 16) { const w = v(15) > 0; c.dmg = clamp(v(13), 0, 1); c.pull = v(14) > 0 ? 1 : -1; if (w && !(c.wreck > 0)) boom(c); c.wreck = w ? 1 : 0; }
+  if (a.length >= o + 17 && v(16) > 0) c.out = true; // pages from before damage was shared send 13
   if (!c.netOk || Math.hypot(c.tx - c.x, c.ty - c.y) > 80) { c.x = c.tx; c.y = c.ty; c.netOk = true; }
 }
 function netSync(dt) {
@@ -2345,6 +2372,29 @@ function rankMerge(list) {
     changed = true;
   }
   if (changed) store.set(RANK_KEY, rankLocal);
+}
+// Likes without claude.ai: each player's liked circuits travel with the hub's gossip, newest list per player wins.
+const LIKE_KEY = 'monoplace-gp.likes';
+let likeLocal = store.get(LIKE_KEY) || {};
+function likeCount() {
+  if (DB) return;
+  likes = new Map(); myVotes = new Set(likeLocal[PID] && Array.isArray(likeLocal[PID].ids) ? likeLocal[PID].ids : []);
+  for (const e of Object.values(likeLocal)) if (e && Array.isArray(e.ids)) for (const id of new Set(e.ids)) likes.set(id, (likes.get(id) || 0) + 1);
+}
+likeCount();
+const likeShare = () => Object.entries(likeLocal).sort((a, b) => b[1].t - a[1].t).slice(0, 60).map(([id, e]) => [id, e.ids.slice(-40), e.t]);
+function likeMerge(list) {
+  if (!Array.isArray(list)) return;
+  let changed = false;
+  for (const e of list.slice(0, 80)) {
+    if (!Array.isArray(e) || typeof e[0] !== 'string' || !/^u[a-z0-9]{10}$/.test(e[0]) || e[0] === PID || !Array.isArray(e[1]) || !Number.isFinite(e[2])) continue;
+    if (likeLocal[e[0]] && likeLocal[e[0]].t >= e[2]) continue;
+    likeLocal[e[0]] = { ids: [...new Set(e[1].filter(x => typeof x === 'string' && /^[a-z][a-z0-9]{1,24}$/.test(x)))].slice(0, 40), t: e[2] };
+    changed = true;
+  }
+  if (!changed) return;
+  store.set(LIKE_KEY, likeLocal); likeCount();
+  if (!el.menu.hidden) { renderTrackList(); refreshLike(); }
 }
 function awardRanked(pos) {
   const pts = POINTS[pos - 1] || 0;
@@ -2453,7 +2503,7 @@ function hubStart() {
   const send = (c, msg) => { if (c && c.open) { try { c.send(msg); } catch (e) { /* dropped */ } } };
   const broadcast = () => {
     galleryMerge(myShared());
-    const msg = { t: 'all', c: gallery, rk: rankShare(), n: h.conns.size + 1, g: [...h.games.values(), myGame()].filter(Boolean) };
+    const msg = { t: 'all', c: gallery, rk: rankShare(), lk: likeShare(), n: h.conns.size + 1, g: [...h.games.values(), myGame()].filter(Boolean) };
     HUB_GAMES = cleanGames(msg.g);
     for (const c of h.conns.values()) send(c, msg);
     setOnline(h.conns.size + 1);
@@ -2494,7 +2544,7 @@ function hubStart() {
     peer.on('connection', c => {
       c.on('data', d => {
         if (g !== h.gen) return;
-        if (d && (d.t === 'hello' || d.t === 'c')) { h.conns.set(c.peer, c); galleryMerge(d.c); rankMerge(d.rk); dirty(); }
+        if (d && (d.t === 'hello' || d.t === 'c')) { h.conns.set(c.peer, c); galleryMerge(d.c); rankMerge(d.rk); likeMerge(d.lk); dirty(); }
         if (d && 'game' in d) { const x = cleanGames([d.game])[0]; if (x) h.games.set(c.peer, x); else h.games.delete(c.peer); dirty(); }
       });
       c.on('close', () => { if (g === h.gen) { h.conns.delete(c.peer); h.games.delete(c.peer); dirty(); } });
@@ -2522,15 +2572,15 @@ function hubStart() {
       }, 10000);
       c.on('open', () => {
         if (g !== h.gen) { try { c.close(); } catch (e) { /* gone */ } return; }
-        clearTimeout(limit); WAIT.delete(id); h.conn = c; hubStatus('ok'); send(c, { t: 'hello', c: myShared(), rk: rankShare(), game: myGame() });
+        clearTimeout(limit); WAIT.delete(id); h.conn = c; hubStatus('ok'); send(c, { t: 'hello', c: myShared(), rk: rankShare(), lk: likeShare(), game: myGame() });
       });
-      c.on('data', d => { if (d && d.t === 'all') { galleryMerge(d.c); rankMerge(d.rk); if (Number.isInteger(d.n)) setOnline(d.n); HUB_GAMES = cleanGames(d.g); } });
+      c.on('data', d => { if (d && d.t === 'all') { galleryMerge(d.c); rankMerge(d.rk); likeMerge(d.lk); if (Number.isInteger(d.n)) setOnline(d.n); HUB_GAMES = cleanGames(d.g); } });
       c.on('close', giveUp); // the hub left: someone takes over
       c.on('error', () => {});
     }, e => { if (g !== h.gen) return; hubStatus(e && e.code === 'noserver' ? 'noserver' : 'ok'); retry(g); });
   }
   h.game = () => { if (h.isHub) dirty(); else send(h.conn, { t: 'g', game: myGame() }); };
-  h.share = () => { if (h.isHub) dirty(); else send(h.conn, { t: 'c', c: myShared(), rk: rankShare() }); };
+  h.share = () => { if (h.isHub) dirty(); else send(h.conn, { t: 'c', c: myShared(), rk: rankShare(), lk: likeShare() }); };
   h.stop = () => { ++h.gen; drop(); h.stopped = true; };
   asHub(0, 0);
 }
