@@ -542,16 +542,9 @@ const PIT_V = 160, PIT_TIME = 2.4, PIT_PEN = 15, SC_V = 300;
 const boxRel = k => BOX0 + k * BOXSP;
 const pitOuter = rel => rel < PA || rel > PB ? R0 : rel < E1 ? R0 + (PIT_OUT - R0) * (rel - PA) / (E1 - PA) : rel > X0 ? R0 + (PIT_OUT - R0) * (PB - rel) / (PB - X0) : PIT_OUT;
 const relIdx = (i, N) => i > N / 2 ? i - N : i; // signed samples from the start line
-// Made-up sponsors (no real brand) on the trackside boards; each team wears one on its rear wing (sp).
-const SPONSORS = [
-  { name: 'ZÉPHYR', sub: 'PNEUS', bg: '#1d4ed8', fg: '#ffffff' },
-  { name: 'KIWI VOLT', sub: 'ÉNERGIE', bg: '#7bc943', fg: '#10210a' },
-  { name: 'PISTON', sub: 'CAFÉ', bg: '#5a3826', fg: '#f6e7cf' },
-  { name: 'RAPIDO', sub: 'PIZZA', bg: '#d42a2a', fg: '#ffd23f' },
-  { name: 'FLOCON', sub: 'GLACES', bg: '#cfeaff', fg: '#123a63' },
-  { name: 'COMÈTE', sub: 'COLA', bg: '#111317', fg: '#ff4d4d' },
-  { name: 'HIBOU', sub: 'TÉLÉCOM', bg: '#6d3fd6', fg: '#ffffff' },
-];
+// Grandstands: front edge SF from the centre line, SD deep. Spectators' shirts and hair.
+const SF = R0 + 18, SD = 96;
+const SHIRTS = ['#ec3a2a', '#f4f5f7', '#2f62f5', '#f1c22e', '#18b3a0', '#ff8a1e', '#2d9f4c', '#14161a', '#c5cad3', '#a54cff'], HAIR = ['#2b1d14', '#5a3a22', '#d9b26f', '#111317', '#8a5a2b'];
 const POINTS = [25, 18, 15, 12, 10, 8];
 const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -573,17 +566,17 @@ const store = { get(k) { try { return JSON.parse(localStorage.getItem(k)); } cat
 // Each circuit: corners [x, y, radius] in driving order; straights join the tangent arcs.
 const DEFS = [
   { id: 'lac', name: 'Anneau du Lac', blurb: 'Rapide et large autour du lac, avec une chicane pour casser le rythme.',
-    theme: { out: '#2f5527', run: '#5b9641', stripe: '#558f3c', wall: '#1e2228', dash: '#eef1f4', asph: '#3a3e45', deco: 'trees', d1: '#24461f', d2: '#2f5b27', water: '#2d6a8a', shore: '#cbbd8c' },
+    theme: { out: '#2f5527', run: '#5b9641', stripe: '#558f3c', wall: '#1e2228', dash: '#eef1f4', asph: '#3a3e45', deco: 'trees', d1: '#24461f', d2: '#2f5b27', water: '#2d6a8a', shore: '#cbbd8c', gravel: '#cdbf96' },
     lake: [1650, 950, 1050, 430],
     verts: [[0,0,450],[3200,0,550],[3500,1600,500],[2600,2000,220],[2150,1750,200],[1650,1750,200],[1200,2000,220],[200,2000,500],[-300,1000,450]] },
   { id: 'pins', name: 'Côte des Pins', blurb: 'Une épingle serrée à l’est, puis des courbes qui s’enchaînent dans la forêt.',
-    theme: { out: '#1f3d25', run: '#4a843b', stripe: '#447d36', wall: '#1e2228', dash: '#e8392a', asph: '#383c43', deco: 'trees', d1: '#142c19', d2: '#1d4023' },
+    theme: { out: '#1f3d25', run: '#4a843b', stripe: '#447d36', wall: '#1e2228', dash: '#e8392a', asph: '#383c43', deco: 'trees', d1: '#142c19', d2: '#1d4023', gravel: '#c6b78c' },
     verts: [[0,0,350],[2600,0,350],[3300,600,300],[3300,1600,170],[2900,1600,170],[2900,1050,220],[1700,1050,300],[1300,2000,300],[-200,2100,400],[-400,900,350]] },
   { id: 'ville', name: 'Ville Basse', blurb: 'Circuit urbain : angles droits entre les immeubles et chicane au bord du port.',
-    theme: { out: '#4a4e55', run: '#7d828a', stripe: '#787d85', wall: '#c8ccd2', dash: '#e8392a', asph: '#30333a', deco: 'blocks', d1: '#353940', d2: '#62676f' },
+    theme: { out: '#4a4e55', run: '#7d828a', stripe: '#787d85', wall: '#c8ccd2', dash: '#e8392a', asph: '#30333a', deco: 'blocks', d1: '#353940', d2: '#62676f', gravel: '#9a9ea6' },
     verts: [[0,0,160],[2400,0,160],[2400,700,160],[1700,700,160],[1700,1500,160],[2800,1500,180],[2800,2300,160],[1900,2300,150],[1650,2050,150],[1350,2050,150],[1100,2300,150],[600,2300,160],[600,1300,160],[0,1300,160]] },
   { id: 'cretes', name: 'Col des Crêtes', blurb: 'Lacets techniques à flanc de montagne et grande courbe rapide au retour.',
-    theme: { out: '#5e5038', run: '#9a8a5c', stripe: '#938356', wall: '#26231f', dash: '#f1c22e', asph: '#3b3d42', deco: 'rocks', d1: '#4b402c', d2: '#7a6d4f' },
+    theme: { out: '#5e5038', run: '#9a8a5c', stripe: '#938356', wall: '#26231f', dash: '#f1c22e', asph: '#3b3d42', deco: 'rocks', d1: '#4b402c', d2: '#7a6d4f', gravel: '#c4ae7e' },
     verts: [[0,0,300],[3200,0,200],[3200,700,170],[1800,700,170],[1800,1150,170],[3200,1150,200],[3200,1900,300],[200,1900,350],[700,1100,250],[-200,500,300]] },
 ];
 const OFFICIAL_IDS = new Set(DEFS.map(d => d.id));
@@ -722,28 +715,44 @@ function buildTrack(def, seed) {
     if (dd > R0 + 24 + r) deco.push({ x: dx0, y: dy0, r, a });
   }
 
-  // Sponsor boards just behind the barrier on straights, clear of other parts of the track, the pit complex and the lake.
-  const ads = [], AL = R0 + 42, straight = i => { for (let k = -14; k <= 14; k++) if (curv[(i + k + N) % N] !== 0) return false; return true; };
-  for (let i = 0, n = 0, side = 1; i < N; i += 50) { // one board every 400 px, sides alternating
-    if (!straight(i)) continue;
-    side = -side;
-    for (const sd of [side, -side]) {
-      const bx = x[i] + nx[i] * sd * AL, by = y[i] + ny[i] * sd * AL;
-      if (lake && ((bx - lake[0]) / (lake[2] + 120)) ** 2 + ((by - lake[1]) / (lake[3] + 120)) ** 2 < 1) continue;
-      const pts = [-90, 0, 90].map(u => [bx + tx[i] * u, by + ty[i] * u]);
-      const clear = pts.every(([qx, qy]) => {
-        for (let j = 0; j < N; j += 2) if ((x[j] - qx) ** 2 + (y[j] - qy) ** 2 < (R0 + 22) ** 2) return false;
-        for (let r = PA - 20; r <= PB + 20; r++) { const j = (r + N) % N, dx = qx - x[j], dy = qy - y[j]; if (dx * nx[j] + dy * ny[j] < 0 && dx * dx + dy * dy < (PIT_OUT + 140) ** 2) return false; }
-        return true;
-      });
-      if (!clear) continue;
-      let a = Math.atan2(ty[i], tx[i]); if (Math.cos(a) < -0.01) a += Math.PI; // text never upside down
-      ads.push({ x: bx, y: by, a, k: n++ % SPONSORS.length });
-      break;
-    }
+  // Corners: a gravel trap and a tyre wall on the outside, where cars run wide.
+  const gravel = new Path2D(), tyres = new Path2D(), holes = new Path2D(), corners = [];
+  for (let i = 0; i < N; i++) {
+    if (curv[i] === 0 || curv[(i + N - 1) % N] !== 0) continue; // first sample of a corner
+    let j = i; while (curv[j % N] !== 0 && j - i < N) j++;
+    const a = (i + N - 1) % N, b = j % N, sd = wrapA(Math.atan2(ty[b], tx[b]) - Math.atan2(ty[a], tx[a])) > 0 ? -1 : 1, m = sd * (HW + R0 + 8) / 2;
+    let back = 0; while (back < N && curv[(i - 1 - back + 2 * N) % N] === 0) back++; // the straight before it
+    corners.push({ i, sd, back });
+    for (let k = i - 4; k <= j + 10; k++) { const q = (k + N) % N; (k === i - 4 ? gravel.moveTo : gravel.lineTo).call(gravel, x[q] + nx[q] * m, y[q] + ny[q] * m); }
+    for (let k = i - 2; k <= j + 4; k++) { const q = (k + N) % N, px_ = x[q] + nx[q] * sd * (R0 - 3), py_ = y[q] + ny[q] * sd * (R0 - 3); tyres.moveTo(px_ + 5.5, py_); tyres.arc(px_, py_, 5.5, 0, 7); holes.moveTo(px_ + 2.2, py_); holes.arc(px_, py_, 2.2, 0, 7); }
   }
+  // Grandstands on straights: one across from the pits at the start line, then before the corners that end the longest straights.
+  const stands = [];
+  const standAt = (c, sd, L) => {
+    for (let k = -Math.ceil(L / 2 / DS) - 2; k <= Math.ceil(L / 2 / DS) + 2; k++) if (curv[(c + k + N) % N] !== 0) return false;
+    const pts = [];
+    for (let u = -L / 2; u <= L / 2; u += 40) for (const v of [SF, SF + SD / 2, SF + SD]) pts.push([x[c] + tx[c] * u + nx[c] * sd * v, y[c] + ty[c] * u + ny[c] * sd * v]);
+    const ok = pts.every(([qx, qy]) => {
+      if (lake && ((qx - lake[0]) / (lake[2] + 40)) ** 2 + ((qy - lake[1]) / (lake[3] + 40)) ** 2 < 1) return false;
+      for (let j = 0; j < N; j += 2) if ((x[j] - qx) ** 2 + (y[j] - qy) ** 2 < (R0 + 14) ** 2) return false;
+      for (let r = PA - 20; r <= PB + 20; r++) { const j = (r + N) % N, dx = qx - x[j], dy = qy - y[j]; if (dx * nx[j] + dy * ny[j] < 0 && dx * dx + dy * dy < (PIT_OUT + 140) ** 2) return false; }
+      return stands.every(st => Math.hypot(qx - st.cx, qy - st.cy) > st.L / 2 + 60);
+    });
+    if (ok) stands.push({ c, sd, L, cx: x[c] + nx[c] * sd * (SF + SD / 2), cy: y[c] + ny[c] * sd * (SF + SD / 2), img: null });
+    return ok;
+  };
+  standAt(N - 10, 1, 560) || standAt(N - 10, 1, 400) || standAt(N - 10, 1, 240);
+  for (const cn of corners.sort((p, q) => q.back - p.back)) {
+    if (stands.length >= 4) break;
+    if (cn.back >= 62) standAt((cn.i - 33 + N) % N, cn.sd, 400) || standAt((cn.i - 26 + N) % N, cn.sd, 280);
+  }
+  const inStand = (px_, py_, r) => stands.some(st => {
+    const c = st.c, dx = px_ - x[c], dy = py_ - y[c], u = dx * tx[c] + dy * ty[c], v = (dx * nx[c] + dy * ny[c]) * st.sd;
+    return Math.abs(u) < st.L / 2 + r + 6 && v > SF - r - 6 && v < SF + SD + r + 6;
+  });
 
-  return { def, N, x, y, tx, ty, nx, ny, curv, ro, prof, len: S.len, turns: S.turns, path, kerbs, grid, deco, lake, ads,
+  return { def, N, x, y, tx, ty, nx, ny, curv, ro, prof, len: S.len, turns: S.turns, path, kerbs, grid, lake, gravel, tyres, holes, stands,
+    deco: deco.filter(d => !inStand(d.x, d.y, d.r)),
     cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, w: x1 - x0, h: y1 - y0 };
 }
 
@@ -890,13 +899,14 @@ function shareLap(trackId, t, color, rec) {
 }
 
 // ---------- Teams, drivers & cars ----------
+// sp: each team's made-up sponsor (no real brand), painted on its rear wing.
 const TEAMS = [
-  { name: 'Rouge', color: '#ec3a2a', alt: '#f4f5f7', helmet: '#f1c22e', sp: 5 },
-  { name: 'Turquoise', color: '#18b3a0', alt: '#0b2f2b', helmet: '#f4f5f7', sp: 2 },
-  { name: 'Orange', color: '#ff8a1e', alt: '#16181c', helmet: '#2f6bff', sp: 0 },
-  { name: 'Bleu', color: '#2f62f5', alt: '#f1c22e', helmet: '#f4f5f7', sp: 3 },
-  { name: 'Argent', color: '#c5cad3', alt: '#14161a', helmet: '#ec3a2a', sp: 6 },
-  { name: 'Vert', color: '#2d9f4c', alt: '#f4f5f7', helmet: '#16181c', sp: 4 },
+  { name: 'Rouge', color: '#ec3a2a', alt: '#f4f5f7', helmet: '#f1c22e', sp: { name: 'COMÈTE', bg: '#111317', fg: '#ff4d4d' } },
+  { name: 'Turquoise', color: '#18b3a0', alt: '#0b2f2b', helmet: '#f4f5f7', sp: { name: 'PISTON', bg: '#5a3826', fg: '#f6e7cf' } },
+  { name: 'Orange', color: '#ff8a1e', alt: '#16181c', helmet: '#2f6bff', sp: { name: 'ZÉPHYR', bg: '#1d4ed8', fg: '#ffffff' } },
+  { name: 'Bleu', color: '#2f62f5', alt: '#f1c22e', helmet: '#f4f5f7', sp: { name: 'RAPIDO', bg: '#d42a2a', fg: '#ffd23f' } },
+  { name: 'Argent', color: '#c5cad3', alt: '#14161a', helmet: '#ec3a2a', sp: { name: 'HIBOU', bg: '#6d3fd6', fg: '#ffffff' } },
+  { name: 'Vert', color: '#2d9f4c', alt: '#f4f5f7', helmet: '#16181c', sp: { name: 'FLOCON', bg: '#cfeaff', fg: '#123a63' } },
 ].map((t, i) => ({ ...t, i }));
 const RIVALS = [{ code: 'ROY', name: 'Mathis Roy' }, { code: 'LAM', name: 'Inès Lambert' }, { code: 'KOV', name: 'Dario Kovač' }, { code: 'SAN', name: 'Léo Santos' }, { code: 'BRI', name: 'Chloé Brière' }];
 // skill scales the bots' speed profile; err is the mean number of seconds between driving mistakes.
@@ -1304,12 +1314,41 @@ function grass(th) {
   return patCache[th.run];
 }
 const disc = (g, x, y, r) => { g.beginPath(); g.arc(x, y, r, 0, 7); g.fill(); };
-// A sponsor's panel of w × h centred on the origin.
-function drawSponsor(g, sp, w, h, sub = true) {
+// Gravel: the theme's colour speckled with lighter and darker stones.
+function gravelPat(c) {
+  if (!patCache[c]) {
+    const cv2 = document.createElement('canvas'); cv2.width = cv2.height = 64;
+    const g = cv2.getContext('2d'), r = rng(7); g.fillStyle = c; g.fillRect(0, 0, 64, 64);
+    for (let k = 0; k < 90; k++) { g.fillStyle = r() < .5 ? 'rgba(0,0,0,.13)' : 'rgba(255,255,255,.16)'; g.fillRect(r() * 64, r() * 64, 2, 2); }
+    patCache[c] = ctx.createPattern(cv2, 'repeat');
+  }
+  return patCache[c];
+}
+// A grandstand, drawn once: rows of seats with the crowd facing the track (front at y = 0), a roof over the back rows.
+function standImg(st) {
+  if (st.img) return st.img;
+  const L = st.L, k = 2, c = document.createElement('canvas'); c.width = L * k; c.height = SD * k;
+  const g = c.getContext('2d'), r = rng(st.c * 31 + 7), open = SD * 0.66; g.scale(k, k);
+  g.fillStyle = '#2a2e35'; g.fillRect(0, 0, L, SD);
+  for (let y = 5, n = 0; y < open - 4; y += 7, n++) {
+    g.fillStyle = n % 2 ? '#8e949d' : '#a4aab2'; g.fillRect(2, y, L - 4, 7);
+    for (let x = 6; x < L - 6; x += 5 + r() * 1.5) {
+      if (r() < 0.18) continue; // empty seat
+      g.fillStyle = SHIRTS[r() * SHIRTS.length | 0]; disc(g, x, y + 4.3, 2.3);
+      g.fillStyle = HAIR[r() * HAIR.length | 0]; disc(g, x, y + 2.6, 1.3);
+    }
+  }
+  g.fillStyle = '#c3c8cf'; for (let x = 60; x < L - 20; x += 90) g.fillRect(x, 5, 4, open - 9); // aisles
+  g.fillStyle = '#353a43'; g.fillRect(0, open, L, SD - open);
+  g.fillStyle = 'rgba(255,255,255,.07)'; for (let x = 20; x < L; x += 40) g.fillRect(x, open, 2, SD - open); // roof ribs
+  g.fillStyle = '#e8392b'; g.fillRect(0, open - 3, L, 4); // roof edge
+  return st.img = c;
+}
+// A sponsor's name on a w × h panel centred on the origin.
+function drawSponsor(g, sp, w, h) {
   g.fillStyle = sp.bg; g.fillRect(-w / 2, -h / 2, w, h);
   g.fillStyle = sp.fg; g.textAlign = 'center'; g.textBaseline = 'middle';
-  g.font = '800 ' + h * (sub ? .56 : .8) + 'px "Saira Condensed", sans-serif'; g.fillText(sp.name, 0, sub ? -h * .12 : h * .05, w * .9);
-  if (sub) { g.font = '700 ' + h * .27 + 'px "Barlow Semi Condensed", sans-serif'; g.fillText(sp.sub, 0, h * .3, w * .9); }
+  g.font = '800 ' + h * .8 + 'px "Saira Condensed", sans-serif'; g.fillText(sp.name, 0, h * .05, w * .9);
   g.textBaseline = 'alphabetic';
 }
 
@@ -1326,10 +1365,20 @@ function drawWorld(T, x0, y0, x1, y1) {
     else if (th.deco === 'rocks') { ctx.fillStyle = th.d1; ctx.beginPath(); ctx.ellipse(d.x + 4, d.y + 4, d.r, d.r * .7, d.a, 0, 7); ctx.fill(); ctx.fillStyle = th.d2; ctx.beginPath(); ctx.ellipse(d.x, d.y, d.r, d.r * .7, d.a, 0, 7); ctx.fill(); }
     else { ctx.save(); ctx.translate(d.x, d.y); ctx.rotate(Math.round(d.a / 1.57) * 1.57); ctx.fillStyle = th.d1; ctx.fillRect(-d.r * 1.6, -d.r, d.r * 3.2, d.r * 2); ctx.fillStyle = th.d2; ctx.fillRect(-d.r * 1.3, -d.r * .7, d.r * 2.6, d.r * 1.4); ctx.restore(); }
   }
+  for (const st of T.stands) {
+    if (st.cx < x0 - st.L || st.cx > x1 + st.L || st.cy < y0 - st.L || st.cy > y1 + st.L) continue;
+    const c = st.c;
+    ctx.save(); ctx.translate(T.x[c], T.y[c]); ctx.rotate(Math.atan2(T.ty[c], T.tx[c])); ctx.scale(1, st.sd);
+    ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.fillRect(-st.L / 2 + 6, SF + 8, st.L, SD);
+    ctx.drawImage(standImg(st), -st.L / 2, SF, st.L, SD);
+    ctx.restore();
+  }
   ctx.lineJoin = 'round'; ctx.lineCap = 'butt';
   ctx.lineWidth = 2 * R0 + 16; ctx.strokeStyle = th.wall; ctx.stroke(T.path);
   ctx.setLineDash([26, 26]); ctx.strokeStyle = th.dash; ctx.stroke(T.path); ctx.setLineDash([]);
   ctx.lineWidth = 2 * R0; ctx.strokeStyle = grass(th); ctx.stroke(T.path);
+  ctx.lineCap = 'round'; ctx.lineWidth = R0 - HW - 20; ctx.strokeStyle = gravelPat(th.gravel); ctx.stroke(T.gravel); ctx.lineCap = 'butt';
+  ctx.fillStyle = '#17191d'; ctx.fill(T.tyres); ctx.fillStyle = '#41454d'; ctx.fill(T.holes); // tyre walls
   drawPit(T);
   ctx.lineWidth = 2 * HW + 18; ctx.strokeStyle = '#f2f3f5'; ctx.stroke(T.kerbs);
   ctx.setLineDash([15, 15]); ctx.strokeStyle = '#d93226'; ctx.stroke(T.kerbs); ctx.setLineDash([]);
@@ -1340,14 +1389,6 @@ function drawWorld(T, x0, y0, x1, y1) {
   const w = 2 * (HW - 2) / 12;
   for (let r = 0; r < 2; r++) for (let k = 0; k < 12; k++) { ctx.fillStyle = (r + k) % 2 ? '#15171b' : '#f4f5f7'; ctx.fillRect(r * w - w, -HW + 2 + k * w, w, w); }
   ctx.restore();
-  for (const b of T.ads) {
-    if (b.x < x0 - 120 || b.x > x1 + 120 || b.y < y0 - 120 || b.y > y1 + 120) continue;
-    ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(b.a);
-    ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(-93, -15, 196, 46);
-    ctx.fillStyle = '#15171b'; ctx.fillRect(-98, -23, 196, 46);
-    drawSponsor(ctx, SPONSORS[b.k], 190, 40);
-    ctx.restore();
-  }
   ctx.strokeStyle = 'rgba(244,245,247,.8)'; ctx.lineWidth = 3;
   for (const g of T.grid) {
     ctx.save(); ctx.translate(g.x, g.y); ctx.rotate(g.a);
@@ -1395,8 +1436,8 @@ function drawCar(c, g = ctx) {
   for (let s = -1; s <= 1; s += 2) { g.save(); g.translate(13, s * 9.5); g.rotate(c.steer * 0.35); g.fillRect(-4, -2.5, 8, 5); g.restore(); }
   g.strokeStyle = '#111317'; g.lineWidth = 1.2; g.beginPath();
   g.moveTo(13, -8); g.lineTo(6, -2); g.moveTo(13, 8); g.lineTo(6, 2); g.moveTo(-15, -8); g.lineTo(-10, -5); g.moveTo(-15, 8); g.lineTo(-10, 5); g.stroke();
-  const sp = SPONSORS[d.sp]; // rear wing: the team's sponsor
-  if (sp) { g.save(); g.translate(-20.5, 0); g.rotate(-Math.PI / 2); drawSponsor(g, sp, 22, 6.5, false); g.restore(); } else { g.fillStyle = d.alt; g.fillRect(-23, -10, 5, 20); }
+  const sp = d.sp; // rear wing: the team's sponsor
+  if (sp) { g.save(); g.translate(-20.5, 0); g.rotate(-Math.PI / 2); drawSponsor(g, sp, 22, 6.5); g.restore(); } else { g.fillStyle = d.alt; g.fillRect(-23, -10, 5, 20); }
   g.fillStyle = d.alt;
   if (c.dmg > 0.3) g.fillRect(19, c.pull > 0 ? -11 : 0, 4, 11); else g.fillRect(19, -11, 4, 22); // half the front wing is gone
   g.fillStyle = d.color; g.beginPath();
@@ -1912,7 +1953,7 @@ const isPlayerPeer = p => p.kind === 'viewer' && (p.presence.role === 'host' || 
 // A game is a star: the host owns the PeerJS id of the game's name and relays everyone's presence to every guest.
 // It mimics the parts of the room capability the game uses (peers, presence, join, leave).
 const P2P_PREFIX = 'monoplace-gp-v1-'; // the names every version so far has used: old and new pages still find each other
-const VERSION = 20; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
+const VERSION = 21; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
 // Relay for players whose networks refuse direct connections: turn.js, next to the page, holds the owner's own TURN account.
 const RELAY = window.TURN_CONFIG && TURN_CONFIG.username && TURN_CONFIG.credential ? TURN_CONFIG : null;
 const PEER_OPTS = RELAY ? { debug: 0, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, RELAY] } } : { debug: 0 };
