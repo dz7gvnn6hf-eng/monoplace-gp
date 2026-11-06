@@ -99,13 +99,22 @@ h1 span{color:var(--red)}
 .tb.gas.on{background:rgba(30,196,107,.55)}
 
 /* ---------- Home: three modes ---------- */
-#home{display:grid;grid-template-rows:auto minmax(0,1fr);gap:12px;background:rgba(8,10,14,.78)}
+#home{display:grid;grid-template-rows:auto auto minmax(0,1fr);gap:12px;background:rgba(8,10,14,.78)}
 .home-top{display:flex;flex-wrap:wrap;align-items:center;gap:8px 18px}
 .home-top h1{font-size:clamp(30px,6vh,54px)}
 .home-top .online{margin:0 0 0 auto;font-weight:600;color:var(--muted)}
 .home-top .online b{color:var(--green);font-weight:700}
 .home-top .online.warn{color:var(--yellow)}
 .home-top .btn{padding:10px 14px;font-size:16px}
+/* Online play gets its own always-visible row: one colour per kind of game. */
+.netbar{display:flex;gap:8px}
+.nb{--c:var(--green);flex:1 1 0;min-width:0;display:grid;gap:3px;align-content:center;text-align:left;padding:10px 14px 10px 16px;background:var(--panel-hi);box-shadow:inset 4px 0 0 var(--c)}
+.nb b{font:800 20px/1 var(--f-display);text-transform:uppercase;letter-spacing:.03em;transform:skewX(-8deg);transform-origin:left bottom}
+.nb small{font-size:13px;line-height:1.25;color:var(--muted)}
+.nb-ranked{--c:var(--yellow)} .nb-friends{--c:#4aa3ff} .nb-code{--c:var(--line);flex:0 1 auto}
+.nb:hover,.nb:focus-visible{filter:brightness(1.25)}
+.nb:disabled{opacity:.45;filter:none;cursor:default}
+@media (max-width:700px){.netbar{display:grid;grid-template-columns:1fr 1fr}.nb{padding:9px 10px 9px 13px}.nb b{font-size:17px}.nb small{display:none}}
 /* The three cards nest like broadcast graphics: parallel slanted edges, one accent per mode (race red, title gold, record purple). */
 .modes{--s:34px;--gap:12px;display:flex;min-height:0}
 .mode{--accent:var(--red-text);--glow:rgba(236,58,42,.24);
@@ -179,6 +188,13 @@ h1 span{color:var(--red)}
 .rounds li{display:grid;grid-template-columns:28px 1fr;gap:10px;align-items:center;background:var(--panel-hi);padding:8px 10px}
 .rounds .n{font:800 18px/1 var(--f-display);color:var(--red-text)}
 .opts{display:grid;grid-template-columns:1fr 1.6fr;gap:12px}
+.more{display:grid;gap:14px}
+.more summary{cursor:pointer;width:max-content;padding:4px 0;color:var(--muted);font:700 13px/1 var(--f-body);letter-spacing:.12em;text-transform:uppercase}
+.more summary:hover{color:var(--fg)}
+.more[open] summary{margin-bottom:6px}
+/* The start button stays in view at the bottom of the panel, however long the circuit list. */
+.gobar{position:sticky;bottom:0;z-index:2;margin-inline:-16px;padding:12px 16px max(14px, env(safe-area-inset-bottom,0px));background:var(--ink);box-shadow:0 -1px 0 var(--line)}
+@media (min-width:700px){.gobar{margin-inline:-36px;padding-inline:36px}}
 .swatches{display:flex;flex-wrap:wrap;gap:8px;background:var(--panel-hi);padding:7px}
 .swatches button{width:30px;height:30px;box-shadow:inset 0 0 0 2px rgba(0,0,0,.3)}
 .swatches button[aria-pressed="true"]{outline:2px solid var(--fg);outline-offset:2px}
@@ -316,8 +332,13 @@ label.btn{cursor:pointer;display:inline-block}
     <button id="rankBtn" class="btn" type="button">Classement</button>
     <button id="settingsBtn" class="btn" type="button">Réglages</button>
     <button id="fsBtn" class="btn" type="button" aria-label="Plein écran" title="Plein écran" aria-keyshortcuts="F" hidden>⛶</button>
-    <button id="codeBtn" class="btn" type="button" hidden>Rejoindre avec un code</button>
   </header>
+  <div class="netbar" role="group" aria-label="Jouer en ligne">
+    <button id="hQuick" class="nb nb-quick" type="button"><b>Course en ligne</b><small>Contre les joueurs qui cherchent une partie</small></button>
+    <button id="hRanked" class="nb nb-ranked" type="button"><b>Partie classée</b><small>6 vrais joueurs, points au classement</small></button>
+    <button id="hFriends" class="nb nb-friends" type="button"><b>Entre amis</b><small>Créez une partie, partagez le code</small></button>
+    <button id="codeBtn" class="nb nb-code" type="button" hidden><b>Rejoindre avec un code</b></button>
+  </div>
   <div class="modes">
     <button class="mode" data-mode="race" type="button"><canvas aria-hidden="true"></canvas>
       <span class="mk">Course unique</span><span class="mt">Grand Prix</span>
@@ -360,9 +381,6 @@ label.btn{cursor:pointer;display:inline-block}
       <ol class="rounds" id="rounds"></ol>
       <p class="note">Points de la 1re à la 6e place : 25, 18, 15, 12, 10, 8.</p>
     </div>
-    <div class="grp" id="qualiGrp"><p class="lbl">Qualifications</p>
-      <div class="seg"><button type="button" data-k="quali" data-v="1">Un tour chrono</button><button type="button" data-k="quali" data-v="0">Sans, départ dernier</button></div>
-    </div>
     <div class="opts" id="raceOpts">
       <div class="grp"><p class="lbl">Tours</p>
         <div class="seg"><button type="button" data-k="laps" data-v="3">3</button><button type="button" data-k="laps" data-v="5">5</button><button type="button" data-k="laps" data-v="10">10</button></div>
@@ -371,19 +389,19 @@ label.btn{cursor:pointer;display:inline-block}
         <div class="seg"><button type="button" data-k="diff" data-v="facile">Facile</button><button type="button" data-k="diff" data-v="normal">Normal</button><button type="button" data-k="diff" data-v="difficile">Difficile</button></div>
       </div>
     </div>
-    <div class="opts">
+    <details class="more" id="moreOpts"><summary>Plus d’options</summary>
+      <div class="grp"><p class="lbl">Qualifications</p>
+        <div class="seg"><button type="button" data-k="quali" data-v="1">Un tour chrono</button><button type="button" data-k="quali" data-v="0">Sans, départ dernier</button></div>
+      </div>
       <div class="grp"><p class="lbl">Météo</p>
         <div class="seg"><button type="button" data-k="weather" data-v="dry">Sec</button><button type="button" data-k="weather" data-v="rain">Pluie</button><button type="button" data-k="weather" data-v="var">Variable</button></div>
       </div>
-      <div class="grp"><p class="lbl">Votre écurie</p><div class="swatches" id="teams"></div></div>
+    </details>
+    <div class="grp gobar">
+      <button id="go" class="go" type="button"><span id="goTxt">Course contre les bots</span><span aria-hidden="true">→</span></button>
     </div>
     <div class="grp">
-      <button id="go" class="go" type="button"><span id="goTxt">Course contre les bots</span><span aria-hidden="true">→</span></button>
-      <div class="actions" id="netActions">
-        <button id="quickBtn" class="btn" type="button">Course en ligne</button>
-        <button id="inviteBtn" class="btn" type="button">Inviter des amis</button>
-        <button id="rankedBtn" class="btn" type="button">Partie classée</button>
-      </div>
+      <div class="actions" id="netActions"><button id="inviteBtn" class="btn" type="button">Inviter des amis</button></div>
       <p class="note" id="netNote"></p>
       <div class="grp" id="openGrp" hidden><p class="lbl">Parties ouvertes</p><ul class="opengames" id="openGames"></ul></div>
       <p class="note" id="ghostNote" hidden></p>
@@ -394,6 +412,7 @@ label.btn{cursor:pointer;display:inline-block}
       <ol class="board" id="boardList"></ol>
       <p class="note" id="boardNote"></p>
     </section>
+    <details class="more"><summary>Comment jouer</summary>
     <dl class="keys">
       <dt><kbd>↑</kbd><kbd>Z</kbd></dt><dd>Accélérer</dd>
       <dt><kbd>↓</kbd><kbd>S</kbd></dt><dd>Freiner, puis marche arrière</dd>
@@ -402,6 +421,7 @@ label.btn{cursor:pointer;display:inline-block}
       <dt><kbd>M</kbd></dt><dd>Couper ou remettre le son</dd>
     </dl>
     <p class="note">Sur clavier QWERTY, ZQSD devient WASD. Stands : la voie des stands part à gauche avant la ligne droite de départ, limitée à 80 km/h. Arrêtez-vous dans le garage de votre couleur, marqué VOUS, pour des pneus neufs. Rouler dans l’aspiration d’une voiture vous fait gagner de la vitesse. Partie classée : uniquement entre 6 vrais joueurs, sans bots ; un tour de qualification fixe la grille, puis 5 tours avec arrêt au stand obligatoire, et chaque course rapporte des points au classement. Secteur violet : record du circuit battu ; vert : votre meilleur de la séance. En chrono, une voiture fantôme rejoue votre record.</p>
+    </details>
   </div>
   <aside class="caption" aria-hidden="true">
     <p class="lbl" id="capMeta"></p>
@@ -467,6 +487,7 @@ label.btn{cursor:pointer;display:inline-block}
         <button id="pfRemove" class="btn" type="button" hidden>Retirer la photo</button>
       </div>
     </div>
+    <div class="grp"><p class="lbl">Couleur de votre voiture</p><div class="swatches" id="teams"></div></div>
     <label class="grp"><span class="lbl">Pseudo</span><input id="nick" class="input" maxlength="20" autocomplete="off" spellcheck="false"></label>
     <p class="note">Votre pseudo s’affiche pour les autres joueurs en ligne. Votre photo reste sur cet appareil : les autres ne la voient pas.</p>
     <div class="actions"><button id="pfClose" class="btn" type="button">Fermer</button></div>
@@ -1708,7 +1729,7 @@ function hud(dt) {
 }
 
 // ---------- Home, setup and track list ----------
-const ui = { mode: 'race', tid: 'lac', laps: 3, diff: 'normal', weather: 'dry', team: 0, champ: null, quali: '1', sort: 'pop' };
+const ui = { mode: 'race', tid: 'lac', laps: 3, diff: 'normal', weather: 'dry', team: Math.min(TEAMS.length - 1, Math.max(0, store.get('monoplace-gp.team') | 0)), champ: null, quali: '1', sort: 'pop', friends: false };
 const MODE_NAMES = { race: 'Grand Prix', champ: L('Championnat', 'Championship'), tt: L('Chrono', 'Time Trial') };
 const recTxt = id => { const r = records[id]; return r ? 'Record <b>' + fmt(r.lap) + '</b>' : 'Pas encore de record'; };
 
@@ -1838,17 +1859,17 @@ function refreshSetup() {
   const mode = ui.mode, champ = mode === 'champ', def = findDef(ui.tid), r = records[ui.tid];
   $('setupTitle').textContent = MODE_NAMES[mode];
   $('trackGrp').hidden = champ; $('champGrp').hidden = !champ;
-  $('raceOpts').hidden = $('qualiGrp').hidden = mode === 'tt';
+  $('raceOpts').hidden = $('moreOpts').hidden = mode === 'tt';
   $('pitNote').hidden = mode === 'tt';
   $('ghostNote').hidden = true;
   $('editBtn').hidden = champ || !mine.some(c => c.id === ui.tid);
   refreshLike();
-  $('goTxt').textContent = champ ? 'Lancer le championnat' : mode === 'race' ? 'Course contre les bots' : 'Lancer le chrono';
-  $('netActions').hidden = $('netNote').hidden = mode === 'tt';
-  $('quickBtn').hidden = $('rankedBtn').hidden = champ;
+  $('goTxt').textContent = ui.friends ? (champ ? 'Créer le championnat entre amis' : 'Créer la partie entre amis') : champ ? 'Lancer le championnat' : mode === 'race' ? 'Course contre les bots' : 'Lancer le chrono';
+  $('netActions').hidden = $('netNote').hidden = mode === 'tt' || ui.friends;
+  $('hQuick').disabled = $('hRanked').disabled = $('hFriends').disabled = !ROOM;
   $('inviteBtn').textContent = champ ? 'Championnat entre amis' : 'Inviter des amis';
-  $('quickBtn').disabled = $('inviteBtn').disabled = $('rankedBtn').disabled = !ROOM;
-  $('netNote').textContent = ROOM && champ ? 'Invitez vos amis avec un code : les ' + DEFS.length + ' manches s’enchaînent et les points s’additionnent. Les places libres sont prises par des bots.' : ROOM ? 'En ligne, on vous place avec les pilotes qui cherchent une partie ; les places libres sont prises par des bots.' : window.claude ? 'Le jeu en ligne demande d’être connecté à claude.ai et invité sur cette page.' : 'Le jeu en ligne n’a pas pu se charger : vérifiez votre connexion puis rechargez la page.';
+  $('inviteBtn').disabled = !ROOM;
+  $('netNote').textContent = ROOM && champ ? 'Invitez vos amis avec un code : les ' + DEFS.length + ' manches s’enchaînent et les points s’additionnent. Les places libres sont prises par des bots.' : ROOM ? 'Invitez vos amis avec un code. Les places libres sont prises par des bots. Course en ligne et partie classée : sur l’écran d’accueil.' : window.claude ? 'Le jeu en ligne demande d’être connecté à claude.ai et invité sur cette page.' : 'Le jeu en ligne n’a pas pu se charger : vérifiez votre connexion puis rechargez la page.';
   if (champ) {
     $('capName').textContent = 'Championnat';
     $('capMeta').textContent = DEFS.length + ' manches · 25, 18, 15, 12, 10, 8 points';
@@ -1865,6 +1886,7 @@ function refreshSetup() {
 document.querySelectorAll('[data-k]').forEach(b => b.addEventListener('click', () => {
   const k = b.dataset.k, v = b.dataset.v;
   ui[k] = k === 'laps' || k === 'team' ? +v : v;
+  if (k === 'team') store.set('monoplace-gp.team', ui.team);
   refreshSetup();
 }));
 
@@ -1948,7 +1970,7 @@ async function cgInit() {
 
 function startAttract() { ED = null; startSession({ mode: 'race', tid: ui.tid, laps: Infinity, attract: true }); }
 function goHome() { leaveGame(); startAttract(); show('home'); }
-function openSetup(mode) { ui.mode = mode; refreshSetup(); show('menu'); }
+function openSetup(mode, friends = false) { ui.mode = mode; ui.friends = friends; refreshSetup(); show('menu'); }
 function startRace(o) { leaveGame(); startSession(o); show(null); $('pauseTrack').textContent = $('resTrack').textContent = G.T.def.name + (G.rain ? ' · pluie' : ''); $('restartBtn').hidden = false; }
 function startChampRound() { launch({ mode: 'race', champ: true, tid: DEFS[ui.champ.round].id, laps: ui.laps, diff: ui.diff, rain: weatherPick(), team: ui.team }); }
 // A race with qualifying starts with one timed lap alone on track (weather already decided).
@@ -2005,9 +2027,10 @@ function resume() { if (G.state === 'paused') G.state = G.prev; show(null); }
 document.querySelectorAll('.mode').forEach(b => b.addEventListener('click', () => openSetup(b.dataset.mode)));
 $('backBtn').addEventListener('click', () => show('home'));
 $('go').addEventListener('click', () => {
+  if (ui.friends) { retryAction = () => hostGame(false); return hostGame(false); }
   if (ui.mode === 'champ') { ui.champ = { round: 0, pts: {} }; startChampRound(); }
   else if (ui.mode === 'race') launch({ mode: 'race', tid: ui.tid, laps: ui.laps, diff: ui.diff, rain: weatherPick(), team: ui.team });
-  else startRace({ mode: 'tt', tid: ui.tid, rain: weatherPick(), team: ui.team });
+  else startRace({ mode: 'tt', tid: ui.tid, rain: false, team: ui.team }); // time trial: always dry, so records compare
 });
 $('pauseBtn').addEventListener('click', pause);
 $('resumeBtn').addEventListener('click', resume);
@@ -2079,7 +2102,7 @@ const isPlayerPeer = p => p.kind === 'viewer' && (p.presence.role === 'host' || 
 // A game is a star: the host owns the PeerJS id of the game's name and relays everyone's presence to every guest.
 // It mimics the parts of the room capability the game uses (peers, presence, join, leave).
 const P2P_PREFIX = 'monoplace-gp-v1-'; // the names every version so far has used: old and new pages still find each other
-const VERSION = 32; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
+const VERSION = 33; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
 // Relay for players whose networks refuse direct connections: turn.js, next to the page, holds the owner's own TURN account.
 const RELAY = window.TURN_CONFIG && TURN_CONFIG.username && TURN_CONFIG.credential ? TURN_CONFIG : null;
 const PEER_OPTS = RELAY ? { debug: 0, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, RELAY] } } : { debug: 0 };
@@ -2537,8 +2560,9 @@ function renderLobby(humans) {
   };
   if (USER && ids.length) USER.profiles(ids).then(draw); else draw({});
 }
-$('quickBtn').addEventListener('click', () => quickMatch(false));
-$('rankedBtn').addEventListener('click', () => quickMatch(true));
+$('hQuick').addEventListener('click', () => { ui.mode = 'race'; quickMatch(false); });
+$('hRanked').addEventListener('click', () => { ui.mode = 'race'; quickMatch(true); });
+$('hFriends').addEventListener('click', () => openSetup('race', true));
 
 // ---------- Ranking: points per finishing place in ranked races ----------
 // On claude.ai one shared table in the db; elsewhere each player keeps a table that is passed on in every online lobby.
@@ -2845,7 +2869,7 @@ document.addEventListener('visibilitychange', () => {
 $('inviteBtn').addEventListener('click', () => { retryAction = () => hostGame(false); hostGame(false); });
 $('lbStart').addEventListener('click', () => { if (NET && NET.host && NET.room) hostStart(); });
 $('lbRetry').addEventListener('click', () => { const f = retryAction; leaveGame(); if (f) f(); });
-$('lbLeave').addEventListener('click', () => { leaveGame(); if (lobbyFrom === 'menu') openSetup(ui.mode); else show('home'); });
+$('lbLeave').addEventListener('click', () => { leaveGame(); if (lobbyFrom === 'menu') openSetup(ui.mode, ui.friends); else show('home'); });
 $('lbLink').addEventListener('click', () => {
   let link = location.origin + location.pathname + '#partie-' + $('lbCode').textContent.toLowerCase();
   if (CG && NET) { try { link = CG.game.inviteLink({ roomName: NET.name }); } catch (e) { /* keep the page's own link */ } }
@@ -3174,6 +3198,9 @@ if (matchMedia('(pointer: coarse)').matches) document.body.classList.add('touch'
 // ---------- Language: English unless the player picked French ----------
 // Texts are written in French; this dictionary turns every text the page shows into English as it appears.
 const EN = new Map([
+["Jouer en ligne", "Play online"], ["Contre les joueurs qui cherchent une partie", "Against players looking for a game"], ["6 vrais joueurs, points au classement", "6 real players, ranking points"],
+["Entre amis", "With friends"], ["Créez une partie, partagez le code", "Create a game, share the code"], ["Créer la partie entre amis", "Create the game with friends"], ["Créer le championnat entre amis", "Create the championship with friends"],
+["Plus d’options", "More options"], ["Invitez vos amis avec un code. Les places libres sont prises par des bots. Course en ligne et partie classée : sur l’écran d’accueil.", "Invite your friends with a code. Empty places go to bots. Online race and ranked game: on the home screen."], ["Comment jouer", "How to play"], ["Couleur de votre voiture", "Your car colour"],
 ["L’hôte peut lancer une nouvelle course : restez ici pour rejouer ensemble.", "The host can start a new race: stay here to play again together."], ["Rejouer ensemble", "Play again together"],
 ["Donnez ce code à vos amis : ils le tapent dans « Rejoindre avec un code » sur l’écran d’accueil.", "Give this code to your friends: they type it in “Join with a code” on the home screen."],
 ["Plein écran", "Full screen"], ["Quitter le plein écran", "Exit full screen"], ["Affichage", "Display"],
