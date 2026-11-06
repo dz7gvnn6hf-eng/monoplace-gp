@@ -2025,7 +2025,7 @@ const isPlayerPeer = p => p.kind === 'viewer' && (p.presence.role === 'host' || 
 // A game is a star: the host owns the PeerJS id of the game's name and relays everyone's presence to every guest.
 // It mimics the parts of the room capability the game uses (peers, presence, join, leave).
 const P2P_PREFIX = 'monoplace-gp-v1-'; // the names every version so far has used: old and new pages still find each other
-const VERSION = 30; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
+const VERSION = 31; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
 // Relay for players whose networks refuse direct connections: turn.js, next to the page, holds the owner's own TURN account.
 const RELAY = window.TURN_CONFIG && TURN_CONFIG.username && TURN_CONFIG.credential ? TURN_CONFIG : null;
 const PEER_OPTS = RELAY ? { debug: 0, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, RELAY] } } : { debug: 0 };
@@ -2441,8 +2441,9 @@ function renderLobby(humans) {
   const tname = g.track ? (OFFICIAL_IDS.has(g.track.id) ? findDef(g.track.id).name : String(g.track.name || 'Circuit perso').slice(0, 28)) : '…';
   $('lbTrack').textContent = (g.champ && Number.isInteger(g.champ.round) ? 'Manche ' + (g.champ.round + 1) + '/' + DEFS.length + ' · ' : '') + tname + ' · ' + ([3, 5, 10].includes(g.laps) ? g.laps : 3) + ' tours' + (g.rain === true ? ' · pluie' : '') + (net.ranked ? ' · sans bots' : ' · bots ' + (DIFF[g.diff] ? g.diff : 'normal'));
   $('lbCodeBox').hidden = net.pub; $('lbCode').textContent = net.code.toUpperCase();
-  $('lbLink').hidden = !ROOM.p2p;
-  $('lbShare').textContent = ROOM.p2p ? 'Envoyez le lien à vos amis, ou le code à taper dans « Rejoindre avec un code » sur l’écran d’accueil.' : 'Vos amis touchent « Rejoindre avec un code » sur l’écran d’accueil et tapent ce code. Ils doivent avoir accès à cette page : invitez-les depuis le menu Partager.';
+  $('lbLink').hidden = !ROOM.p2p || !!window.MGP_PORTAL; // on a games portal the page's own address is not one to share
+  $('lbShare').textContent = ROOM.p2p && window.MGP_PORTAL ? 'Donnez ce code à vos amis : ils le tapent dans « Rejoindre avec un code » sur l’écran d’accueil.'
+    : ROOM.p2p ? 'Envoyez le lien à vos amis, ou le code à taper dans « Rejoindre avec un code » sur l’écran d’accueil.' : 'Vos amis touchent « Rejoindre avec un code » sur l’écran d’accueil et tapent ce code. Ils doivent avoir accès à cette page : invitez-les depuis le menu Partager.';
   $('lbStart').hidden = !net.host || net.ranked;
   const left = Math.ceil((net.autoAt - Date.now()) / 1000), bots = Math.max(0, 6 - humans.length);
   $('lbNote').textContent = (net.ranked ? 'Partie classée : dès que 6 pilotes sont là (' + humans.length + '/6), chacun fait un tour de qualification, puis course de 5 tours avec arrêt au stand obligatoire. Pas de bots. Points : 25, 18, 15, 12, 10, 8.' :
@@ -3100,6 +3101,7 @@ if (matchMedia('(pointer: coarse)').matches) document.body.classList.add('touch'
 // ---------- Language: English unless the player picked French ----------
 // Texts are written in French; this dictionary turns every text the page shows into English as it appears.
 const EN = new Map([
+["Donnez ce code à vos amis : ils le tapent dans « Rejoindre avec un code » sur l’écran d’accueil.", "Give this code to your friends: they type it in “Join with a code” on the home screen."],
 ["Plein écran", "Full screen"], ["Quitter le plein écran", "Exit full screen"], ["Affichage", "Display"],
 ["Sur iPhone et iPad, le navigateur ne permet pas le plein écran : touchez Partager, puis « Sur l’écran d’accueil ». Le jeu s’ouvre alors comme une appli, en plein écran.", "On iPhone and iPad, the browser doesn’t allow full screen: tap Share, then “Add to Home Screen”. The game then opens like an app, in full screen."],
 ["Profil", "Profile"], ["Réglages", "Settings"], ["Choisir une photo", "Choose a photo"], ["Retirer la photo", "Remove the photo"], ["Pseudo", "Nickname"],
