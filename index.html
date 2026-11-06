@@ -542,6 +542,16 @@ const PIT_V = 160, PIT_TIME = 2.4, PIT_PEN = 15, SC_V = 300;
 const boxRel = k => BOX0 + k * BOXSP;
 const pitOuter = rel => rel < PA || rel > PB ? R0 : rel < E1 ? R0 + (PIT_OUT - R0) * (rel - PA) / (E1 - PA) : rel > X0 ? R0 + (PIT_OUT - R0) * (PB - rel) / (PB - X0) : PIT_OUT;
 const relIdx = (i, N) => i > N / 2 ? i - N : i; // signed samples from the start line
+// Made-up sponsors (no real brand) on the trackside boards; each team wears one on its rear wing (sp).
+const SPONSORS = [
+  { name: 'ZÉPHYR', sub: 'PNEUS', bg: '#1d4ed8', fg: '#ffffff' },
+  { name: 'KIWI VOLT', sub: 'ÉNERGIE', bg: '#7bc943', fg: '#10210a' },
+  { name: 'PISTON', sub: 'CAFÉ', bg: '#5a3826', fg: '#f6e7cf' },
+  { name: 'RAPIDO', sub: 'PIZZA', bg: '#d42a2a', fg: '#ffd23f' },
+  { name: 'FLOCON', sub: 'GLACES', bg: '#cfeaff', fg: '#123a63' },
+  { name: 'COMÈTE', sub: 'COLA', bg: '#111317', fg: '#ff4d4d' },
+  { name: 'HIBOU', sub: 'TÉLÉCOM', bg: '#6d3fd6', fg: '#ffffff' },
+];
 const POINTS = [25, 18, 15, 12, 10, 8];
 const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -712,7 +722,28 @@ function buildTrack(def, seed) {
     if (dd > R0 + 24 + r) deco.push({ x: dx0, y: dy0, r, a });
   }
 
-  return { def, N, x, y, tx, ty, nx, ny, curv, ro, prof, len: S.len, turns: S.turns, path, kerbs, grid, deco, lake,
+  // Sponsor boards just behind the barrier on straights, clear of other parts of the track, the pit complex and the lake.
+  const ads = [], AL = R0 + 42, straight = i => { for (let k = -14; k <= 14; k++) if (curv[(i + k + N) % N] !== 0) return false; return true; };
+  for (let i = 0, n = 0, side = 1; i < N; i += 50) { // one board every 400 px, sides alternating
+    if (!straight(i)) continue;
+    side = -side;
+    for (const sd of [side, -side]) {
+      const bx = x[i] + nx[i] * sd * AL, by = y[i] + ny[i] * sd * AL;
+      if (lake && ((bx - lake[0]) / (lake[2] + 120)) ** 2 + ((by - lake[1]) / (lake[3] + 120)) ** 2 < 1) continue;
+      const pts = [-90, 0, 90].map(u => [bx + tx[i] * u, by + ty[i] * u]);
+      const clear = pts.every(([qx, qy]) => {
+        for (let j = 0; j < N; j += 2) if ((x[j] - qx) ** 2 + (y[j] - qy) ** 2 < (R0 + 22) ** 2) return false;
+        for (let r = PA - 20; r <= PB + 20; r++) { const j = (r + N) % N, dx = qx - x[j], dy = qy - y[j]; if (dx * nx[j] + dy * ny[j] < 0 && dx * dx + dy * dy < (PIT_OUT + 140) ** 2) return false; }
+        return true;
+      });
+      if (!clear) continue;
+      let a = Math.atan2(ty[i], tx[i]); if (Math.cos(a) < -0.01) a += Math.PI; // text never upside down
+      ads.push({ x: bx, y: by, a, k: n++ % SPONSORS.length });
+      break;
+    }
+  }
+
+  return { def, N, x, y, tx, ty, nx, ny, curv, ro, prof, len: S.len, turns: S.turns, path, kerbs, grid, deco, lake, ads,
     cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, w: x1 - x0, h: y1 - y0 };
 }
 
@@ -860,12 +891,12 @@ function shareLap(trackId, t, color, rec) {
 
 // ---------- Teams, drivers & cars ----------
 const TEAMS = [
-  { name: 'Rouge', color: '#ec3a2a', alt: '#f4f5f7', helmet: '#f1c22e' },
-  { name: 'Turquoise', color: '#18b3a0', alt: '#0b2f2b', helmet: '#f4f5f7' },
-  { name: 'Orange', color: '#ff8a1e', alt: '#16181c', helmet: '#2f6bff' },
-  { name: 'Bleu', color: '#2f62f5', alt: '#f1c22e', helmet: '#f4f5f7' },
-  { name: 'Argent', color: '#c5cad3', alt: '#14161a', helmet: '#ec3a2a' },
-  { name: 'Vert', color: '#2d9f4c', alt: '#f4f5f7', helmet: '#16181c' },
+  { name: 'Rouge', color: '#ec3a2a', alt: '#f4f5f7', helmet: '#f1c22e', sp: 5 },
+  { name: 'Turquoise', color: '#18b3a0', alt: '#0b2f2b', helmet: '#f4f5f7', sp: 2 },
+  { name: 'Orange', color: '#ff8a1e', alt: '#16181c', helmet: '#2f6bff', sp: 0 },
+  { name: 'Bleu', color: '#2f62f5', alt: '#f1c22e', helmet: '#f4f5f7', sp: 3 },
+  { name: 'Argent', color: '#c5cad3', alt: '#14161a', helmet: '#ec3a2a', sp: 6 },
+  { name: 'Vert', color: '#2d9f4c', alt: '#f4f5f7', helmet: '#16181c', sp: 4 },
 ].map((t, i) => ({ ...t, i }));
 const RIVALS = [{ code: 'ROY', name: 'Mathis Roy' }, { code: 'LAM', name: 'Inès Lambert' }, { code: 'KOV', name: 'Dario Kovač' }, { code: 'SAN', name: 'Léo Santos' }, { code: 'BRI', name: 'Chloé Brière' }];
 // skill scales the bots' speed profile; err is the mean number of seconds between driving mistakes.
@@ -1273,6 +1304,14 @@ function grass(th) {
   return patCache[th.run];
 }
 const disc = (g, x, y, r) => { g.beginPath(); g.arc(x, y, r, 0, 7); g.fill(); };
+// A sponsor's panel of w × h centred on the origin.
+function drawSponsor(g, sp, w, h, sub = true) {
+  g.fillStyle = sp.bg; g.fillRect(-w / 2, -h / 2, w, h);
+  g.fillStyle = sp.fg; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.font = '800 ' + h * (sub ? .56 : .8) + 'px "Saira Condensed", sans-serif'; g.fillText(sp.name, 0, sub ? -h * .12 : h * .05, w * .9);
+  if (sub) { g.font = '700 ' + h * .27 + 'px "Barlow Semi Condensed", sans-serif'; g.fillText(sp.sub, 0, h * .3, w * .9); }
+  g.textBaseline = 'alphabetic';
+}
 
 function drawWorld(T, x0, y0, x1, y1) {
   const th = T.def.theme;
@@ -1301,6 +1340,14 @@ function drawWorld(T, x0, y0, x1, y1) {
   const w = 2 * (HW - 2) / 12;
   for (let r = 0; r < 2; r++) for (let k = 0; k < 12; k++) { ctx.fillStyle = (r + k) % 2 ? '#15171b' : '#f4f5f7'; ctx.fillRect(r * w - w, -HW + 2 + k * w, w, w); }
   ctx.restore();
+  for (const b of T.ads) {
+    if (b.x < x0 - 120 || b.x > x1 + 120 || b.y < y0 - 120 || b.y > y1 + 120) continue;
+    ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(b.a);
+    ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(-93, -15, 196, 46);
+    ctx.fillStyle = '#15171b'; ctx.fillRect(-98, -23, 196, 46);
+    drawSponsor(ctx, SPONSORS[b.k], 190, 40);
+    ctx.restore();
+  }
   ctx.strokeStyle = 'rgba(244,245,247,.8)'; ctx.lineWidth = 3;
   for (const g of T.grid) {
     ctx.save(); ctx.translate(g.x, g.y); ctx.rotate(g.a);
@@ -1348,7 +1395,9 @@ function drawCar(c, g = ctx) {
   for (let s = -1; s <= 1; s += 2) { g.save(); g.translate(13, s * 9.5); g.rotate(c.steer * 0.35); g.fillRect(-4, -2.5, 8, 5); g.restore(); }
   g.strokeStyle = '#111317'; g.lineWidth = 1.2; g.beginPath();
   g.moveTo(13, -8); g.lineTo(6, -2); g.moveTo(13, 8); g.lineTo(6, 2); g.moveTo(-15, -8); g.lineTo(-10, -5); g.moveTo(-15, 8); g.lineTo(-10, 5); g.stroke();
-  g.fillStyle = d.alt; g.fillRect(-23, -10, 5, 20);
+  const sp = SPONSORS[d.sp]; // rear wing: the team's sponsor
+  if (sp) { g.save(); g.translate(-20.5, 0); g.rotate(-Math.PI / 2); drawSponsor(g, sp, 22, 6.5, false); g.restore(); } else { g.fillStyle = d.alt; g.fillRect(-23, -10, 5, 20); }
+  g.fillStyle = d.alt;
   if (c.dmg > 0.3) g.fillRect(19, c.pull > 0 ? -11 : 0, 4, 11); else g.fillRect(19, -11, 4, 22); // half the front wing is gone
   g.fillStyle = d.color; g.beginPath();
   g.moveTo(22, 0); g.lineTo(15, -2.5); g.lineTo(6, -3.5); g.lineTo(2, -7); g.lineTo(-11, -7); g.lineTo(-17, -3.5); g.lineTo(-19, -3.5);
@@ -1863,7 +1912,7 @@ const isPlayerPeer = p => p.kind === 'viewer' && (p.presence.role === 'host' || 
 // A game is a star: the host owns the PeerJS id of the game's name and relays everyone's presence to every guest.
 // It mimics the parts of the room capability the game uses (peers, presence, join, leave).
 const P2P_PREFIX = 'monoplace-gp-v1-'; // the names every version so far has used: old and new pages still find each other
-const VERSION = 19; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
+const VERSION = 20; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
 // Relay for players whose networks refuse direct connections: turn.js, next to the page, holds the owner's own TURN account.
 const RELAY = window.TURN_CONFIG && TURN_CONFIG.username && TURN_CONFIG.credential ? TURN_CONFIG : null;
 const PEER_OPTS = RELAY ? { debug: 0, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, RELAY] } } : { debug: 0 };
