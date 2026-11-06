@@ -99,22 +99,25 @@ h1 span{color:var(--red)}
 .tb.gas.on{background:rgba(30,196,107,.55)}
 
 /* ---------- Home: three modes ---------- */
-#home{display:grid;grid-template-rows:auto auto minmax(0,1fr);gap:12px;background:rgba(8,10,14,.78)}
+#home{display:grid;grid-template-rows:auto minmax(0,1fr);gap:12px;background:rgba(8,10,14,.78)}
 .home-top{display:flex;flex-wrap:wrap;align-items:center;gap:8px 18px}
 .home-top h1{font-size:clamp(30px,6vh,54px)}
 .home-top .online{margin:0 0 0 auto;font-weight:600;color:var(--muted)}
 .home-top .online b{color:var(--green);font-weight:700}
 .home-top .online.warn{color:var(--yellow)}
 .home-top .btn{padding:10px 14px;font-size:16px}
-/* Online play gets its own always-visible row: one colour per kind of game. */
-.netbar{display:flex;gap:8px}
-.nb{--c:var(--green);flex:1 1 0;min-width:0;display:grid;gap:3px;align-content:center;text-align:left;padding:10px 14px 10px 16px;background:var(--panel-hi);box-shadow:inset 4px 0 0 var(--c)}
-.nb b{font:800 20px/1 var(--f-display);text-transform:uppercase;letter-spacing:.03em;transform:skewX(-8deg);transform-origin:left bottom}
-.nb small{font-size:13px;line-height:1.25;color:var(--muted)}
-.nb-ranked{--c:var(--yellow)} .nb-friends{--c:#4aa3ff} .nb-code{--c:var(--line);flex:0 1 auto}
-.nb:hover,.nb:focus-visible{filter:brightness(1.25)}
-.nb:disabled{opacity:.45;filter:none;cursor:default}
-@media (max-width:700px){.netbar{display:grid;grid-template-columns:1fr 1fr}.nb{padding:9px 10px 9px 13px}.nb b{font-size:17px}.nb small{display:none}}
+/* Grand Prix first asks how to play: one colour per kind of game. */
+#gp{display:flex;overflow-y:auto;background:rgba(8,10,14,.82)}
+.gp-wrap{margin:auto;width:min(860px,100%);display:grid;gap:18px;padding-block:8px}
+.gp-sub{margin:0;color:var(--muted);font-size:17px}
+.picks{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.pick{--c:var(--red);width:100%;display:grid;gap:8px;align-content:end;min-height:150px;text-align:left;padding:18px 20px 18px 24px;background:linear-gradient(180deg,#161b25,#0b0e13);background:radial-gradient(80% 90% at 100% 0%,color-mix(in srgb,var(--c) 16%,transparent),transparent 70%),linear-gradient(180deg,#161b25,#0b0e13);box-shadow:inset 5px 0 0 var(--c)}
+.pick b{font:800 clamp(26px,3.4vw,40px)/.95 var(--f-display);text-transform:uppercase;transform:skewX(-8deg);transform-origin:left bottom}
+.pick small{font-size:15px;line-height:1.35;color:var(--muted);max-width:38ch}
+.pk-quick{--c:var(--green)} .pk-ranked{--c:var(--yellow)} .pk-friends{--c:#4aa3ff}
+.pick:hover,.pick:focus-visible{filter:brightness(1.2)}
+.pick:disabled{opacity:.45;filter:none;cursor:default}
+@media (max-width:700px){.picks{grid-template-columns:1fr}.pick{min-height:0;padding:14px 16px 14px 20px}.pick b{font-size:26px}.pick small{font-size:14px}}
 /* The three cards nest like broadcast graphics: parallel slanted edges, one accent per mode (race red, title gold, record purple). */
 .modes{--s:34px;--gap:12px;display:flex;min-height:0}
 .mode{--accent:var(--red-text);--glow:rgba(236,58,42,.24);
@@ -333,18 +336,12 @@ label.btn{cursor:pointer;display:inline-block}
     <button id="settingsBtn" class="btn" type="button">Réglages</button>
     <button id="fsBtn" class="btn" type="button" aria-label="Plein écran" title="Plein écran" aria-keyshortcuts="F" hidden>⛶</button>
   </header>
-  <div class="netbar" role="group" aria-label="Jouer en ligne">
-    <button id="hQuick" class="nb nb-quick" type="button"><b>Course en ligne</b><small>Contre les joueurs qui cherchent une partie</small></button>
-    <button id="hRanked" class="nb nb-ranked" type="button"><b>Partie classée</b><small>6 vrais joueurs, points au classement</small></button>
-    <button id="hFriends" class="nb nb-friends" type="button"><b>Entre amis</b><small>Créez une partie, partagez le code</small></button>
-    <button id="codeBtn" class="nb nb-code" type="button" hidden><b>Rejoindre avec un code</b></button>
-  </div>
   <div class="modes">
     <button class="mode" data-mode="race" type="button"><canvas aria-hidden="true"></canvas>
       <span class="mk">Course unique</span><span class="mt">Grand Prix</span>
-      <span class="ms">Six monoplaces sur la grille. Seul contre les bots, ou en ligne avec vos amis.</span>
+      <span class="ms">Six monoplaces sur la grille. Contre les bots, en ligne, en partie classée ou entre amis.</span>
       <span class="mf" id="mfRace"><b>6</b> voitures · 3 à 10 tours</span>
-      <span class="go-hint" aria-hidden="true">Choisir le circuit <i>→</i></span></button>
+      <span class="go-hint" aria-hidden="true">Choisir comment jouer <i>→</i></span></button>
     <button class="mode" data-mode="champ" type="button"><canvas aria-hidden="true"></canvas>
       <span class="mk">Saison</span><span class="mt">Championnat</span>
       <span class="ms">Quatre Grands Prix à la suite. Les points s’additionnent, le meilleur total gagne le titre.</span>
@@ -355,6 +352,25 @@ label.btn{cursor:pointer;display:inline-block}
       <span class="ms">Seul en piste, face à votre fantôme et à celui du meilleur joueur.</span>
       <span class="mf" id="mfTt">Pas encore de record</span>
       <span class="go-hint" aria-hidden="true">Viser le record <i>→</i></span></button>
+  </div>
+</section>
+
+<section id="gp" class="layer" hidden>
+  <div class="gp-wrap">
+    <div class="setup-head">
+      <button id="gpBack" class="back" type="button">← Modes</button>
+      <h2 class="setup-title">Grand Prix</h2>
+      <p class="gp-sub">Comment voulez-vous jouer ?</p>
+    </div>
+    <div class="picks">
+      <button class="pick" data-pick="bots" type="button"><b>Contre les bots</b><small>Choisissez le circuit, les tours et le niveau des bots.</small></button>
+      <button class="pick pk-quick" data-pick="quick" type="button"><b>Course en ligne</b><small>Avec les joueurs qui cherchent une partie. Les places libres sont prises par des bots.</small></button>
+      <button class="pick pk-ranked" data-pick="ranked" type="button"><b>Partie classée</b><small>6 vrais joueurs, un tour de qualification, puis 5 tours. Points au classement.</small></button>
+      <button class="pick pk-friends" data-pick="friends" type="button"><b>Entre amis</b><small>Créez une partie et donnez le code à vos amis.</small></button>
+    </div>
+    <div class="actions"><button id="codeBtn" class="btn" type="button" hidden>Rejoindre avec un code</button></div>
+    <p class="note" id="gpNote"></p>
+    <div class="grp" id="openGrp" hidden><p class="lbl">Parties ouvertes</p><ul class="opengames" id="openGames"></ul></div>
   </div>
 </section>
 
@@ -403,7 +419,6 @@ label.btn{cursor:pointer;display:inline-block}
     <div class="grp">
       <div class="actions" id="netActions"><button id="inviteBtn" class="btn" type="button">Inviter des amis</button></div>
       <p class="note" id="netNote"></p>
-      <div class="grp" id="openGrp" hidden><p class="lbl">Parties ouvertes</p><ul class="opengames" id="openGames"></ul></div>
       <p class="note" id="ghostNote" hidden></p>
       <p class="note" id="pitNote">À partir de 5 tours, un arrêt au stand est obligatoire (sinon +15 s).</p>
     </div>
@@ -1604,11 +1619,11 @@ function drawOutline(g, O, w, h, lw) {
 
 // ---------- HUD ----------
 const $ = id => document.getElementById(id);
-const el = { profile: $('profile'), settings: $('settings'), hud: $('hud'), home: $('home'), menu: $('menu'), pause: $('pause'), results: $('results'), quali: $('quali'), ranking: $('ranking'), editor: $('editor'), lobby: $('lobby'), join: $('join'),
+const el = { profile: $('profile'), settings: $('settings'), hud: $('hud'), home: $('home'), menu: $('menu'), pause: $('pause'), results: $('results'), quali: $('quali'), ranking: $('ranking'), editor: $('editor'), lobby: $('lobby'), join: $('join'), gp: $('gp'),
   tower: $('tower'), lapNo: $('lapNo'), lapLbl: $('lapLbl'), cur: $('cur'), last: $('lastLap'), best: $('bestLap'), rec: $('recLap'),
   tyre: $('tyreTxt'), wing: $('wingTxt'), pitDt: $('pitDt'), pit: $('pitTxt'), tag: $('tag'), spd: $('spd'), gear: $('gear'), lights: $('lights'), toast: $('toast'), mini: $('mini') };
 const secEls = [$('s0'), $('s1'), $('s2')], lightEls = [...el.lights.children], mctx = el.mini.getContext('2d');
-const SCREENS = ['home', 'menu', 'pause', 'results', 'quali', 'editor', 'lobby', 'join', 'ranking', 'profile', 'settings'];
+const SCREENS = ['home', 'gp', 'menu', 'pause', 'results', 'quali', 'editor', 'lobby', 'join', 'ranking', 'profile', 'settings'];
 
 function show(id) {
   for (const s of SCREENS) el[s].hidden = s !== id;
@@ -1865,11 +1880,12 @@ function refreshSetup() {
   $('editBtn').hidden = champ || !mine.some(c => c.id === ui.tid);
   refreshLike();
   $('goTxt').textContent = ui.friends ? (champ ? 'Créer le championnat entre amis' : 'Créer la partie entre amis') : champ ? 'Lancer le championnat' : mode === 'race' ? 'Course contre les bots' : 'Lancer le chrono';
-  $('netActions').hidden = $('netNote').hidden = mode === 'tt' || ui.friends;
-  $('hQuick').disabled = $('hRanked').disabled = $('hFriends').disabled = !ROOM;
+  $('netActions').hidden = $('netNote').hidden = !champ || ui.friends;
+  document.querySelectorAll('.pick:not([data-pick="bots"])').forEach(b => { b.disabled = !ROOM; });
   $('inviteBtn').textContent = champ ? 'Championnat entre amis' : 'Inviter des amis';
   $('inviteBtn').disabled = !ROOM;
-  $('netNote').textContent = ROOM && champ ? 'Invitez vos amis avec un code : les ' + DEFS.length + ' manches s’enchaînent et les points s’additionnent. Les places libres sont prises par des bots.' : ROOM ? 'Invitez vos amis avec un code. Les places libres sont prises par des bots. Course en ligne et partie classée : sur l’écran d’accueil.' : window.claude ? 'Le jeu en ligne demande d’être connecté à claude.ai et invité sur cette page.' : 'Le jeu en ligne n’a pas pu se charger : vérifiez votre connexion puis rechargez la page.';
+  $('netNote').textContent = ROOM && champ ? 'Invitez vos amis avec un code : les ' + DEFS.length + ' manches s’enchaînent et les points s’additionnent. Les places libres sont prises par des bots.' : ROOM ? '' : window.claude ? 'Le jeu en ligne demande d’être connecté à claude.ai et invité sur cette page.' : 'Le jeu en ligne n’a pas pu se charger : vérifiez votre connexion puis rechargez la page.';
+  $('gpNote').textContent = ROOM ? '' : $('netNote').textContent;
   if (champ) {
     $('capName').textContent = 'Championnat';
     $('capMeta').textContent = DEFS.length + ' manches · 25, 18, 15, 12, 10, 8 points';
@@ -2024,8 +2040,12 @@ function pause() {
 }
 function resume() { if (G.state === 'paused') G.state = G.prev; show(null); }
 
-document.querySelectorAll('.mode').forEach(b => b.addEventListener('click', () => openSetup(b.dataset.mode)));
-$('backBtn').addEventListener('click', () => show('home'));
+document.querySelectorAll('.mode').forEach(b => b.addEventListener('click', () => b.dataset.mode === 'race' ? openGp() : openSetup(b.dataset.mode)));
+$('backBtn').addEventListener('click', () => ui.mode === 'race' ? openGp() : show('home'));
+function openGp() { ui.mode = 'race'; ui.friends = false; refreshSetup(); show('gp'); renderOpenGames(); }
+$('gpBack').addEventListener('click', () => show('home'));
+const PICKS = { bots: () => openSetup('race'), quick: () => quickMatch(false), ranked: () => quickMatch(true), friends: () => openSetup('race', true) };
+document.querySelectorAll('.pick').forEach(b => b.addEventListener('click', () => PICKS[b.dataset.pick]()));
 $('go').addEventListener('click', () => {
   if (ui.friends) { retryAction = () => hostGame(false); return hostGame(false); }
   if (ui.mode === 'champ') { ui.champ = { round: 0, pts: {} }; startChampRound(); }
@@ -2102,7 +2122,7 @@ const isPlayerPeer = p => p.kind === 'viewer' && (p.presence.role === 'host' || 
 // A game is a star: the host owns the PeerJS id of the game's name and relays everyone's presence to every guest.
 // It mimics the parts of the room capability the game uses (peers, presence, join, leave).
 const P2P_PREFIX = 'monoplace-gp-v1-'; // the names every version so far has used: old and new pages still find each other
-const VERSION = 33; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
+const VERSION = 34; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
 // Relay for players whose networks refuse direct connections: turn.js, next to the page, holds the owner's own TURN account.
 const RELAY = window.TURN_CONFIG && TURN_CONFIG.username && TURN_CONFIG.credential ? TURN_CONFIG : null;
 const PEER_OPTS = RELAY ? { debug: 0, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, RELAY] } } : { debug: 0 };
@@ -2509,7 +2529,7 @@ function netSync(dt) {
 let lobbyFrom = 'home';
 function showLobby(msg) {
   document.querySelectorAll('[data-chat] .feed').forEach(ul => ul.replaceChildren());
-  lobbyFrom = el.menu.hidden ? 'home' : 'menu';
+  lobbyFrom = !el.menu.hidden ? 'menu' : !el.gp.hidden ? 'gp' : 'home';
   lobbyKind(NET.cfg);
   $('lbTitle').textContent = 'Salle d’attente';
   $('lbTrack').textContent = msg;
@@ -2560,9 +2580,6 @@ function renderLobby(humans) {
   };
   if (USER && ids.length) USER.profiles(ids).then(draw); else draw({});
 }
-$('hQuick').addEventListener('click', () => { ui.mode = 'race'; quickMatch(false); });
-$('hRanked').addEventListener('click', () => { ui.mode = 'race'; quickMatch(true); });
-$('hFriends').addEventListener('click', () => openSetup('race', true));
 
 // ---------- Ranking: points per finishing place in ranked races ----------
 // On claude.ai one shared table in the db; elsewhere each player keeps a table that is passed on in every online lobby.
@@ -2750,8 +2767,8 @@ function openGames() {
     .map(p => ({ g: p.presence.g, nick: '', by: p.by, n: clamp(p.presence.n | 0, 1, 6) }));
 }
 function renderOpenGames() {
-  if (el.menu.hidden) return;
-  const list = ui.mode === 'race' && !NET ? openGames().filter(x => x.n < 6) : [];
+  if (el.gp.hidden) return;
+  const list = !NET ? openGames().filter(x => x.n < 6) : [];
   $('openGrp').hidden = !list.length;
   $('openGames').replaceChildren(...list.slice(0, 8).map(x => {
     const li = document.createElement('li'), t = document.createElement('span'), b = document.createElement('button');
@@ -2869,7 +2886,7 @@ document.addEventListener('visibilitychange', () => {
 $('inviteBtn').addEventListener('click', () => { retryAction = () => hostGame(false); hostGame(false); });
 $('lbStart').addEventListener('click', () => { if (NET && NET.host && NET.room) hostStart(); });
 $('lbRetry').addEventListener('click', () => { const f = retryAction; leaveGame(); if (f) f(); });
-$('lbLeave').addEventListener('click', () => { leaveGame(); if (lobbyFrom === 'menu') openSetup(ui.mode, ui.friends); else show('home'); });
+$('lbLeave').addEventListener('click', () => { leaveGame(); if (lobbyFrom === 'menu') openSetup(ui.mode, ui.friends); else if (lobbyFrom === 'gp') openGp(); else show('home'); });
 $('lbLink').addEventListener('click', () => {
   let link = location.origin + location.pathname + '#partie-' + $('lbCode').textContent.toLowerCase();
   if (CG && NET) { try { link = CG.game.inviteLink({ roomName: NET.name }); } catch (e) { /* keep the page's own link */ } }
@@ -2880,7 +2897,7 @@ $('lbCopy').addEventListener('click', () => {
   navigator.clipboard.writeText(code).then(() => { $('lbCopy').textContent = 'Copié'; }, () => { const r = document.createRange(); r.selectNodeContents($('lbCode')); getSelection().removeAllRanges(); getSelection().addRange(r); });
 });
 $('codeBtn').addEventListener('click', () => { $('joinCode').value = ''; $('joinErr').textContent = ''; show('join'); $('joinCode').focus(); });
-$('joinCancel').addEventListener('click', () => show('home'));
+$('joinCancel').addEventListener('click', () => openGp());
 $('joinForm').addEventListener('submit', e => {
   e.preventDefault();
   const code = $('joinCode').value.trim().toLowerCase();
@@ -3198,9 +3215,11 @@ if (matchMedia('(pointer: coarse)').matches) document.body.classList.add('touch'
 // ---------- Language: English unless the player picked French ----------
 // Texts are written in French; this dictionary turns every text the page shows into English as it appears.
 const EN = new Map([
-["Jouer en ligne", "Play online"], ["Contre les joueurs qui cherchent une partie", "Against players looking for a game"], ["6 vrais joueurs, points au classement", "6 real players, ranking points"],
-["Entre amis", "With friends"], ["Créez une partie, partagez le code", "Create a game, share the code"], ["Créer la partie entre amis", "Create the game with friends"], ["Créer le championnat entre amis", "Create the championship with friends"],
-["Plus d’options", "More options"], ["Invitez vos amis avec un code. Les places libres sont prises par des bots. Course en ligne et partie classée : sur l’écran d’accueil.", "Invite your friends with a code. Empty places go to bots. Online race and ranked game: on the home screen."], ["Comment jouer", "How to play"], ["Couleur de votre voiture", "Your car colour"],
+["Comment voulez-vous jouer ?", "How do you want to play?"], ["Contre les bots", "Against bots"], ["Choisissez le circuit, les tours et le niveau des bots.", "Choose the circuit, the laps and how good the bots are."],
+["Avec les joueurs qui cherchent une partie. Les places libres sont prises par des bots.", "With players looking for a game. Empty places go to bots."],
+["6 vrais joueurs, un tour de qualification, puis 5 tours. Points au classement.", "6 real players, a qualifying lap, then 5 laps. Ranking points."],
+["Entre amis", "With friends"], ["Créez une partie et donnez le code à vos amis.", "Create a game and give the code to your friends."], ["Choisir comment jouer", "Choose how to play"], ["Créer la partie entre amis", "Create the game with friends"], ["Créer le championnat entre amis", "Create the championship with friends"],
+["Plus d’options", "More options"], ["Comment jouer", "How to play"], ["Couleur de votre voiture", "Your car colour"],
 ["L’hôte peut lancer une nouvelle course : restez ici pour rejouer ensemble.", "The host can start a new race: stay here to play again together."], ["Rejouer ensemble", "Play again together"],
 ["Donnez ce code à vos amis : ils le tapent dans « Rejoindre avec un code » sur l’écran d’accueil.", "Give this code to your friends: they type it in “Join with a code” on the home screen."],
 ["Plein écran", "Full screen"], ["Quitter le plein écran", "Exit full screen"], ["Affichage", "Display"],
@@ -3230,7 +3249,7 @@ const EN = new Map([
 ["Son coupé", "Sound off"],
 ["Rejoindre avec un code", "Join with a code"],
 ["Course unique", "Single race"],
-["Six monoplaces sur la grille. Seul contre les bots, ou en ligne avec vos amis.", "Six cars on the grid. Alone against bots, or online with your friends."],
+["Six monoplaces sur la grille. Contre les bots, en ligne, en partie classée ou entre amis.", "Six cars on the grid. Against bots, online, ranked or with friends."],
 ["voitures · 3 à 10 tours", "cars · 3 to 10 laps"],
 ["Choisir le circuit", "Choose the circuit"],
 ["Saison", "Season"],
