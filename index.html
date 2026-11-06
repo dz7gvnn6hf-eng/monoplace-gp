@@ -218,7 +218,8 @@ kbd{display:inline-grid;place-items:center;min-width:24px;height:22px;padding:0 
 .join-row{display:flex;gap:10px}
 .join-row .input{font:800 26px/1 var(--f-display);letter-spacing:.2em;text-transform:uppercase}
 .tblwrap{overflow-x:auto}
-.card>*{min-width:0} /* a wide table scrolls inside the card instead of widening it */
+.card>*,.card .grp>*{min-width:0}
+.picks{display:flex;flex-wrap:wrap;gap:6px}.picks:empty{display:none} /* a wide table scrolls inside the card instead of widening it */
 .res{width:100%;border-collapse:collapse;font-size:15px}
 .res th{font:700 11px/1 var(--f-body);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);text-align:left;padding:6px}
 .res td{padding:8px 6px;box-shadow:inset 0 1px 0 var(--line);white-space:nowrap}
@@ -441,18 +442,24 @@ kbd{display:inline-grid;place-items:center;min-width:24px;height:22px;padding:0 
 <section id="ranking" class="layer modal" hidden>
   <div class="card">
     <h2>Classement</h2>
-    <p class="lbl">Parties classées · 6 vrais pilotes, qualifs puis 5 tours, sans bots</p>
-    <div class="tblwrap">
-      <table class="res">
-        <thead><tr><th>Pos</th><th>Pilote</th><th class="r">Points</th><th class="r">Courses</th><th class="r">Victoires</th></tr></thead>
-        <tbody id="rkBody"></tbody>
-      </table>
+    <div class="seg" role="group" aria-label="Classement"><button type="button" data-rk="ranked">Parties classées</button><button type="button" data-rk="laps">Meilleurs tours</button></div>
+    <div class="grp" id="rkRanked">
+      <p class="lbl">6 vrais pilotes, qualifs puis 5 tours, sans bots</p>
+      <div class="tblwrap">
+        <table class="res">
+          <thead><tr><th>Pos</th><th>Pilote</th><th class="r">Points</th><th class="r">Courses</th><th class="r">Victoires</th></tr></thead>
+          <tbody id="rkBody"></tbody>
+        </table>
+      </div>
+      <p class="note" id="rkNote"></p>
     </div>
-    <p class="note" id="rkNote"></p>
-    <p class="lbl">Meilleurs tours · circuits officiels</p>
-    <div class="seg" id="lapSeg" role="group" aria-label="Circuit"></div>
-    <ol class="board" id="lapBoard" aria-label="Meilleurs tours"></ol>
-    <p class="note" id="lapNote"></p>
+    <div class="grp" id="rkLaps" hidden>
+      <input id="lapSearch" class="input" type="search" placeholder="Rechercher un circuit, officiel ou d’un joueur" aria-label="Rechercher un circuit" autocomplete="off">
+      <div class="picks" id="lapPicks"></div>
+      <p class="lbl" id="lapTitle"></p>
+      <ol class="board" id="lapBoard" aria-label="Meilleurs tours"></ol>
+      <p class="note" id="lapNote"></p>
+    </div>
     <div class="actions"><button id="rkClose" class="btn" type="button">Fermer</button></div>
   </div>
 </section>
@@ -785,7 +792,7 @@ async function initCloud() {
     board = {}; snap.docs.forEach(d => { board[d.id] = d.data(); });
     myLaps = {};
     const mineLaps = ME && board[ME];
-    if (mineLaps) for (const id of OFFICIAL_IDS) { const e = mineLaps[lbKey(id)]; if (e && Number.isFinite(e.t)) myLaps[lbKey(id)] = { t: e.t, c: e.c, at: e.at }; }
+    if (mineLaps) for (const [k, e] of Object.entries(mineLaps)) if (k.endsWith('-2') && e && Number.isFinite(e.t)) myLaps[k] = { t: e.t, c: e.c, at: e.at };
     boardState = 'ok'; renderBoard();
   }, () => { clearTimeout(timer); boardState = 'slow'; renderBoard(); });
   let synced = false;
@@ -856,13 +863,13 @@ function persistMine() {
   if (hub) hub.share();
 }
 function shareLap(trackId, t, color, rec) {
-  if (!DB || !ME || !OFFICIAL_IDS.has(trackId)) return;
+  if (!DB || !ME) return;
   const k = lbKey(trackId);
   if (myLaps[k] && myLaps[k].t <= t) return;
   myLaps = { ...myLaps, [k]: { t: Math.round(t * 1000) / 1000, c: color, at: Date.now() } };
   const body = myLaps;
   cloudQ = cloudQ.then(() => DB.doc('laps/' + ME).set(body)).catch(() => {});
-  if (myGhosts && rec.length >= 180) {
+  if (myGhosts && rec.length >= 180 && OFFICIAL_IDS.has(trackId)) {
     const d = []; for (let i = 0; i + 2 < rec.length; i += 6) d.push(rec[i], rec[i + 1], rec[i + 2]); // 30 → 15 samples per second
     myGhosts = { ...myGhosts, [k]: { t: Math.round(t * 1000) / 1000, d } };
     const gb = myGhosts;
@@ -1245,7 +1252,7 @@ function lapDone(c) {
       store.set(GHOST_KEY + id, { d: G.rec });
       if (G.mode === 'tt' && !G.quali) G.ghosts = G.ghosts.filter(g => !g.mine).concat({ mine: true, d: G.rec, hz: 30, drv: c.drv, label: '' });
       c.lastCls = 'p'; toast('Record du circuit · ' + fmt(lt), 'p');
-      if (hub && OFFICIAL_IDS.has(id)) hub.share();
+      if (hub) hub.share(); // the others' lap rankings get it now
     } else if (pb) { c.lastCls = 'g'; toast('Meilleur tour · ' + fmt(lt), 'g'); }
     else c.lastCls = '';
     shareLap(id, lt, c.drv.color, G.rec);
@@ -1946,7 +1953,7 @@ const isPlayerPeer = p => p.kind === 'viewer' && (p.presence.role === 'host' || 
 // A game is a star: the host owns the PeerJS id of the game's name and relays everyone's presence to every guest.
 // It mimics the parts of the room capability the game uses (peers, presence, join, leave).
 const P2P_PREFIX = 'monoplace-gp-v1-'; // the names every version so far has used: old and new pages still find each other
-const VERSION = 24; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
+const VERSION = 25; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
 // Relay for players whose networks refuse direct connections: turn.js, next to the page, holds the owner's own TURN account.
 const RELAY = window.TURN_CONFIG && TURN_CONFIG.username && TURN_CONFIG.credential ? TURN_CONFIG : null;
 const PEER_OPTS = RELAY ? { debug: 0, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, RELAY] } } : { debug: 0 };
@@ -2437,36 +2444,41 @@ async function renderRanking() {
 const LAP_KEY = 'monoplace-gp.laps';
 let lapLocal = store.get(LAP_KEY) || {}, lapTid = null, lapTok = 0;
 const okLap = t => Number.isFinite(t) && t > 10 && t < 900;
-function lapMine() { // this device's records, as the others see them
-  const l = {}; for (const id of OFFICIAL_IDS) if (records[id] && okLap(records[id].lap)) l[id] = Math.round(records[id].lap * 1000) / 1000;
+const LAP_ID = /^[a-z][a-z0-9]{1,24}$/;
+function lapMine() { // this device's records on circuits that still exist, as the others see them
+  const l = {}; for (const id of Object.keys(records).filter(i => LAP_ID.test(i) && findDef(i)).slice(0, 40)) if (okLap(records[id].lap)) l[id] = Math.round(records[id].lap * 1000) / 1000;
   const cur = lapLocal[PID];
   if (cur && cur.n === myNick() && JSON.stringify(cur.l) === JSON.stringify(l)) return;
   lapLocal[PID] = { n: myNick(), l, t: Date.now() }; store.set(LAP_KEY, lapLocal);
 }
 const lapShare = () => { lapMine(); return Object.entries(lapLocal).sort((a, b) => b[1].t - a[1].t).slice(0, 60).map(([id, e]) => [id, e.n, e.l, e.t]); };
-// Entries from other players are untrusted: shape-checked, official circuits only, newest wins, and nobody can overwrite your own line.
+// Entries from other players are untrusted: shape-checked, newest wins, and nobody can overwrite your own line.
 function lapMerge(list) {
   if (!Array.isArray(list)) return;
   let changed = false;
   for (const e of list.slice(0, 80)) {
     if (!Array.isArray(e) || typeof e[0] !== 'string' || !/^u[a-z0-9]{10}$/.test(e[0]) || e[0] === PID || !e[2] || typeof e[2] !== 'object' || !Number.isFinite(e[3])) continue;
     if (lapLocal[e[0]] && lapLocal[e[0]].t >= e[3]) continue;
-    const l = {}; for (const id of OFFICIAL_IDS) if (okLap(e[2][id])) l[id] = e[2][id];
+    const l = {}; for (const id of Object.keys(e[2]).slice(0, 40)) if (LAP_ID.test(id) && okLap(e[2][id])) l[id] = e[2][id];
     lapLocal[e[0]] = { n: cleanNick(e[1]) || 'Pilote', l, t: e[3] }; changed = true;
   }
   if (changed) { store.set(LAP_KEY, lapLocal); if (!el.ranking.hidden) renderLaps(); }
 }
+// Best laps of everyone on one circuit, picked with the search field.
 async function renderLaps() {
-  if (!OFFICIAL_IDS.has(lapTid)) lapTid = OFFICIAL_IDS.has(ui.tid) ? ui.tid : DEFS[0].id;
-  $('lapSeg').replaceChildren(...DEFS.map(d => {
-    const b = document.createElement('button'); b.type = 'button'; b.textContent = d.name; b.setAttribute('aria-pressed', d.id === lapTid);
-    b.addEventListener('click', () => { lapTid = d.id; renderLaps(); }); return b;
+  if (!findDef(lapTid)) lapTid = findDef(ui.tid) ? ui.tid : DEFS[0].id;
+  const raw = $('lapSearch').value.trim(), q = norm(raw);
+  const pool = [...DEFS, ...mine.map(customDef), ...others.map(customDef)];
+  $('lapPicks').replaceChildren(...(q ? pool.filter(d => norm(d.name).includes(q) && isOk(d)).slice(0, 8) : []).map(d => {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'btn'; b.textContent = d.name;
+    b.addEventListener('click', () => { lapTid = d.id; $('lapSearch').value = ''; renderLaps(); }); return b;
   }));
-  const tok = ++lapTok, id = lapTid;
+  const def = findDef(lapTid), tok = ++lapTok, id = lapTid;
+  $('lapTitle').textContent = q && !$('lapPicks').children.length ? 'Aucun circuit ne s’appelle « ' + raw + ' »' : 'Meilleurs tours · ' + def.name;
   let rows;
   if (DB) rows = Object.entries(board).map(([uid, d]) => { const e = d && d[lbKey(id)]; return { id: uid, me: uid === ME, t: e && e.t, c: e && e.c }; });
   else { lapMine(); rows = Object.entries(lapLocal).map(([pid, e]) => ({ id: pid, me: pid === PID, name: pid === PID ? myNick() : e.n, t: e.l && e.l[id] })); }
-  rows = rows.filter(r => okLap(r.t)).sort((a, b) => a.t - b.t).slice(0, 10);
+  rows = rows.filter(r => okLap(r.t)).sort((a, b) => a.t - b.t).slice(0, 100);
   const ps = DB && USER && rows.length ? await USER.profiles(rows.map(r => r.id)) : {};
   if (tok !== lapTok) return;
   $('lapBoard').replaceChildren(...rows.map((r, i) => {
@@ -2478,10 +2490,16 @@ async function renderLaps() {
     t.className = 't'; t.textContent = fmt(r.t);
     li.append(p, c, n, t); return li;
   }));
-  $('lapNote').textContent = rows.length ? 'Votre meilleur tour sur chaque circuit officiel, en Chrono ou en course, y est ajouté automatiquement.' + (DB ? '' : ' Les temps se transmettent entre les joueurs qui se retrouvent en ligne.')
+  $('lapNote').textContent = rows.length ? 'Le meilleur tour de chaque joueur sur ce circuit, en Chrono ou en course. Le vôtre y est ajouté automatiquement.' + (DB ? '' : ' Les temps se transmettent entre les joueurs qui se retrouvent en ligne.')
     : 'Aucun temps sur ce circuit pour l’instant : faites un tour en Chrono ou en course pour être le premier.';
 }
-function openRanking() { rkFrom = !el.results.hidden ? 'results' : !el.menu.hidden ? 'menu' : 'home'; renderRanking(); show('ranking'); }
+$('lapSearch').addEventListener('input', renderLaps);
+function rkTab(t) {
+  document.querySelectorAll('[data-rk]').forEach(b => b.setAttribute('aria-pressed', b.dataset.rk === t));
+  $('rkRanked').hidden = t !== 'ranked'; $('rkLaps').hidden = t !== 'laps';
+}
+document.querySelectorAll('[data-rk]').forEach(b => b.addEventListener('click', () => rkTab(b.dataset.rk)));
+function openRanking() { rkFrom = !el.results.hidden ? 'results' : !el.menu.hidden ? 'menu' : 'home'; rkTab('ranked'); lapTid = null; $('lapSearch').value = ''; renderRanking(); show('ranking'); }
 $('rankBtn').addEventListener('click', openRanking);
 $('resRankBtn').addEventListener('click', openRanking);
 $('rkClose').addEventListener('click', () => show(rkFrom));
