@@ -234,6 +234,7 @@ kbd{display:inline-grid;place-items:center;min-width:24px;height:22px;padding:0 
 label.btn{cursor:pointer;display:inline-block}
 .vol{display:grid;gap:6px}.vol input{width:100%;accent-color:var(--red)}
 .btn.danger{color:var(--red-text)}
+.nochat [data-chat]{display:none!important}
 .card>*,.card .grp>*{min-width:0}
 .picks{display:flex;flex-wrap:wrap;gap:6px}.picks:empty{display:none} /* a wide table scrolls inside the card instead of widening it */
 .res{width:100%;border-collapse:collapse;font-size:15px}
@@ -466,7 +467,7 @@ label.btn{cursor:pointer;display:inline-block}
         <button id="pfRemove" class="btn" type="button" hidden>Retirer la photo</button>
       </div>
     </div>
-    <label class="grp"><span class="lbl">Pseudo</span><input id="nick" class="input" maxlength="16" autocomplete="off" spellcheck="false"></label>
+    <label class="grp"><span class="lbl">Pseudo</span><input id="nick" class="input" maxlength="20" autocomplete="off" spellcheck="false"></label>
     <p class="note">Votre pseudo s’affiche pour les autres joueurs en ligne. Votre photo reste sur cet appareil : les autres ne la voient pas.</p>
     <div class="actions"><button id="pfClose" class="btn" type="button">Fermer</button></div>
   </div>
@@ -573,6 +574,7 @@ label.btn{cursor:pointer;display:inline-block}
       </table>
     </div>
     <p id="resRank" class="note" hidden></p>
+    <p id="resNet" class="note" hidden>L’hôte peut lancer une nouvelle course : restez ici pour rejouer ensemble.</p>
     <div class="champ" id="champBox" hidden>
       <p class="lbl" id="champTitle"></p>
       <div class="tblwrap">
@@ -1628,7 +1630,8 @@ function renderResults() {
   }).join('');
   const nc = G.netChamp, lastNet = nc && nc.round === DEFS.length - 1;
   $('champBox').hidden = !G.champ && !nc;
-  $('againBtn').hidden = !!G.online && !(nc && G.online.host && !lastNet);
+  $('againBtn').hidden = !!G.online && !G.online.host;
+  $('resNet').hidden = !G.online || G.online.host || (nc && !lastNet);
   $('resRank').hidden = $('resRankBtn').hidden = !G.ranked;
   if (G.ranked) $('resRank').textContent = G.rankPts != null ? 'Partie classée : +' + G.rankPts + ' points au classement.' : 'Partie classée : vos points sont comptés quand vous franchissez la ligne.';
   $('resChat').hidden = !G.online;
@@ -1638,13 +1641,13 @@ function renderResults() {
     $('champTitle').textContent = lastNet ? 'Classement final du championnat · ' + (mineP === 1 ? 'vous êtes champion' : 'vous terminez P' + mineP)
       : 'Championnat · après la manche ' + (nc.round + 1) + ' sur ' + DEFS.length + (G.online.host ? '' : ' · l’hôte lance la manche suivante');
     $('champBody').innerHTML = rows.map((r, i) => row(r.me ? 'me' : '', [['num', i + 1], ['', chip({ color: r.color, name: r.me ? 'Vous' : r.name || 'Pilote' })], ['r num', '+' + r.add], ['r num', r.pts]])).join('');
-    $('againTxt').textContent = 'Manche suivante';
+    $('againTxt').textContent = lastNet ? 'Rejouer ensemble' : 'Manche suivante';
   } else if (G.champ) {
     const rows = champRows(), last = ui.champ.round === DEFS.length - 1, mineP = rows.findIndex(r => r.c.isPlayer) + 1;
     $('champTitle').textContent = last ? 'Classement final du championnat · ' + (mineP === 1 ? 'vous êtes champion' : 'vous terminez P' + mineP) : 'Championnat · après la manche ' + (ui.champ.round + 1) + ' sur ' + DEFS.length;
     $('champBody').innerHTML = rows.map((r, i) => row(r.c.isPlayer ? 'me' : '', [['num', i + 1], ['', chip(r.c.drv)], ['r num', '+' + r.add], ['r num', r.pts]])).join('');
     $('againTxt').textContent = last ? 'Nouveau championnat' : 'Course suivante';
-  } else $('againTxt').textContent = 'Rejouer';
+  } else $('againTxt').textContent = G.online ? 'Rejouer ensemble' : 'Rejouer';
 }
 
 let slow = 0, hudLit = 0;
@@ -1892,6 +1895,57 @@ async function renderBoard() {
 }
 
 const weatherPick = () => ui.weather === 'rain' || (ui.weather === 'var' && Math.random() < 0.4);
+// ---------- CrazyGames: only in the build for CrazyGames, which loads their SDK ----------
+// Their platform shows an invite button, joins friends into the player's room and starts parties straight into a private
+// game; the game tells it which room the player is in, follows its settings (chat, sound) and reports when gameplay runs.
+let CG = null, cgSig = '', cgPlaying = false;
+function cgRoom() {
+  if (!CG) return;
+  const net = NET, g = net && net.cfg, open = !!(net && net.room && g && g.state === 'lobby' && !net.closed && net.room.peers().filter(isPlayerPeer).length < 6);
+  const sig = net && net.room ? net.name + ':' + open : '';
+  if (sig === cgSig) return;
+  cgSig = sig;
+  try { if (!sig) CG.game.leftRoom(); else CG.game.updateRoom({ roomId: net.name, isJoinable: open, inviteParams: { roomName: net.name } }); } catch (e) { /* the platform refused: the game goes on */ }
+}
+function cgJoin(params) {
+  const name = params && typeof params.roomName === 'string' ? params.roomName : '';
+  if (!ROOM || !GAME_RE.test(name) || (NET && NET.name === name)) return;
+  if (NET) leaveGame();
+  joinGame(name);
+}
+function cgSettings(st) {
+  if (!st) return;
+  document.body.classList.toggle('nochat', !!st.disableChat);
+  SND.forceMute = !!st.muteAudio;
+  if (SND.ctx) SND.master.gain.setTargetAtTime(sndGain(), SND.ctx.currentTime, 0.05);
+}
+function cgUser(u) { // a signed-in CrazyGames player plays under their username, so friends recognise each other
+  const name = u && cleanNick(u.username);
+  $('nick').disabled = !!name;
+  if (!name) return;
+  $('nick').value = name; store.set('monoplace-gp.nick', name); refreshProfile(); if (hub) hub.share();
+}
+function cgPlay() {
+  if (!CG) return;
+  const playing = !!(G && !G.attract && !ED && G.state !== 'paused' && el.results.hidden && el.quali.hidden);
+  if (playing === cgPlaying) return;
+  cgPlaying = playing;
+  try { if (playing) CG.game.gameplayStart(); else CG.game.gameplayStop(); } catch (e) { /* ignore */ }
+}
+async function cgInit() {
+  const sdk = window.MGP_PORTAL === 'crazygames' && window.CrazyGames && window.CrazyGames.SDK;
+  if (!sdk) return;
+  try { await sdk.init(); } catch (e) { return; }
+  if (sdk.environment !== 'crazygames' && sdk.environment !== 'local') return;
+  CG = sdk;
+  cgSettings(sdk.game.settings); sdk.game.addSettingsChangeListener(cgSettings);
+  if (sdk.user.isUserAccountAvailable) { sdk.user.getUser().then(cgUser, () => {}); sdk.user.addAuthListener(cgUser); }
+  sdk.game.addJoinRoomListener(cgJoin);
+  if (sdk.game.inviteParams) cgJoin(sdk.game.inviteParams);
+  else if (sdk.game.isInstantMultiplayer && ROOM && !NET) { ui.mode = 'race'; hostGame(false); } // a party leader goes straight into a new private game
+  if (NET && !el.lobby.hidden) renderLobby(NET.room ? NET.room.peers().filter(isPlayerPeer) : []);
+}
+
 function startAttract() { ED = null; startSession({ mode: 'race', tid: ui.tid, laps: Infinity, attract: true }); }
 function goHome() { leaveGame(); startAttract(); show('home'); }
 function openSetup(mode) { ui.mode = mode; refreshSetup(); show('menu'); }
@@ -1959,7 +2013,7 @@ $('pauseBtn').addEventListener('click', pause);
 $('resumeBtn').addEventListener('click', resume);
 $('restartBtn').addEventListener('click', () => startRace(G.opts));
 $('againBtn').addEventListener('click', () => {
-  if (G.netChamp) return hostNextRound();
+  if (G.online) return G.netChamp && G.netChamp.round < DEFS.length - 1 ? hostNextRound() : hostBackToLobby();
   if (!G.champ) return G.opts.grid ? launch({ ...G.opts, grid: null }) : startRace(G.opts);
   if (ui.champ.round === DEFS.length - 1) { ui.champ = { round: 0, pts: {} }; return startChampRound(); }
   for (const r of champRows()) ui.champ.pts[r.c.drv.code] = r.pts;
@@ -2025,7 +2079,7 @@ const isPlayerPeer = p => p.kind === 'viewer' && (p.presence.role === 'host' || 
 // A game is a star: the host owns the PeerJS id of the game's name and relays everyone's presence to every guest.
 // It mimics the parts of the room capability the game uses (peers, presence, join, leave).
 const P2P_PREFIX = 'monoplace-gp-v1-'; // the names every version so far has used: old and new pages still find each other
-const VERSION = 31; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
+const VERSION = 32; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
 // Relay for players whose networks refuse direct connections: turn.js, next to the page, holds the owner's own TURN account.
 const RELAY = window.TURN_CONFIG && TURN_CONFIG.username && TURN_CONFIG.credential ? TURN_CONFIG : null;
 const PEER_OPTS = RELAY ? { debug: 0, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, RELAY] } } : { debug: 0 };
@@ -2034,7 +2088,7 @@ const NETMSG = {
   noserver: 'Le serveur de connexion en ligne est injoignable : vérifiez votre connexion internet puis réessayez.',
 };
 let lastJoinErr = null, retryAction = null;
-const cleanNick = n => typeof n === 'string' ? n.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 16) : '';
+const cleanNick = n => typeof n === 'string' ? n.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 20) : ''; // 20: CrazyGames usernames
 const myNick = () => cleanNick($('nick').value) || 'Pilote';
 function p2pLobby() {
   return { p2p: true, peers: () => [], presence: () => Promise.resolve(), onPeers: () => () => {}, join: p2pJoin };
@@ -2217,6 +2271,7 @@ function leaveGame() {
   stopLobbyTick();
   if (NET && NET.room) NET.room.leave().catch(() => {});
   const had = !!NET; NET = null;
+  cgRoom();
   if (G) G.online = null;
   if (had) hubGame();
   if (had && ROOM) ROOM.presence({ st: 'menu', g: null, open: null, n: null }).catch(() => {});
@@ -2228,6 +2283,7 @@ function stopLobbyTick() { clearInterval(lobbyTimer); lobbyTimer = 0; }
 function lobbyTick() {
   const net = NET;
   if (!net || !net.room) return;
+  cgRoom();
   collectSays();
   const peers = net.room.peers(), humans = peers.filter(isPlayerPeer);
   if (ROOM.p2p) for (const p of peers) if (!p.isMe) rankMerge(p.presence.rk);
@@ -2282,6 +2338,7 @@ function startOnlineQuali(g) {
   NET.qStarted = true;
   NET.room.presence({ q: null }).catch(() => {});
   startSession({ mode: 'tt', T, rain: g.rain === true, team: ui.team, quali: { online: true } });
+  cgRoom();
   show(null);
   $('pauseTrack').textContent = 'Qualifications · ' + T.def.name;
   $('restartBtn').hidden = true;
@@ -2347,6 +2404,19 @@ function hostNextRound() {
   hostStart();
 }
 
+// After an online race the host brings everyone back to the same waiting room (a finished championship starts again).
+function hostBackToLobby() {
+  const net = NET;
+  if (!net || !net.host || !net.room) return;
+  net.cfg = { ...net.cfg, state: 'lobby', seq: Date.now() % 1e9, slots: null, players: null,
+    ...(net.cfg.champ ? { champ: { round: 0, pts: {}, names: {} }, track: trackPayload(DEFS[0]) } : {}) };
+  net.closed = false; net.qAt = 0; net.autoAt = Date.now() + 30000;
+  net.room.presence({ game: net.cfg, q: null }).catch(() => {});
+  ROOM.presence({ st: 'host', g: net.name, open: net.pub, ranked: net.ranked, n: net.n || 1 }).catch(() => {});
+  backToLobby();
+}
+function backToLobby() { NET.qStarted = false; NET.waitUntil = Date.now() + 8000; startAttract(); showLobby(''); startLobbyTick(); hubGame(); }
+
 // The host's game object is another player's input: check every field before using it.
 function startOnline(g) {
   stopLobbyTick();
@@ -2358,6 +2428,7 @@ function startOnline(g) {
     hold: clamp(+g.hold || 1, 0.4, 1.5), team: 0, online: { slots, me, host: NET.host, ranked: g.ranked === true } });
   G.ranked = g.ranked === true;
   G.online.me = me; G.online.seq = g.seq; G.netChamp = cleanChamp(g.champ);
+  cgRoom(); // racing: friends can't join now
   if (ROOM.p2p) NET.room.presence({ rk: null }).catch(() => {}); // the shared table travels in the lobby only
   show(null);
   $('pauseTrack').textContent = $('resTrack').textContent = G.T.def.name + ' · en ligne' + (G.rain ? ' · pluie' : '');
@@ -2395,6 +2466,7 @@ function netSync(dt) {
   const host = G.online.host ? null : peers.find(p => p.kind === 'viewer' && p.presence.role === 'host');
   const hg = host && host.presence.game;
   if (hg && hg.champ && hg.state === 'go' && hg.seq !== G.online.seq) { NET.cfg = hg; return startOnline(hg); } // the host started the next round
+  if (hg && hg.state === 'lobby' && hg.seq !== G.online.seq) { NET.cfg = hg; return backToLobby(); } // the host brought everyone back to the waiting room
   const hostBots = host && Array.isArray(host.presence.bots) ? host.presence.bots : null;
   for (const c of G.cars) {
     if (!c.remote) continue;
@@ -2441,8 +2513,8 @@ function renderLobby(humans) {
   const tname = g.track ? (OFFICIAL_IDS.has(g.track.id) ? findDef(g.track.id).name : String(g.track.name || 'Circuit perso').slice(0, 28)) : '…';
   $('lbTrack').textContent = (g.champ && Number.isInteger(g.champ.round) ? 'Manche ' + (g.champ.round + 1) + '/' + DEFS.length + ' · ' : '') + tname + ' · ' + ([3, 5, 10].includes(g.laps) ? g.laps : 3) + ' tours' + (g.rain === true ? ' · pluie' : '') + (net.ranked ? ' · sans bots' : ' · bots ' + (DIFF[g.diff] ? g.diff : 'normal'));
   $('lbCodeBox').hidden = net.pub; $('lbCode').textContent = net.code.toUpperCase();
-  $('lbLink').hidden = !ROOM.p2p || !!window.MGP_PORTAL; // on a games portal the page's own address is not one to share
-  $('lbShare').textContent = ROOM.p2p && window.MGP_PORTAL ? 'Donnez ce code à vos amis : ils le tapent dans « Rejoindre avec un code » sur l’écran d’accueil.'
+  $('lbLink').hidden = !ROOM.p2p || (!!window.MGP_PORTAL && !CG); // on a games portal the page's own address is not one to share: only the portal's invite link
+  $('lbShare').textContent = ROOM.p2p && window.MGP_PORTAL && !CG ? 'Donnez ce code à vos amis : ils le tapent dans « Rejoindre avec un code » sur l’écran d’accueil.'
     : ROOM.p2p ? 'Envoyez le lien à vos amis, ou le code à taper dans « Rejoindre avec un code » sur l’écran d’accueil.' : 'Vos amis touchent « Rejoindre avec un code » sur l’écran d’accueil et tapent ce code. Ils doivent avoir accès à cette page : invitez-les depuis le menu Partager.';
   $('lbStart').hidden = !net.host || net.ranked;
   const left = Math.ceil((net.autoAt - Date.now()) / 1000), bots = Math.max(0, 6 - humans.length);
@@ -2775,7 +2847,8 @@ $('lbStart').addEventListener('click', () => { if (NET && NET.host && NET.room) 
 $('lbRetry').addEventListener('click', () => { const f = retryAction; leaveGame(); if (f) f(); });
 $('lbLeave').addEventListener('click', () => { leaveGame(); if (lobbyFrom === 'menu') openSetup(ui.mode); else show('home'); });
 $('lbLink').addEventListener('click', () => {
-  const link = location.origin + location.pathname + '#partie-' + $('lbCode').textContent.toLowerCase();
+  let link = location.origin + location.pathname + '#partie-' + $('lbCode').textContent.toLowerCase();
+  if (CG && NET) { try { link = CG.game.inviteLink({ roomName: NET.name }); } catch (e) { /* keep the page's own link */ } }
   navigator.clipboard.writeText(link).then(() => { $('lbLink').textContent = 'Lien copié'; }, () => { $('lbShare').textContent = link; });
 });
 $('lbCopy').addEventListener('click', () => {
@@ -2915,7 +2988,7 @@ function renderEditor() {
 
 // ---------- Sound: synthesised with Web Audio; browsers only allow it after the first click or key press ----------
 const SND = { on: store.get('monoplace-gp.sound') !== false, vol: Number.isFinite(store.get('monoplace-gp.volume')) ? clamp(store.get('monoplace-gp.volume'), 0, 100) : 100, ctx: null };
-const sndGain = () => SND.on ? 0.6 * SND.vol / 100 : 0;
+const sndGain = () => SND.on && !SND.forceMute ? 0.6 * SND.vol / 100 : 0; // forceMute: the games portal asks for silence
 function sndLabel() { for (const id of ['sndPause']) { const b = $(id); b.textContent = SND.on ? 'Son activé' : 'Son coupé'; b.setAttribute('aria-pressed', SND.on); } }
 function toggleSound() { SND.on = !SND.on; store.set('monoplace-gp.sound', SND.on); sndLabel(); if (SND.ctx) SND.master.gain.setTargetAtTime(sndGain(), SND.ctx.currentTime, 0.05); refreshSettings(); }
 $('sndPause').addEventListener('click', toggleSound);
@@ -3101,6 +3174,7 @@ if (matchMedia('(pointer: coarse)').matches) document.body.classList.add('touch'
 // ---------- Language: English unless the player picked French ----------
 // Texts are written in French; this dictionary turns every text the page shows into English as it appears.
 const EN = new Map([
+["L’hôte peut lancer une nouvelle course : restez ici pour rejouer ensemble.", "The host can start a new race: stay here to play again together."], ["Rejouer ensemble", "Play again together"],
 ["Donnez ce code à vos amis : ils le tapent dans « Rejoindre avec un code » sur l’écran d’accueil.", "Give this code to your friends: they type it in “Join with a code” on the home screen."],
 ["Plein écran", "Full screen"], ["Quitter le plein écran", "Exit full screen"], ["Affichage", "Display"],
 ["Sur iPhone et iPad, le navigateur ne permet pas le plein écran : touchez Partager, puis « Sur l’écran d’accueil ». Le jeu s’ouvre alors comme une appli, en plein écran.", "On iPhone and iPad, the browser doesn’t allow full screen: tap Share, then “Add to Home Screen”. The game then opens like an app, in full screen."],
@@ -3412,11 +3486,12 @@ if (LANG === 'en') {
 startAttract();
 show('home');
 if (document.fonts) document.fonts.ready.then(() => { if (!el.home.hidden) drawModeArts(); });
-initCloud();
+initCloud(); cgInit();
 let last = performance.now();
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
   if (ED) renderEditor(); else { update(dt); render(dt); hud(dt); }
+  cgPlay();
   sfxUpdate();
   requestAnimationFrame(frame);
 }
