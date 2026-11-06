@@ -210,7 +210,7 @@ kbd{display:inline-grid;place-items:center;min-width:24px;height:22px;padding:0 
 
 /* ---------- Modals ---------- */
 .modal{display:flex;flex-direction:column;background:rgba(6,8,11,.6);overflow-y:auto}
-.card{margin:auto;width:min(600px,100%);background:var(--panel);padding:24px clamp(16px,4vw,28px);display:grid;gap:14px;clip-path:polygon(16px 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%,0 16px)}
+.card{box-sizing:border-box;margin:auto;width:min(600px,100%);background:var(--panel);padding:24px clamp(16px,4vw,28px);display:grid;gap:14px;clip-path:polygon(16px 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%,0 16px)}
 .card h2{margin:0;font:800 clamp(34px,6vw,48px)/.95 var(--f-display);text-transform:uppercase;transform:skewX(-8deg);transform-origin:left bottom}
 .card p{margin:0}
 .code{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
@@ -218,6 +218,7 @@ kbd{display:inline-grid;place-items:center;min-width:24px;height:22px;padding:0 
 .join-row{display:flex;gap:10px}
 .join-row .input{font:800 26px/1 var(--f-display);letter-spacing:.2em;text-transform:uppercase}
 .tblwrap{overflow-x:auto}
+.card>*{min-width:0} /* a wide table scrolls inside the card instead of widening it */
 .res{width:100%;border-collapse:collapse;font-size:15px}
 .res th{font:700 11px/1 var(--f-body);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);text-align:left;padding:6px}
 .res td{padding:8px 6px;box-shadow:inset 0 1px 0 var(--line);white-space:nowrap}
@@ -439,8 +440,8 @@ kbd{display:inline-grid;place-items:center;min-width:24px;height:22px;padding:0 
 
 <section id="ranking" class="layer modal" hidden>
   <div class="card">
-    <p class="lbl">Parties classées · 6 vrais pilotes, qualifs puis 5 tours, sans bots</p>
     <h2>Classement</h2>
+    <p class="lbl">Parties classées · 6 vrais pilotes, qualifs puis 5 tours, sans bots</p>
     <div class="tblwrap">
       <table class="res">
         <thead><tr><th>Pos</th><th>Pilote</th><th class="r">Points</th><th class="r">Courses</th><th class="r">Victoires</th></tr></thead>
@@ -448,6 +449,10 @@ kbd{display:inline-grid;place-items:center;min-width:24px;height:22px;padding:0 
       </table>
     </div>
     <p class="note" id="rkNote"></p>
+    <p class="lbl">Meilleurs tours · circuits officiels</p>
+    <div class="seg" id="lapSeg" role="group" aria-label="Circuit"></div>
+    <ol class="board" id="lapBoard" aria-label="Meilleurs tours"></ol>
+    <p class="note" id="lapNote"></p>
     <div class="actions"><button id="rkClose" class="btn" type="button">Fermer</button></div>
   </div>
 </section>
@@ -1240,6 +1245,7 @@ function lapDone(c) {
       store.set(GHOST_KEY + id, { d: G.rec });
       if (G.mode === 'tt' && !G.quali) G.ghosts = G.ghosts.filter(g => !g.mine).concat({ mine: true, d: G.rec, hz: 30, drv: c.drv, label: '' });
       c.lastCls = 'p'; toast('Record du circuit · ' + fmt(lt), 'p');
+      if (hub && OFFICIAL_IDS.has(id)) hub.share();
     } else if (pb) { c.lastCls = 'g'; toast('Meilleur tour · ' + fmt(lt), 'g'); }
     else c.lastCls = '';
     shareLap(id, lt, c.drv.color, G.rec);
@@ -1940,7 +1946,7 @@ const isPlayerPeer = p => p.kind === 'viewer' && (p.presence.role === 'host' || 
 // A game is a star: the host owns the PeerJS id of the game's name and relays everyone's presence to every guest.
 // It mimics the parts of the room capability the game uses (peers, presence, join, leave).
 const P2P_PREFIX = 'monoplace-gp-v1-'; // the names every version so far has used: old and new pages still find each other
-const VERSION = 23; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
+const VERSION = 24; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
 // Relay for players whose networks refuse direct connections: turn.js, next to the page, holds the owner's own TURN account.
 const RELAY = window.TURN_CONFIG && TURN_CONFIG.username && TURN_CONFIG.credential ? TURN_CONFIG : null;
 const PEER_OPTS = RELAY ? { debug: 0, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, RELAY] } } : { debug: 0 };
@@ -2425,6 +2431,55 @@ async function renderRanking() {
   }));
   $('rkNote').textContent = !rows.length ? 'Aucune partie classée terminée pour l’instant. Lancez « Partie classée » dans Grand Prix : la course part dès que 6 pilotes sont là.'
     : 'Points par place : 25, 18, 15, 12, 10, 8.' + (DB ? '' : ' Ce classement se transmet entre les joueurs qui se retrouvent en ligne.');
+  renderLaps();
+}
+// Best laps on the official circuits. claude.ai: the shared laps documents; elsewhere: each player's records travel with the hub's gossip.
+const LAP_KEY = 'monoplace-gp.laps';
+let lapLocal = store.get(LAP_KEY) || {}, lapTid = null, lapTok = 0;
+const okLap = t => Number.isFinite(t) && t > 10 && t < 900;
+function lapMine() { // this device's records, as the others see them
+  const l = {}; for (const id of OFFICIAL_IDS) if (records[id] && okLap(records[id].lap)) l[id] = Math.round(records[id].lap * 1000) / 1000;
+  const cur = lapLocal[PID];
+  if (cur && cur.n === myNick() && JSON.stringify(cur.l) === JSON.stringify(l)) return;
+  lapLocal[PID] = { n: myNick(), l, t: Date.now() }; store.set(LAP_KEY, lapLocal);
+}
+const lapShare = () => { lapMine(); return Object.entries(lapLocal).sort((a, b) => b[1].t - a[1].t).slice(0, 60).map(([id, e]) => [id, e.n, e.l, e.t]); };
+// Entries from other players are untrusted: shape-checked, official circuits only, newest wins, and nobody can overwrite your own line.
+function lapMerge(list) {
+  if (!Array.isArray(list)) return;
+  let changed = false;
+  for (const e of list.slice(0, 80)) {
+    if (!Array.isArray(e) || typeof e[0] !== 'string' || !/^u[a-z0-9]{10}$/.test(e[0]) || e[0] === PID || !e[2] || typeof e[2] !== 'object' || !Number.isFinite(e[3])) continue;
+    if (lapLocal[e[0]] && lapLocal[e[0]].t >= e[3]) continue;
+    const l = {}; for (const id of OFFICIAL_IDS) if (okLap(e[2][id])) l[id] = e[2][id];
+    lapLocal[e[0]] = { n: cleanNick(e[1]) || 'Pilote', l, t: e[3] }; changed = true;
+  }
+  if (changed) { store.set(LAP_KEY, lapLocal); if (!el.ranking.hidden) renderLaps(); }
+}
+async function renderLaps() {
+  if (!OFFICIAL_IDS.has(lapTid)) lapTid = OFFICIAL_IDS.has(ui.tid) ? ui.tid : DEFS[0].id;
+  $('lapSeg').replaceChildren(...DEFS.map(d => {
+    const b = document.createElement('button'); b.type = 'button'; b.textContent = d.name; b.setAttribute('aria-pressed', d.id === lapTid);
+    b.addEventListener('click', () => { lapTid = d.id; renderLaps(); }); return b;
+  }));
+  const tok = ++lapTok, id = lapTid;
+  let rows;
+  if (DB) rows = Object.entries(board).map(([uid, d]) => { const e = d && d[lbKey(id)]; return { id: uid, me: uid === ME, t: e && e.t, c: e && e.c }; });
+  else { lapMine(); rows = Object.entries(lapLocal).map(([pid, e]) => ({ id: pid, me: pid === PID, name: pid === PID ? myNick() : e.n, t: e.l && e.l[id] })); }
+  rows = rows.filter(r => okLap(r.t)).sort((a, b) => a.t - b.t).slice(0, 10);
+  const ps = DB && USER && rows.length ? await USER.profiles(rows.map(r => r.id)) : {};
+  if (tok !== lapTok) return;
+  $('lapBoard').replaceChildren(...rows.map((r, i) => {
+    const li = document.createElement('li'), p = document.createElement('span'), c = document.createElement('span'), n = document.createElement('span'), t = document.createElement('span');
+    li.className = r.me ? 'me' : '';
+    p.className = 'p'; p.textContent = i + 1;
+    c.className = 'c'; c.style.background = /^#[0-9a-f]{6}$/i.test(r.c || '') ? r.c : 'var(--muted)';
+    n.className = 'n'; n.textContent = r.me ? 'Vous' : (DB ? ps[r.id] && ps[r.id].name : r.name) || 'Pilote';
+    t.className = 't'; t.textContent = fmt(r.t);
+    li.append(p, c, n, t); return li;
+  }));
+  $('lapNote').textContent = rows.length ? 'Votre meilleur tour sur chaque circuit officiel, en Chrono ou en course, y est ajouté automatiquement.' + (DB ? '' : ' Les temps se transmettent entre les joueurs qui se retrouvent en ligne.')
+    : 'Aucun temps sur ce circuit pour l’instant : faites un tour en Chrono ou en course pour être le premier.';
 }
 function openRanking() { rkFrom = !el.results.hidden ? 'results' : !el.menu.hidden ? 'menu' : 'home'; renderRanking(); show('ranking'); }
 $('rankBtn').addEventListener('click', openRanking);
@@ -2503,7 +2558,7 @@ function hubStart() {
   const send = (c, msg) => { if (c && c.open) { try { c.send(msg); } catch (e) { /* dropped */ } } };
   const broadcast = () => {
     galleryMerge(myShared());
-    const msg = { t: 'all', c: gallery, rk: rankShare(), lk: likeShare(), n: h.conns.size + 1, g: [...h.games.values(), myGame()].filter(Boolean) };
+    const msg = { t: 'all', c: gallery, rk: rankShare(), lk: likeShare(), lp: lapShare(), n: h.conns.size + 1, g: [...h.games.values(), myGame()].filter(Boolean) };
     HUB_GAMES = cleanGames(msg.g);
     for (const c of h.conns.values()) send(c, msg);
     setOnline(h.conns.size + 1);
@@ -2544,7 +2599,7 @@ function hubStart() {
     peer.on('connection', c => {
       c.on('data', d => {
         if (g !== h.gen) return;
-        if (d && (d.t === 'hello' || d.t === 'c')) { h.conns.set(c.peer, c); galleryMerge(d.c); rankMerge(d.rk); likeMerge(d.lk); dirty(); }
+        if (d && (d.t === 'hello' || d.t === 'c')) { h.conns.set(c.peer, c); galleryMerge(d.c); rankMerge(d.rk); likeMerge(d.lk); lapMerge(d.lp); dirty(); }
         if (d && 'game' in d) { const x = cleanGames([d.game])[0]; if (x) h.games.set(c.peer, x); else h.games.delete(c.peer); dirty(); }
       });
       c.on('close', () => { if (g === h.gen) { h.conns.delete(c.peer); h.games.delete(c.peer); dirty(); } });
@@ -2572,15 +2627,15 @@ function hubStart() {
       }, 10000);
       c.on('open', () => {
         if (g !== h.gen) { try { c.close(); } catch (e) { /* gone */ } return; }
-        clearTimeout(limit); WAIT.delete(id); h.conn = c; hubStatus('ok'); send(c, { t: 'hello', c: myShared(), rk: rankShare(), lk: likeShare(), game: myGame() });
+        clearTimeout(limit); WAIT.delete(id); h.conn = c; hubStatus('ok'); send(c, { t: 'hello', c: myShared(), rk: rankShare(), lk: likeShare(), lp: lapShare(), game: myGame() });
       });
-      c.on('data', d => { if (d && d.t === 'all') { galleryMerge(d.c); rankMerge(d.rk); likeMerge(d.lk); if (Number.isInteger(d.n)) setOnline(d.n); HUB_GAMES = cleanGames(d.g); } });
+      c.on('data', d => { if (d && d.t === 'all') { galleryMerge(d.c); rankMerge(d.rk); likeMerge(d.lk); lapMerge(d.lp); if (Number.isInteger(d.n)) setOnline(d.n); HUB_GAMES = cleanGames(d.g); } });
       c.on('close', giveUp); // the hub left: someone takes over
       c.on('error', () => {});
     }, e => { if (g !== h.gen) return; hubStatus(e && e.code === 'noserver' ? 'noserver' : 'ok'); retry(g); });
   }
   h.game = () => { if (h.isHub) dirty(); else send(h.conn, { t: 'g', game: myGame() }); };
-  h.share = () => { if (h.isHub) dirty(); else send(h.conn, { t: 'c', c: myShared(), rk: rankShare(), lk: likeShare() }); };
+  h.share = () => { if (h.isHub) dirty(); else send(h.conn, { t: 'c', c: myShared(), rk: rankShare(), lk: likeShare(), lp: lapShare() }); };
   h.stop = () => { ++h.gen; drop(); h.stopped = true; };
   asHub(0, 0);
 }
