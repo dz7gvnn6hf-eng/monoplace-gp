@@ -425,9 +425,6 @@ label.btn{cursor:pointer;display:inline-block}
       </div>
     </div>
     <details class="more" id="moreOpts"><summary>Plus d’options</summary>
-      <div class="grp"><p class="lbl">Qualifications</p>
-        <div class="seg"><button type="button" data-k="quali" data-v="1">Un tour chrono</button><button type="button" data-k="quali" data-v="0">Sans, départ dernier</button></div>
-      </div>
       <div class="grp"><p class="lbl">Météo</p>
         <div class="seg"><button type="button" data-k="weather" data-v="dry">Sec</button><button type="button" data-k="weather" data-v="rain">Pluie</button><button type="button" data-k="weather" data-v="var">Variable</button></div>
       </div>
@@ -1898,7 +1895,7 @@ function hud(dt) {
 }
 
 // ---------- Home, setup and track list ----------
-const ui = { mode: 'race', tid: 'lac', laps: 3, diff: 'normal', weather: 'dry', team: (t => colorOpen(t) ? t : 0)(Math.min(TEAMS.length - 1, Math.max(0, store.get('monoplace-gp.team') | 0))), champ: null, quali: '1', sort: 'pop', friends: false, motif: myMotif(store.get('monoplace-gp.motif')) };
+const ui = { mode: 'race', tid: 'lac', laps: 3, diff: 'normal', weather: 'dry', team: (t => colorOpen(t) ? t : 0)(Math.min(TEAMS.length - 1, Math.max(0, store.get('monoplace-gp.team') | 0))), champ: null, sort: 'pop', friends: false, motif: myMotif(store.get('monoplace-gp.motif')) };
 const MODE_NAMES = { race: 'Grand Prix', champ: L('Championnat', 'Championship'), tt: L('Chrono', 'Time Trial') };
 const recTxt = id => { const r = records[id]; return r ? 'Record <b>' + fmt(r.lap) + '</b>' : 'Pas encore de record'; };
 
@@ -2155,7 +2152,7 @@ function openSetup(mode, friends = false) { ui.mode = mode; ui.friends = friends
 function startRace(o) { leaveGame(); startSession(o); show(null); $('pauseTrack').textContent = $('resTrack').textContent = G.T.def.name + (G.rain ? ' · pluie' : ''); $('restartBtn').hidden = false; }
 function startChampRound() { launch({ mode: 'race', champ: true, tid: DEFS[ui.champ.round].id, laps: ui.laps, diff: ui.diff, rain: weatherPick(), team: ui.team }); }
 // A race with qualifying starts with one timed lap alone on track (weather already decided).
-function launch(o) { if (ui.quali === '1') startRace({ mode: 'tt', tid: o.tid, rain: o.rain, team: o.team, quali: o }); else startRace(o); }
+function launch(o) { startRace({ mode: 'tt', tid: o.tid, rain: o.rain, team: o.team, quali: o }); } // every race starts with a qualifying lap
 
 // Qualifying time of a bot: it drives a standing-start lap alone at its own skill (lap times don't scale linearly with skill).
 const REF = new Map();
@@ -2175,7 +2172,7 @@ function showQuali() {
   $('qGo').hidden = $('qRetry').hidden = !!o.online; $('qNote').hidden = !o.online;
   if (o.online) {
     if (!G.qSent && NET && NET.room) { G.qSent = true; NET.room.presence({ q: Math.round(G.qTime * 1000) / 1000 }).catch(() => {}); }
-    $('qTitle').textContent = 'Qualifications'; $('qTrack').textContent = 'Partie classée · ' + T.def.name;
+    $('qTitle').textContent = 'Qualifications'; $('qTrack').textContent = (NET && NET.ranked ? L('Partie classée', 'Ranked game') : L('Course en ligne', 'Online race')) + ' · ' + T.def.name;
     tq.length = 0; toastT = 0; el.toast.className = '';
     show('quali'); renderOnlineQuali();
     return;
@@ -2505,11 +2502,11 @@ function lobbyTick() {
     if (humans.length !== net.n) { net.n = humans.length; ROOM.presence({ n: net.n }).catch(() => {}); hubGame(); }
     if (net.qAt) { // ranked qualifying under way: start once every driver has a time, or after 2 minutes
       renderOnlineQuali();
-      if (humans.every(p => Number.isFinite(p.presence.q)) || Date.now() - net.qAt > 120000) return hostStart();
+      if ((Date.now() - net.qAt > 10000 && humans.every(p => Number.isFinite(p.presence.q))) || Date.now() - net.qAt > 120000) return hostStart(); // 10 s: last round's times may still be there
       return;
     }
     if (humans.length >= 6 && net.ranked) return hostQuali(); // ranked: only a full grid of six humans starts
-    if (humans.length >= 6 || (net.pub && !net.ranked && Date.now() >= net.autoAt)) return hostStart();
+    if (humans.length >= 6 || (net.pub && !net.ranked && Date.now() >= net.autoAt)) return hostQuali();
     renderLobby(humans);
   } else {
     const host = peers.find(p => p.kind === 'viewer' && p.presence.role === 'host');
@@ -2519,7 +2516,7 @@ function lobbyTick() {
     if (!g || typeof g !== 'object') return;
     net.cfg = g;
     if (g.state === 'quali') {
-      if (!Array.isArray(g.players) || !g.players.includes(selfPeer(net.room))) return lobbyFail('La partie classée a déjà commencé sans vous.');
+      if (!Array.isArray(g.players) || !g.players.includes(selfPeer(net.room))) return lobbyFail('La partie a déjà commencé sans vous.');
       if (!net.qStarted) startOnlineQuali(g);
       return renderOnlineQuali();
     }
@@ -2545,6 +2542,7 @@ function startOnlineQuali(g) {
   if (!T) return lobbyFail('Ce circuit ne peut pas être chargé.');
   NET.qStarted = true;
   NET.room.presence({ q: null }).catch(() => {});
+  if (!lobbyTimer) startLobbyTick(); // after a championship round the tick was stopped: it watches for the start
   startSession({ mode: 'tt', T, rain: g.rain === true, team: ui.team, quali: { online: true } });
   cgRoom();
   show(null);
@@ -2571,15 +2569,17 @@ function renderOnlineQuali() {
 function hostStart() {
   const net = NET, humans = net.room.peers().filter(isPlayerPeer);
   humans.sort((a, b) => (b.presence.role === 'host') - (a.presence.role === 'host') || (a.peer < b.peer ? -1 : 1));
-  if (net.ranked) humans.sort((a, b) => qTime(a) - qTime(b)); // ranked grid: qualifying order, pole first
+  humans.sort((a, b) => qTime(a) - qTime(b)); // the grid follows the qualifying times, pole first
+  const T = trackFromPayload(net.cfg.track), d = DIFF[net.cfg.diff] || DIFF.normal, nb = net.ranked ? 0 : 6 - Math.min(6, humans.length);
+  const botT = T ? Array.from({ length: nb }, (_, k) => refLap(T, net.cfg.rain === true, d.skill - k * 0.012) * (1 + (Math.random() - 0.5) * 0.008)) : [];
   const usedT = new Set();
   const slots = humans.slice(0, 6).map((p, i) => {
     let t = clamp(p.presence.team | 0, 0, TEAMS.length - 1);
     if (usedT.has(t)) t = TEAMS.findIndex((_, x) => !usedT.has(x));
     usedT.add(t);
-    return { p: p.peer, by: typeof p.by === 'string' ? p.by : null, nick: cleanNick(p.presence.nick), t, m: cleanMotif(p.presence.motif), s: net.ranked ? i : 5 - i };
+    return { p: p.peer, by: typeof p.by === 'string' ? p.by : null, nick: cleanNick(p.presence.nick), t, m: cleanMotif(p.presence.motif), s: i + botT.filter(b => b < qTime(p)).length };
   });
-  net.cfg = { ...net.cfg, state: 'go', seq: Date.now() % 1e9, slots };
+  net.cfg = { ...net.cfg, state: 'go', seq: Date.now() % 1e9, slots }; net.qAt = 0;
   net.closed = true; hubGame();
   net.room.presence({ game: net.cfg }).catch(() => {});
   ROOM.presence({ st: 'play', open: false }).catch(() => {});
@@ -2609,7 +2609,7 @@ function hostNextRound() {
   const pts = {}, names = {};
   for (const r of netChampRows()) { pts[r.k] = r.pts; names[r.k] = r.name || 'Pilote'; }
   net.cfg = { ...net.cfg, track: trackPayload(DEFS[nc.round + 1]), rain: weatherPick(), hold: 0.4 + Math.random() * 1.1, champ: { round: nc.round + 1, pts, names } };
-  hostStart();
+  hostQuali();
 }
 
 // After an online race the host brings everyone back to the same waiting room (a finished championship starts again).
@@ -2674,6 +2674,10 @@ function netSync(dt) {
   const host = G.online.host ? null : peers.find(p => p.kind === 'viewer' && p.presence.role === 'host');
   const hg = host && host.presence.game;
   if (hg && hg.champ && hg.state === 'go' && hg.seq !== G.online.seq) { NET.cfg = hg; return startOnline(hg); } // the host started the next round
+  if (hg && hg.champ && hg.state === 'quali' && hg.seq !== G.online.seq) { // next round begins with qualifying
+    NET.cfg = hg; NET.qStarted = false;
+    if (!Array.isArray(hg.players) || !hg.players.includes(selfPeer(NET.room))) return;
+    return startOnlineQuali(hg); }
   if (hg && hg.state === 'lobby' && hg.seq !== G.online.seq) { NET.cfg = hg; return backToLobby(); } // the host brought everyone back to the waiting room
   const hostBots = host && Array.isArray(host.presence.bots) ? host.presence.bots : null;
   for (const c of G.cars) {
@@ -3081,7 +3085,7 @@ document.addEventListener('visibilitychange', () => {
   else if (hub.stopped) hubStart();
 });
 $('inviteBtn').addEventListener('click', () => { retryAction = () => hostGame(false); hostGame(false); });
-$('lbStart').addEventListener('click', () => { if (NET && NET.host && NET.room) hostStart(); });
+$('lbStart').addEventListener('click', () => { if (NET && NET.host && NET.room) hostQuali(); });
 $('lbRetry').addEventListener('click', () => { const f = retryAction; leaveGame(); if (f) f(); });
 $('lbLeave').addEventListener('click', () => { leaveGame(); if (lobbyFrom === 'menu') openSetup(ui.mode, ui.friends); else if (lobbyFrom === 'gp') openGp(); else show('home'); });
 $('lbLink').addEventListener('click', () => {
@@ -3625,7 +3629,7 @@ const EN = new Map([
 ["Cette partie n’existe plus, ou le code est faux : vérifiez-le auprès de votre ami.", "This game no longer exists, or the code is wrong: check it with your friend."],
 ["Toutes les parties publiques sont pleines ou déjà lancées. Réessayez dans un instant.", "All public games are full or already started. Try again in a moment."],
 ["Partie introuvable : l’hôte l’a peut-être quittée.", "Game not found: the host may have left."],
-["La partie classée a déjà commencé sans vous.", "The ranked game already started without you."],
+["La partie classée a déjà commencé sans vous.", "The ranked game already started without you."], ["La partie a déjà commencé sans vous.", "The game already started without you."],
 ["La course a déjà commencé sans vous.", "The race already started without you."],
 ["Ce circuit ne peut pas être chargé.", "This circuit can’t be loaded."],
 ["Tous les temps sont là : la course va partir.", "All times are in: the race is about to start."],
