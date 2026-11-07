@@ -1589,7 +1589,7 @@ const xpNeed = n => 100 + 20 * (n - 1); // XP to go from level n to n + 1
 function levelOf(xp) { let n = 1; while (xp >= xpNeed(n)) { xp -= xpNeed(n); n++; } return [n, xp, xpNeed(n)]; }
 // One unlock track: the 8 extra colours and the 10 motifs take turns, further and further apart.
 const MOTIF_LEVEL = { classic: 1, stripe: 4, twin: 8, split: 13, sash: 19, fade: 26, bolt: 34, tiger: 43, camo: 54, flames: 60, neon: 70 };
-const COLOR_LEVEL = [1, 1, 1, 1, 1, 1, 2, 6, 10, 16, 22, 30, 38, 48]; // by TEAMS index: the first six are free
+const COLOR_LEVEL = [1, 1, 1, 1, 1, 1, 2, 48, 10, 16, 6, 30, 38, 22]; // by TEAMS index: the first six are free
 const colorOpen = i => levelOf(XP)[0] >= (COLOR_LEVEL[i] || 1);
 const motifOpen = id => levelOf(XP)[0] >= (MOTIF_LEVEL[id] || 1);
 const POS_XP = [1, .8, .65, .5, .4, .3]; // share of the race's XP by finishing place
