@@ -205,7 +205,7 @@ h1 span{color:var(--red)}
 .motifs button{display:grid;justify-items:center;gap:2px;padding:4px 2px 6px;font:600 13px/1.1 var(--f-body);color:var(--muted);text-align:center}
 .motifs canvas{width:96px;height:56px;max-width:100%}
 .motifs button:disabled{opacity:.5;cursor:default}
-.swatches button:disabled{opacity:.35;cursor:default;font-size:13px;line-height:30px;text-align:center}
+.swatches button:disabled{opacity:.55;cursor:default;font:800 14px/30px var(--f-display);text-align:center;color:#fff;text-shadow:0 0 3px #000,0 0 2px #000}
 .motifs small{font-size:12px;color:var(--yellow)}
 .lvl{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:10px}
 .lvl b{font:800 22px/1 var(--f-display);text-transform:uppercase;transform:skewX(-8deg)}
@@ -519,7 +519,7 @@ label.btn{cursor:pointer;display:inline-block}
       </div>
     </div>
     <div class="lvl"><b id="pfLvl"></b><div class="bar"><i id="pfBar"></i></div><span id="pfXp"></span></div>
-    <div class="grp"><p class="lbl">Couleur de votre voiture</p><div class="swatches" id="teams"></div></div>
+    <div class="grp"><p class="lbl">Couleur de votre voiture</p><div class="swatches" id="teams"></div><p class="note">Le chiffre sur une couleur grisée est le niveau qui la débloque.</p></div>
     <div class="grp"><p class="lbl">Motif</p><div class="motifs" id="motifs"></div></div>
     <label class="grp"><span class="lbl">Pseudo</span><input id="nick" class="input" maxlength="20" autocomplete="off" spellcheck="false"></label>
     <p class="note">Votre pseudo s’affiche pour les autres joueurs en ligne. Votre photo reste sur cet appareil : les autres ne la voient pas.</p>
@@ -547,12 +547,12 @@ label.btn{cursor:pointer;display:inline-block}
 <section id="ranking" class="layer modal" hidden>
   <div class="card">
     <h2>Classement</h2>
-    <div class="seg" role="group" aria-label="Classement"><button type="button" data-rk="ranked">Parties classées</button><button type="button" data-rk="laps">Meilleurs tours</button></div>
+    <div class="seg" role="group" aria-label="Classement"><button type="button" data-rk="ranked">Parties classées</button><button type="button" data-rk="laps">Meilleurs tours</button><button type="button" data-rk="levels">Niveaux</button></div>
     <div class="grp" id="rkRanked">
       <p class="lbl">6 vrais pilotes, qualifs puis 5 tours, sans bots</p>
       <div class="tblwrap">
         <table class="res">
-          <thead><tr><th>Pos</th><th>Pilote</th><th class="r">Points</th><th class="r">Courses</th><th class="r">Victoires</th></tr></thead>
+          <thead><tr><th>Pos</th><th>Pilote</th><th class="r">Niv.</th><th class="r">Points</th><th class="r">Courses</th><th class="r">Victoires</th></tr></thead>
           <tbody id="rkBody"></tbody>
         </table>
       </div>
@@ -564,6 +564,15 @@ label.btn{cursor:pointer;display:inline-block}
       <p class="lbl" id="lapTitle"></p>
       <ol class="board" id="lapBoard" aria-label="Meilleurs tours"></ol>
       <p class="note" id="lapNote"></p>
+    </div>
+    <div class="grp" id="rkLevels" hidden>
+      <div class="tblwrap">
+        <table class="res">
+          <thead><tr><th>Pos</th><th>Pilote</th><th class="r">Niveau</th><th class="r">XP</th></tr></thead>
+          <tbody id="lvBody"></tbody>
+        </table>
+      </div>
+      <p class="note" id="lvNote"></p>
     </div>
     <div class="actions"><button id="rkClose" class="btn" type="button">Fermer</button></div>
   </div>
@@ -1613,6 +1622,7 @@ function giveXp(pos) {
   const after = levelOf(XP)[0], fresh = l => l > before && l <= after;
   const opened = [...MOTIFS.filter(m => fresh(MOTIF_LEVEL[m[0]])).map(m => L('motif ', 'livery ') + m[1]), ...TEAMS.filter((t, i) => fresh(COLOR_LEVEL[i])).map(t => L('couleur ', 'colour ') + t.name.toLowerCase())];
   G.xp = { add, bonus: Math.round(bonus), before, after, opened };
+  if (hub) hub.share();
   if (after > before) { toast(L('Niveau ', 'Level ') + after + ' !', 'p'); sfxChime([659, 784, 1047]); }
   refreshProfile();
 }
@@ -1881,14 +1891,14 @@ const recTxt = id => { const r = records[id]; return r ? 'Record <b>' + fmt(r.la
 
 $('motifs').innerHTML = [...MOTIFS].sort((a, b) => MOTIF_LEVEL[a[0]] - MOTIF_LEVEL[b[0]]).map(([id, name]) => '<button type="button" data-k="motif" data-v="' + id + '"><canvas width="96" height="56" aria-hidden="true"></canvas><span>' + name + '</span><small></small></button>').join('');
 function drawMotifs() { // previews in the chosen colour; locked colours and motifs show the level they open at
-  document.querySelectorAll('#teams button').forEach(b => { const i = +b.dataset.v, open = colorOpen(i); b.disabled = !open; b.textContent = open ? '' : '🔒';
+  document.querySelectorAll('#teams button').forEach(b => { const i = +b.dataset.v, open = colorOpen(i); b.disabled = !open; b.textContent = open ? '' : COLOR_LEVEL[i];
     b.title = TEAMS[i].name + (open ? '' : ' · ' + L('niveau ', 'level ') + COLOR_LEVEL[i]); });
   document.querySelectorAll('#motifs button').forEach(b => { const cv = b.firstChild, g = cv.getContext('2d'), open = motifOpen(b.dataset.v); g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, cv.width, cv.height);
     b.disabled = !open; b.lastChild.textContent = open ? '' : '🔒 ' + L('Niveau ', 'Level ') + MOTIF_LEVEL[b.dataset.v];
     b.title = open ? '' : L('Se débloque au niveau ', 'Unlocks at level ') + MOTIF_LEVEL[b.dataset.v];
     g.setTransform(1.75, 0, 0, 1.75, 46, 28); drawCar({ x: 0, y: 0, a: 0, steer: 0, drv: { ...TEAMS[ui.team], motif: b.dataset.v } }, g); });
 }
-$('teams').innerHTML = TEAMS.map((t, i) => '<button type="button" data-k="team" data-v="' + i + '" aria-label="Écurie ' + t.name + '" title="' + t.name + '" style="background:' + t.color + '"></button>').join('');
+$('teams').innerHTML = TEAMS.map((t, i) => [t, i]).sort((a, b) => COLOR_LEVEL[a[1]] - COLOR_LEVEL[b[1]]).map(([t, i]) => '<button type="button" data-k="team" data-v="' + i + '" aria-label="Écurie ' + t.name + '" title="' + t.name + '" style="background:' + t.color + '"></button>').join('');
 $('rounds').innerHTML = DEFS.map((d, i) => '<li><span class="n">' + (i + 1) + '</span><span>' + esc(d.name) + '</span></li>').join('');
 
 // Illustrations on the three mode cards
@@ -2401,7 +2411,7 @@ async function hostGame(pub, fixed, rankedWanted) {
   try { net.room = await ROOM.join(name, { host: true }); }
   catch (e) { if (e && e.code === 'taken' && fixed) { NET = null; return false; } lobbyFail(NETMSG[e && e.code] || 'Impossible de créer la partie pour le moment. Réessayez dans un instant.', e && e.code); return true; }
   if (NET !== net) { net.room.leave().catch(() => {}); return true; }
-  net.room.presence({ role: 'host', team: ui.team, motif: ui.motif, nick: myNick(), game: net.cfg, ...(ROOM.p2p ? { rk: rankShare() } : {}) }).catch(() => {});
+  net.room.presence({ role: 'host', team: ui.team, motif: ui.motif, nick: myNick(), game: net.cfg, ...(ROOM.p2p ? { rk: rankShare(), lv: lvShare() } : {}) }).catch(() => {});
   ROOM.presence({ st: 'host', g: name, open: pub, ranked, n: 1 }).catch(() => {});
   if (!pub) location.hash = 'partie-' + code;
   hubGame();
@@ -2416,7 +2426,7 @@ async function joinGame(name, probe) {
   try { net.room = await (probe && ROOM.p2p ? ROOM.join(name, { wait: 12000 }) : ROOM.join(name)); }
   catch (e) { lastJoinErr = e && e.code; if (probe) { NET = null; return false; } lobbyFail(lastJoinErr === 'not_found' ? 'Cette partie n’existe plus, ou le code est faux : vérifiez-le auprès de votre ami.' : NETMSG[lastJoinErr] || 'Impossible de rejoindre cette partie.', lastJoinErr); return false; }
   if (NET !== net) { net.room.leave().catch(() => {}); return false; }
-  net.room.presence({ role: 'guest', team: ui.team, motif: ui.motif, nick: myNick(), ...(ROOM.p2p ? { rk: rankShare() } : {}) }).catch(() => {});
+  net.room.presence({ role: 'guest', team: ui.team, motif: ui.motif, nick: myNick(), ...(ROOM.p2p ? { rk: rankShare(), lv: lvShare() } : {}) }).catch(() => {});
   ROOM.presence({ st: 'play', g: name, open: null, n: null }).catch(() => {});
   if (probe) { // a public slot: stay only if its game is still waiting for players
     let host = null;
@@ -2471,7 +2481,7 @@ function lobbyTick() {
   cgRoom();
   collectSays();
   const peers = net.room.peers(), humans = peers.filter(isPlayerPeer);
-  if (ROOM.p2p) for (const p of peers) if (!p.isMe) rankMerge(p.presence.rk);
+  if (ROOM.p2p) for (const p of peers) if (!p.isMe) { rankMerge(p.presence.rk); lvMerge(p.presence.lv); }
   if (net.host) {
     const me = selfPeer(net.room);
     // Two players who hit "Course en ligne" at once: the newer lone host joins the older game.
@@ -2791,14 +2801,42 @@ async function renderRanking() {
   if (tok !== rkTok) return;
   $('rkBody').replaceChildren(...rows.map((r, i) => {
     const tr = document.createElement('tr'); tr.className = r.me ? 'me' : '';
-    [i + 1, r.me ? 'Vous' : (DB ? ps[r.id] && ps[r.id].name : r.name) || 'Pilote', r.p, r.r, r.w].forEach((v, k) => {
+    [i + 1, r.me ? 'Vous' : (DB ? ps[r.id] && ps[r.id].name : r.name) || 'Pilote', (DB ? null : lvOf(r.id)) || '—', r.p, r.r, r.w].forEach((v, k) => {
       const td = document.createElement('td'); td.className = k === 0 ? 'num' : k === 1 ? '' : 'r num'; td.textContent = v; tr.append(td);
     });
     return tr;
   }));
   $('rkNote').textContent = !rows.length ? 'Aucune partie classée terminée pour l’instant. Lancez « Partie classée » dans Grand Prix : la course part dès que 6 pilotes sont là.'
     : 'Points par place : 25, 18, 15, 12, 10, 8.' + (DB ? '' : ' Ce classement se transmet entre les joueurs qui se retrouvent en ligne.');
-  renderLaps();
+  renderLaps(); renderLevels();
+}
+// Driver levels of everyone met online: XP per player, newest wins, travels with the gossip like the ranking.
+const LV_KEY = 'monoplace-gp.levels';
+let lvLocal = store.get(LV_KEY) || {};
+const okXp = x => Number.isInteger(x) && x >= 0 && x < 1e8;
+function lvMine() { const cur = lvLocal[PID]; if (cur && cur.x === XP && cur.n === myNick()) return; lvLocal[PID] = { n: myNick(), x: XP, t: Date.now() }; store.set(LV_KEY, lvLocal); }
+const lvShare = () => { lvMine(); return Object.entries(lvLocal).sort((a, b) => b[1].x - a[1].x).slice(0, 60).map(([id, e]) => [id, e.n, e.x, e.t]); };
+function lvMerge(list) {
+  if (!Array.isArray(list)) return;
+  let changed = false;
+  for (const e of list.slice(0, 80)) {
+    if (!Array.isArray(e) || typeof e[0] !== 'string' || !/^u[a-z0-9]{10}$/.test(e[0]) || e[0] === PID || !okXp(e[2]) || !Number.isFinite(e[3])) continue;
+    if (lvLocal[e[0]] && lvLocal[e[0]].t >= e[3]) continue;
+    lvLocal[e[0]] = { n: cleanNick(e[1]) || 'Pilote', x: e[2], t: e[3] }; changed = true;
+  }
+  if (changed) { store.set(LV_KEY, lvLocal); if (!el.ranking.hidden) renderRanking(); }
+}
+const lvOf = id => id === PID ? levelOf(XP)[0] : lvLocal[id] ? levelOf(lvLocal[id].x)[0] : null; // null: never met
+const lvBadge = id => { const n = DB ? null : lvOf(id); if (!n) return null; const b = document.createElement('span'); b.className = 'lvlb'; b.textContent = L('Niv. ', 'Lv ') + n; return b; };
+function renderLevels() {
+  lvMine();
+  const rows = Object.entries(lvLocal).map(([id, e]) => ({ id, me: id === PID, name: id === PID ? myNick() : e.n, x: e.x })).sort((a, b) => b.x - a.x).slice(0, 100);
+  $('lvBody').replaceChildren(...rows.map((r, i) => {
+    const tr = document.createElement('tr'); tr.className = r.me ? 'me' : '';
+    [i + 1, r.me ? 'Vous' : r.name || 'Pilote', levelOf(r.x)[0], r.x].forEach((v, k) => { const td = document.createElement('td'); td.className = k === 0 ? 'num' : k === 1 ? '' : 'r num'; td.textContent = v; tr.append(td); });
+    return tr;
+  }));
+  $('lvNote').textContent = 'L’XP vient des courses sur les circuits officiels. Les niveaux se transmettent entre les joueurs qui se retrouvent en ligne.';
 }
 // Best laps on the official circuits. claude.ai: the shared laps documents; elsewhere: each player's records travel with the hub's gossip.
 const LAP_KEY = 'monoplace-gp.laps';
@@ -2848,6 +2886,7 @@ async function renderLaps() {
     c.className = 'c'; c.style.background = /^#[0-9a-f]{6}$/i.test(r.c || '') ? r.c : 'var(--muted)';
     n.className = 'n'; n.textContent = r.me ? 'Vous' : (DB ? ps[r.id] && ps[r.id].name : r.name) || 'Pilote';
     t.className = 't'; t.textContent = fmt(r.t);
+    const lb = lvBadge(r.id); if (lb) t.prepend(lb);
     li.append(p, c, n, t); return li;
   }));
   $('lapNote').textContent = rows.length ? 'Le meilleur tour de chaque joueur sur ce circuit, en Chrono ou en course. Le vôtre y est ajouté automatiquement.' + (DB ? '' : ' Les temps se transmettent entre les joueurs qui se retrouvent en ligne.')
@@ -2856,7 +2895,7 @@ async function renderLaps() {
 $('lapSearch').addEventListener('input', renderLaps);
 function rkTab(t) {
   document.querySelectorAll('[data-rk]').forEach(b => b.setAttribute('aria-pressed', b.dataset.rk === t));
-  $('rkRanked').hidden = t !== 'ranked'; $('rkLaps').hidden = t !== 'laps';
+  $('rkRanked').hidden = t !== 'ranked'; $('rkLaps').hidden = t !== 'laps'; $('rkLevels').hidden = t !== 'levels';
 }
 document.querySelectorAll('[data-rk]').forEach(b => b.addEventListener('click', () => rkTab(b.dataset.rk)));
 function openRanking() { rkFrom = !el.results.hidden ? 'results' : !el.menu.hidden ? 'menu' : 'home'; rkTab('ranked'); lapTid = null; $('lapSearch').value = ''; renderRanking(); show('ranking'); }
@@ -2936,7 +2975,7 @@ function hubStart() {
   const send = (c, msg) => { if (c && c.open) { try { c.send(msg); } catch (e) { /* dropped */ } } };
   const broadcast = () => {
     galleryMerge(myShared());
-    const msg = { t: 'all', c: gallery, rk: rankShare(), lk: likeShare(), lp: lapShare(), n: h.conns.size + 1, g: [...h.games.values(), myGame()].filter(Boolean) };
+    const msg = { t: 'all', c: gallery, rk: rankShare(), lk: likeShare(), lp: lapShare(), lv: lvShare(), n: h.conns.size + 1, g: [...h.games.values(), myGame()].filter(Boolean) };
     HUB_GAMES = cleanGames(msg.g);
     for (const c of h.conns.values()) send(c, msg);
     setOnline(h.conns.size + 1);
@@ -2977,7 +3016,7 @@ function hubStart() {
     peer.on('connection', c => {
       c.on('data', d => {
         if (g !== h.gen) return;
-        if (d && (d.t === 'hello' || d.t === 'c')) { h.conns.set(c.peer, c); galleryMerge(d.c); rankMerge(d.rk); likeMerge(d.lk); lapMerge(d.lp); dirty(); }
+        if (d && (d.t === 'hello' || d.t === 'c')) { h.conns.set(c.peer, c); galleryMerge(d.c); rankMerge(d.rk); likeMerge(d.lk); lapMerge(d.lp); lvMerge(d.lv); dirty(); }
         if (d && 'game' in d) { const x = cleanGames([d.game])[0]; if (x) h.games.set(c.peer, x); else h.games.delete(c.peer); dirty(); }
       });
       c.on('close', () => { if (g === h.gen) { h.conns.delete(c.peer); h.games.delete(c.peer); dirty(); } });
@@ -3005,15 +3044,15 @@ function hubStart() {
       }, 10000);
       c.on('open', () => {
         if (g !== h.gen) { try { c.close(); } catch (e) { /* gone */ } return; }
-        clearTimeout(limit); WAIT.delete(id); h.conn = c; hubStatus('ok'); send(c, { t: 'hello', c: myShared(), rk: rankShare(), lk: likeShare(), lp: lapShare(), game: myGame() });
+        clearTimeout(limit); WAIT.delete(id); h.conn = c; hubStatus('ok'); send(c, { t: 'hello', c: myShared(), rk: rankShare(), lk: likeShare(), lp: lapShare(), lv: lvShare(), game: myGame() });
       });
-      c.on('data', d => { if (d && d.t === 'all') { galleryMerge(d.c); rankMerge(d.rk); likeMerge(d.lk); lapMerge(d.lp); if (Number.isInteger(d.n)) setOnline(d.n); HUB_GAMES = cleanGames(d.g); } });
+      c.on('data', d => { if (d && d.t === 'all') { galleryMerge(d.c); rankMerge(d.rk); likeMerge(d.lk); lapMerge(d.lp); lvMerge(d.lv); if (Number.isInteger(d.n)) setOnline(d.n); HUB_GAMES = cleanGames(d.g); } });
       c.on('close', giveUp); // the hub left: someone takes over
       c.on('error', () => {});
     }, e => { if (g !== h.gen) return; hubStatus(e && e.code === 'noserver' ? 'noserver' : 'ok'); retry(g); });
   }
   h.game = () => { if (h.isHub) dirty(); else send(h.conn, { t: 'g', game: myGame() }); };
-  h.share = () => { if (h.isHub) dirty(); else send(h.conn, { t: 'c', c: myShared(), rk: rankShare(), lk: likeShare(), lp: lapShare() }); };
+  h.share = () => { if (h.isHub) dirty(); else send(h.conn, { t: 'c', c: myShared(), rk: rankShare(), lk: likeShare(), lp: lapShare(), lv: lvShare() }); };
   h.stop = () => { ++h.gen; drop(); h.stopped = true; };
   asHub(0, 0);
 }
@@ -3481,7 +3520,7 @@ const EN = new Map([
 ["Réessayer", "Try again"],
 ["Quitter", "Leave"],
 ["Parties classées", "Ranked games"],
-["Meilleurs tours", "Best laps"],
+["Meilleurs tours", "Best laps"], ["Niveaux", "Levels"], ["Niveau", "Level"], ["Niv.", "Lv"], ["Le chiffre sur une couleur grisée est le niveau qui la débloque.", "The number on a greyed-out colour is the level that unlocks it."], ["L’XP vient des courses sur les circuits officiels. Les niveaux se transmettent entre les joueurs qui se retrouvent en ligne.", "XP comes from races on the official circuits. Levels are passed between players who meet online."],
 ["6 vrais pilotes, qualifs puis 5 tours, sans bots", "6 real drivers, qualifying then 5 laps, no bots"],
 ["Pilote", "Driver"],
 ["Courses", "Races"],
