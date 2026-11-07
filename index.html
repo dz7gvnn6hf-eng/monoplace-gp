@@ -204,6 +204,17 @@ h1 span{color:var(--red)}
 .motifs{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:6px;background:var(--panel-hi);padding:6px}
 .motifs button{display:grid;justify-items:center;gap:2px;padding:4px 2px 6px;font:600 13px/1.1 var(--f-body);color:var(--muted);text-align:center}
 .motifs canvas{width:96px;height:56px;max-width:100%}
+.motifs button:disabled{opacity:.5;cursor:default}
+.motifs small{font-size:12px;color:var(--yellow)}
+.lvl{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:10px}
+.lvl b{font:800 22px/1 var(--f-display);text-transform:uppercase;transform:skewX(-8deg)}
+.lvl .bar{height:10px;background:var(--panel-hi)}
+.lvl .bar i{display:block;height:100%;background:var(--yellow)}
+.lvl span{font-size:14px;color:var(--muted);font-variant-numeric:tabular-nums}
+.lvlb{margin-left:8px;padding:2px 6px;background:var(--yellow);color:var(--ink);font:800 13px/1 var(--f-display)}
+.xpline{margin:0;color:var(--muted)}
+.xpline b{color:var(--yellow);font-weight:700}
+.xpline .up{color:var(--green)}
 .motifs button[aria-pressed="true"]{background:var(--panel-sel);color:var(--fg);box-shadow:inset 0 0 0 1px var(--fg)}
 .board{list-style:none;margin:0;padding:0;display:grid;gap:2px}
 .board li{display:grid;grid-template-columns:22px 4px minmax(0,1fr) auto;gap:8px;align-items:center;padding:7px 10px;background:var(--panel-hi);font-size:14px}
@@ -335,7 +346,7 @@ label.btn{cursor:pointer;display:inline-block}
   <header class="home-top">
     <h1>Monoplace <span>GP</span></h1>
     <p class="online" id="onlineCount"></p>
-    <button id="profileBtn" class="btn prof" type="button" aria-label="Profil"><img id="profImg" alt="" hidden><span id="profName">Profil</span></button>
+    <button id="profileBtn" class="btn prof" type="button" aria-label="Profil"><img id="profImg" alt="" hidden><span id="profName">Profil</span><span id="profLvl" class="lvlb"></span></button>
     <button id="rankBtn" class="btn" type="button">Classement</button>
     <button id="settingsBtn" class="btn" type="button">Réglages</button>
     <button id="fsBtn" class="btn" type="button" aria-label="Plein écran" title="Plein écran" aria-keyshortcuts="F" hidden>⛶</button>
@@ -506,6 +517,7 @@ label.btn{cursor:pointer;display:inline-block}
         <button id="pfRemove" class="btn" type="button" hidden>Retirer la photo</button>
       </div>
     </div>
+    <div class="lvl"><b id="pfLvl"></b><div class="bar"><i id="pfBar"></i></div><span id="pfXp"></span></div>
     <div class="grp"><p class="lbl">Couleur de votre voiture</p><div class="swatches" id="teams"></div></div>
     <div class="grp"><p class="lbl">Motif</p><div class="motifs" id="motifs"></div></div>
     <label class="grp"><span class="lbl">Pseudo</span><input id="nick" class="input" maxlength="20" autocomplete="off" spellcheck="false"></label>
@@ -615,6 +627,7 @@ label.btn{cursor:pointer;display:inline-block}
       </table>
     </div>
     <p id="resRank" class="note" hidden></p>
+    <p id="resXp" class="xpline" hidden></p>
     <p id="resNet" class="note" hidden>L’hôte peut lancer une nouvelle course : restez ici pour rejouer ensemble.</p>
     <div class="champ" id="champBox" hidden>
       <p class="lbl" id="champTitle"></p>
@@ -667,6 +680,7 @@ const CODE_ABC = 'abcdefghjkmnpqrstuvwxyz23456789';
 const randCode = n => Array.from(crypto.getRandomValues(new Uint8Array(n)), b => CODE_ABC[b % CODE_ABC.length]).join('');
 const store = { get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* storage blocked: kept for this visit only */ } }, del(k) { try { localStorage.removeItem(k); } catch (e) { /* ignore */ } } };
 const LANG = store.get('monoplace-gp.lang') === 'fr' ? 'fr' : 'en', L = (fr, en) => LANG === 'en' ? en : fr;
+const txt = L; // same, for places where L is the race leader
 
 // Each circuit: corners [x, y, radius] in driving order; straights join the tangent arcs.
 const DEFS = [
@@ -1155,7 +1169,7 @@ function afterWreck(c) {
   c.wreck = 0;
   if (G.mode === 'race') {
     c.out = true; c.vx = c.vy = 0;
-    if (c.isPlayer) { G.order.sort(cmp); G.over = true; G.resAt = G.t + 0.4; if (G.ranked) awardRanked(99); }
+    if (c.isPlayer) { G.order.sort(cmp); G.over = true; G.resAt = G.t + 0.4; if (G.ranked) awardRanked(99); giveXp(0); }
     return;
   }
   const T = G.T, N = T.N, g = T.grid[0];
@@ -1371,6 +1385,7 @@ function lapDone(c) {
       if (G.pos !== 1) sfxChime([523, 659, 784]);
       if (c.pen) toast('Pénalité +15 s · arrêt non effectué', 'y');
       if (G.ranked) awardRanked(G.pos);
+      giveXp(G.pos);
     }
   } else if (c.isPlayer && G.mode === 'race' && c.lap === G.laps - 1) toast('Dernier tour');
   if (G.quali && c.isPlayer && !G.over) { G.over = true; G.qTime = lt; G.resAt = G.t + 1.4; c.auto = true; c.ai.skill = 0.8; toast('Tour de qualification · ' + fmt(lt), c.lastCls); }
@@ -1566,7 +1581,37 @@ const MOTIFS = (() => {
   ];
 })();
 const MOTIF_IDS = MOTIFS.map(m => m[0]);
+// ---------- Driver level: every finished race gives XP, levels never end, motifs unlock on the way ----------
+const XP_KEY = 'monoplace-gp.xp';
+let XP = Math.max(0, Math.floor(+store.get(XP_KEY) || 0));
+const xpNeed = n => 100 + 20 * (n - 1); // XP to go from level n to n + 1
+function levelOf(xp) { let n = 1; while (xp >= xpNeed(n)) { xp -= xpNeed(n); n++; } return [n, xp, xpNeed(n)]; }
+const MOTIF_LEVEL = { classic: 1, stripe: 2, twin: 3, split: 4, sash: 6, fade: 8, bolt: 10, tiger: 12, camo: 14, flames: 17, neon: 20 };
+const motifOpen = id => levelOf(XP)[0] >= (MOTIF_LEVEL[id] || 1);
+const POS_XP = [1, .8, .65, .5, .4, .3]; // share of the race's XP by finishing place
+// One race: bots < online < ranked; harder bots and longer races give more; a championship round gives a quarter more.
+function raceBase() {
+  if (G.ranked) return 120;
+  const laps = Math.pow((G.laps || 3) / 3, .75);
+  return (G.online ? 45 : 25 * ({ facile: .7, normal: 1, difficile: 1.4 }[G.opts.diff] || 1)) * laps * (G.champ || G.netChamp ? 1.25 : 1);
+}
+function giveXp(pos) {
+  if (G.xp || G.attract || G.mode !== 'race' || G.quali) return;
+  let add = pos >= 1 && pos <= 6 ? raceBase() * POS_XP[pos - 1] : 0, bonus = 0; // a retired car gets nothing
+  const nc = G.netChamp, lastSolo = G.champ && !G.online && ui.champ && ui.champ.round === DEFS.length - 1, lastNet = nc && nc.round === DEFS.length - 1;
+  if (lastSolo || lastNet) { // end of a championship: a bonus by final standing
+    const rows = lastNet ? netChampRows() : champRows(), fp = rows.findIndex(r => lastNet ? r.me : r.c.isPlayer) + 1;
+    bonus = fp >= 1 && fp <= 6 ? raceBase() * 1.5 * POS_XP[fp - 1] : 0;
+  }
+  add = Math.round(add + bonus);
+  const before = levelOf(XP)[0]; XP += add; store.set(XP_KEY, XP);
+  const after = levelOf(XP)[0], opened = MOTIFS.filter(m => MOTIF_LEVEL[m[0]] > before && MOTIF_LEVEL[m[0]] <= after).map(m => m[1]);
+  G.xp = { add, bonus: Math.round(bonus), before, after, opened };
+  if (after > before) { toast(L('Niveau ', 'Level ') + after + ' !', 'p'); sfxChime([659, 784, 1047]); }
+  refreshProfile();
+}
 const cleanMotif = m => MOTIF_IDS.includes(m) ? m : 'classic';
+const myMotif = m => motifOpen(cleanMotif(m)) ? cleanMotif(m) : 'classic';
 const LIVERY = new Map(); // motif + colours → painted canvas, so a car costs one drawImage per frame
 function livery(d) {
   const key = d.motif + d.color + d.alt + d.helmet;
@@ -1744,6 +1789,11 @@ function renderResults() {
   $('resNet').hidden = !G.online || G.online.host || (nc && !lastNet);
   $('resRank').hidden = $('resRankBtn').hidden = !G.ranked;
   if (G.ranked) $('resRank').textContent = G.rankPts != null ? 'Partie classée : +' + G.rankPts + ' points au classement.' : 'Partie classée : vos points sont comptés quand vous franchissez la ligne.';
+  $('resXp').hidden = !G.xp;
+  if (G.xp) { const x = G.xp, [n, have, need] = levelOf(XP);
+    $('resXp').innerHTML = '<b>+' + x.add + ' XP</b>' + (x.bonus ? ' <span>' + txt('dont ', 'incl. ') + x.bonus + txt(' de bonus championnat', ' championship bonus') + '</span>' : '') +
+      ' · ' + (x.after > x.before ? '<b class="up">' + txt('Niveau ', 'Level ') + n + ' !</b>' : txt('Niveau ', 'Level ') + n + ' · ' + have + ' / ' + need + ' XP') +
+      (x.opened.length ? '<br>' + txt('Nouveau motif débloqué : ', 'New livery unlocked: ') + esc(x.opened.join(', ')) : ''); }
   $('resChat').hidden = !G.online;
   if (G.online) collectSays();
   if (nc) {
@@ -1818,13 +1868,14 @@ function hud(dt) {
 }
 
 // ---------- Home, setup and track list ----------
-const ui = { mode: 'race', tid: 'lac', laps: 3, diff: 'normal', weather: 'dry', team: Math.min(TEAMS.length - 1, Math.max(0, store.get('monoplace-gp.team') | 0)), champ: null, quali: '1', sort: 'pop', friends: false, motif: cleanMotif(store.get('monoplace-gp.motif')) };
+const ui = { mode: 'race', tid: 'lac', laps: 3, diff: 'normal', weather: 'dry', team: Math.min(TEAMS.length - 1, Math.max(0, store.get('monoplace-gp.team') | 0)), champ: null, quali: '1', sort: 'pop', friends: false, motif: myMotif(store.get('monoplace-gp.motif')) };
 const MODE_NAMES = { race: 'Grand Prix', champ: L('Championnat', 'Championship'), tt: L('Chrono', 'Time Trial') };
 const recTxt = id => { const r = records[id]; return r ? 'Record <b>' + fmt(r.lap) + '</b>' : 'Pas encore de record'; };
 
-$('motifs').innerHTML = MOTIFS.map(([id, name]) => '<button type="button" data-k="motif" data-v="' + id + '"><canvas width="96" height="56" aria-hidden="true"></canvas><span>' + name + '</span></button>').join('');
+$('motifs').innerHTML = [...MOTIFS].sort((a, b) => MOTIF_LEVEL[a[0]] - MOTIF_LEVEL[b[0]]).map(([id, name]) => '<button type="button" data-k="motif" data-v="' + id + '"><canvas width="96" height="56" aria-hidden="true"></canvas><span>' + name + '</span><small></small></button>').join('');
 function drawMotifs() { // previews in the chosen colour
-  document.querySelectorAll('#motifs button').forEach(b => { const cv = b.firstChild, g = cv.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, cv.width, cv.height);
+  document.querySelectorAll('#motifs button').forEach(b => { const cv = b.firstChild, g = cv.getContext('2d'), open = motifOpen(b.dataset.v); g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, cv.width, cv.height);
+    b.disabled = !open; b.lastChild.textContent = open ? '' : '🔒 ' + L('Niveau ', 'Level ') + MOTIF_LEVEL[b.dataset.v];
     g.setTransform(1.75, 0, 0, 1.75, 46, 28); drawCar({ x: 0, y: 0, a: 0, steer: 0, drv: { ...TEAMS[ui.team], motif: b.dataset.v } }, g); });
 }
 $('teams').innerHTML = TEAMS.map((t, i) => '<button type="button" data-k="team" data-v="' + i + '" aria-label="Écurie ' + t.name + '" title="' + t.name + '" style="background:' + t.color + '"></button>').join('');
@@ -3127,6 +3178,10 @@ function refreshProfile() {
   for (const img of [$('pfImg'), $('profImg')]) { img.hidden = !ph; if (ph) img.src = ph; }
   $('pfInit').hidden = !!ph; $('pfInit').textContent = nm.slice(0, 1).toUpperCase();
   $('pfRemove').hidden = !ph; $('profName').textContent = nm;
+  const [n, have, need] = levelOf(XP);
+  $('profLvl').textContent = L('Niv. ', 'Lv ') + n; $('pfLvl').textContent = L('Niveau ', 'Level ') + n;
+  $('pfXp').textContent = have + ' / ' + need + ' XP'; $('pfBar').style.width = (have / need * 100).toFixed(1) + '%';
+  drawMotifs();
 }
 $('nick').addEventListener('change', () => { $('nick').value = myNick(); store.set('monoplace-gp.nick', myNick()); refreshProfile(); if (hub) hub.share(); });
 // A chosen photo is cut to a 160 px square and kept on this device only.
