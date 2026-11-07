@@ -521,6 +521,7 @@ label.btn{cursor:pointer;display:inline-block}
     <div class="lvl"><b id="pfLvl"></b><div class="bar"><i id="pfBar"></i></div><span id="pfXp"></span></div>
     <div class="grp"><p class="lbl">Couleur de votre voiture</p><div class="swatches" id="teams"></div><p class="note">Le chiffre sur une couleur grisée est le niveau qui la débloque.</p></div>
     <div class="grp"><p class="lbl">Motif</p><div class="motifs" id="motifs"></div></div>
+    <div class="grp"><p class="lbl">Effet de vitesse</p><div class="motifs" id="trails"></div></div>
     <label class="grp"><span class="lbl">Pseudo</span><input id="nick" class="input" maxlength="20" autocomplete="off" spellcheck="false"></label>
     <p class="note">Votre pseudo s’affiche pour les autres joueurs en ligne. Votre photo reste sur cet appareil : les autres ne la voient pas.</p>
     <div class="actions"><button id="pfClose" class="btn" type="button">Fermer</button></div>
@@ -1050,7 +1051,7 @@ function startSession(o) {
       usedS.add(s.s); usedT.add(s.t);
       const me = s.p === o.online.me;
       const nk = s.nick || 'Pilote', code = nk.normalize('NFD').replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase() || 'P' + (6 - s.s);
-      const c = makeCar(T, s.s, { ...TEAMS[s.t], motif: cleanMotif(s.m), code: me ? 'VOUS' : code, name: me ? 'Vous' : nk }, me, 0, 0);
+      const c = makeCar(T, s.s, { ...TEAMS[s.t], motif: cleanMotif(s.m), trail: cleanTrail(s.tr), code: me ? 'VOUS' : code, name: me ? 'Vous' : nk }, me, 0, 0);
       if (me) G.player = c; else { c.remote = true; c.auto = false; c.peer = s.p; c.by = s.by; }
       G.cars.push(c);
     }
@@ -1064,7 +1065,7 @@ function startSession(o) {
     }
     G.online = { host: o.online.host, lastPub: 0 };
   } else {
-    const team = o.team || 0, me = { ...TEAMS[team], motif: ui.motif, code: 'VOUS', name: 'Vous' };
+    const team = o.team || 0, me = { ...TEAMS[team], motif: ui.motif, trail: ui.trail, code: 'VOUS', name: 'Vous' };
     if (o.mode === 'tt') G.cars.push(G.player = makeCar(T, 0, me, true, 0, 0));
     else {
       const others = TEAMS.filter((_, i) => i !== team);
@@ -1601,16 +1602,64 @@ const MOTIFS = (() => {
   ];
 })();
 const MOTIF_IDS = MOTIFS.map(m => m[0]);
+const TRAILS = (() => {
+  const off = (q, back, lat) => [q[0] - Math.cos(q[2]) * back - Math.sin(q[2]) * lat, q[1] - Math.sin(q[2]) * back + Math.cos(q[2]) * lat]; // a point behind / beside the car
+  const ribbon = (g, pts, back, lat, w, col, k) => { // a band that fades and thins toward the oldest position
+    g.lineCap = 'round';
+    for (let i = 0; i < pts.length - 1; i++) { const t = i / (pts.length - 1), a = off(pts[i], back, lat), b = off(pts[i + 1], back, lat);
+      g.globalAlpha = k * (1 - t) ** 2; g.strokeStyle = col; g.lineWidth = w * (1 - t * .7); g.beginPath(); g.moveTo(...a); g.lineTo(...b); g.stroke(); }
+    g.globalAlpha = 1; };
+  const along = (pts, t) => pts[Math.min(pts.length - 1, Math.round(t * (pts.length - 1)))];
+  return [
+    ['none', L('Aucun', 'None'), () => {}],
+    ['trail', L('Traînée', 'Trail'), (g, pts, d, k) => { for (const s of [-1, 1]) ribbon(g, pts, 15, s * 9.5, 3.4, d.color, k); }],
+    ['fire', L('Feu', 'Fire'), (g, pts, d, k) => {
+      for (let j = 0; j < 30; j++) { const t = Math.random(), q = along(pts, t * .45), [x, y] = off(q, 20 + Math.random() * 4, (Math.random() - .5) * (2 + t * 10));
+        g.globalAlpha = k * (1 - t) * .9; g.fillStyle = t < .25 ? '#fff1a8' : t < .55 ? '#ffb21e' : t < .8 ? '#ff6a1a' : '#9a1c10'; disc(g, x, y, (1 - t) * 3.4 + .6); }
+      const q = pts[0], f = 10 + Math.random() * 6; g.globalAlpha = k; g.save(); g.translate(q[0], q[1]); g.rotate(q[2]); g.fillStyle = '#ffe36b';
+      for (const s of [-1, 1]) { g.beginPath(); g.moveTo(-19, s * 1.6); g.quadraticCurveTo(-19 - f * .5, s * 3, -19 - f, s * .6); g.quadraticCurveTo(-19 - f * .5, s * .6, -19, 0); g.fill(); }
+      g.restore(); g.globalAlpha = 1; }],
+    ['volt', L('Électrique', 'Electric'), (g, pts, d, k) => {
+      g.lineJoin = 'miter'; g.lineCap = 'round';
+      for (let b = 0; b < 3; b++) { const path = pts.map((q, i) => off(q, 19, (b - 1) * 5 + (Math.random() - .5) * 9 * (1 + i / pts.length)));
+        for (const [w, col, a] of [[3.2, '#3fa8ff', .25], [1.4, '#7cc8ff', .7], [.5, '#ffffff', .95]]) {
+          g.strokeStyle = col; g.lineWidth = w;
+          for (let i = 0; i < path.length - 1; i += 2) { g.globalAlpha = k * a * (1 - i / path.length); g.beginPath(); g.moveTo(...path[i]); g.lineTo(...path[Math.min(i + 2, path.length - 1)]); g.stroke(); } } }
+      g.globalAlpha = 1; }],
+    ['glow', L('Néon', 'Neon'), (g, pts, d, k) => { for (const [w, a] of [[9, .12], [5, .25], [2.2, .7]]) for (const s of [-1, 1]) ribbon(g, pts, 15, s * 9.5, w, d.color, k * a);
+      for (const s of [-1, 1]) ribbon(g, pts, 15, s * 9.5, .7, '#ffffff', k); }],
+    ['rainbow', L('Arc-en-ciel', 'Rainbow'), (g, pts, d, k) => ['#ff3b3b', '#ff9a1e', '#ffe14a', '#3ed16a', '#36a9ff', '#5b5cff', '#b34cff'].forEach((c, i) => ribbon(g, pts, 18, -6.3 + i * 2.1, 2.2, c, k))],
+    ['sparks', L('Étincelles dorées', 'Golden sparks'), (g, pts, d, k) => {
+      for (let j = 0; j < 60; j++) { const t = Math.random() ** 1.3, [x, y] = off(along(pts, t), 19, (Math.random() - .5) * (6 + t * 30));
+        g.globalAlpha = k * (1 - t * .85); g.fillStyle = Math.random() < .5 ? '#f1c22e' : '#ffe9a0'; disc(g, x, y, (1 - t) * 1.3 + .25); }
+      g.globalAlpha = 1; }],
+    ['ghost', L('Fantôme', 'Ghost'), (g, pts, d, k) => { // see-through copies of the car along its path
+      const drv = { ...d, trail: 'none' }, a0 = g.globalAlpha;
+      for (const [i, a] of [[8, .32], [16, .14]]) { const q = pts[i]; if (!q) continue; g.globalAlpha = a0 * k * a; drawCar({ x: q[0], y: q[1], a: q[2], steer: 0, drv }, g); }
+      g.globalAlpha = a0; }],
+  ];
+})();
+const TRAIL_IDS = TRAILS.map(t => t[0]);
+const cleanTrail = t => TRAIL_IDS.includes(t) ? t : 'none';
+function drawTrail(c, g = ctx) { // the chosen effect shows above about 200 km/h, fading in with speed
+  const id = c.drv.trail; if (!id || id === 'none' || c.wreck > 0 || c.out) { c.hist = null; return; }
+  const sp = Math.hypot(c.vx, c.vy), h = c.hist || (c.hist = []);
+  if (G.state !== 'paused') { h.unshift([c.x, c.y, c.a]); if (h.length > 24) h.length = 24; }
+  const k = clamp((sp / MAXV - .5) / .25, 0, 1);
+  if (k > 0 && h.length > 3) TRAILS.find(t => t[0] === id)[2](g, h, c.drv, k);
+}
 // ---------- Driver level: every finished race gives XP, levels never end, motifs unlock on the way ----------
 const XP_KEY = 'monoplace-gp.xp';
 let XP = Math.max(0, Math.floor(+store.get(XP_KEY) || 0));
 const xpNeed = n => 100 + 20 * (n - 1); // XP to go from level n to n + 1
 function levelOf(xp) { let n = 1; while (xp >= xpNeed(n)) { xp -= xpNeed(n); n++; } return [n, xp, xpNeed(n)]; }
 // One unlock track: the 8 extra colours and the 10 motifs take turns, further and further apart.
-const MOTIF_LEVEL = { classic: 1, stripe: 4, twin: 8, split: 13, sash: 19, fade: 26, bolt: 34, tiger: 43, camo: 54, flames: 60, neon: 70, tribal: 100 };
-const COLOR_LEVEL = [1, 1, 1, 1, 1, 1, 2, 48, 10, 16, 6, 30, 38, 22]; // by TEAMS index: the first six are free
+const MOTIF_LEVEL = { classic: 1, stripe: 4, twin: 8, split: 16, sash: 22, fade: 31, bolt: 43, tiger: 47, camo: 59, flames: 71, neon: 76, tribal: 88 };
+const COLOR_LEVEL = [1, 1, 1, 1, 1, 1, 2, 67, 13, 19, 6, 39, 55, 28]; // by TEAMS index: the first six are free
+const TRAIL_LEVEL = { none: 1, trail: 10, fire: 25, volt: 35, glow: 51, rainbow: 63, sparks: 81, ghost: 100 };
 const colorOpen = i => levelOf(XP)[0] >= (COLOR_LEVEL[i] || 1);
 const motifOpen = id => levelOf(XP)[0] >= (MOTIF_LEVEL[id] || 1);
+const trailOpen = id => levelOf(XP)[0] >= (TRAIL_LEVEL[id] || 1);
 const POS_XP = [1, .8, .65, .5, .4, .3]; // share of the race's XP by finishing place
 // One race: bots < online < ranked; harder bots and longer races give more; a championship round gives a quarter more.
 function raceBase() {
@@ -1630,7 +1679,7 @@ function giveXp(pos) {
   add = Math.round(add + bonus);
   const before = levelOf(XP)[0]; XP += add; store.set(XP_KEY, XP);
   const after = levelOf(XP)[0], fresh = l => l > before && l <= after;
-  const opened = [...MOTIFS.filter(m => fresh(MOTIF_LEVEL[m[0]])).map(m => L('motif ', 'livery ') + m[1]), ...TEAMS.filter((t, i) => fresh(COLOR_LEVEL[i])).map(t => L('couleur ', 'colour ') + t.name.toLowerCase())];
+  const opened = [...MOTIFS.filter(m => fresh(MOTIF_LEVEL[m[0]])).map(m => L('motif ', 'livery ') + m[1]), ...TEAMS.filter((t, i) => fresh(COLOR_LEVEL[i])).map(t => L('couleur ', 'colour ') + t.name.toLowerCase()), ...TRAILS.filter(t => fresh(TRAIL_LEVEL[t[0]])).map(t => L('effet ', 'effect ') + t[1])];
   G.xp = { add, bonus: Math.round(bonus), before, after, opened };
   if (hub) hub.share();
   if (after > before) { toast(L('Niveau ', 'Level ') + after + ' !', 'p'); sfxChime([659, 784, 1047]); }
@@ -1638,6 +1687,7 @@ function giveXp(pos) {
 }
 const cleanMotif = m => MOTIF_IDS.includes(m) ? m : 'classic';
 const myMotif = m => motifOpen(cleanMotif(m)) ? cleanMotif(m) : 'classic';
+const myTrail = t => trailOpen(cleanTrail(t)) ? cleanTrail(t) : 'none';
 const LIVERY = new Map(); // motif + colours → painted canvas, so a car costs one drawImage per frame
 function livery(d) {
   const key = d.motif + d.color + d.alt + d.helmet;
@@ -1727,6 +1777,7 @@ function render(dt) {
     ctx.globalAlpha = 1;
     if (gh.label) { ctx.font = '700 15px "Barlow Semi Condensed", sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(244,245,247,.85)'; ctx.fillText(gh.label, gx, gy - 30); }
   }
+  for (const c of G.cars) if (c.drv.trail) drawTrail(c);
   for (const c of G.cars) if (c.x > x0 - 40 && c.x < x1 + 40 && c.y > y0 - 40 && c.y < y1 + 40) drawCar(c);
   if (G.sc && !G.sc.gone) {
     const sc = G.sc, blink = (performance.now() / 250 | 0) % 2;
@@ -1895,12 +1946,18 @@ function hud(dt) {
 }
 
 // ---------- Home, setup and track list ----------
-const ui = { mode: 'race', tid: 'lac', laps: 3, diff: 'normal', weather: 'dry', team: (t => colorOpen(t) ? t : 0)(Math.min(TEAMS.length - 1, Math.max(0, store.get('monoplace-gp.team') | 0))), champ: null, sort: 'pop', friends: false, motif: myMotif(store.get('monoplace-gp.motif')) };
+const ui = { mode: 'race', tid: 'lac', laps: 3, diff: 'normal', weather: 'dry', team: (t => colorOpen(t) ? t : 0)(Math.min(TEAMS.length - 1, Math.max(0, store.get('monoplace-gp.team') | 0))), champ: null, sort: 'pop', friends: false, motif: myMotif(store.get('monoplace-gp.motif')), trail: myTrail(store.get('monoplace-gp.trail')) };
 const MODE_NAMES = { race: 'Grand Prix', champ: L('Championnat', 'Championship'), tt: L('Chrono', 'Time Trial') };
 const recTxt = id => { const r = records[id]; return r ? 'Record <b>' + fmt(r.lap) + '</b>' : 'Pas encore de record'; };
 
 $('motifs').innerHTML = [...MOTIFS].sort((a, b) => MOTIF_LEVEL[a[0]] - MOTIF_LEVEL[b[0]]).map(([id, name]) => '<button type="button" data-k="motif" data-v="' + id + '"><canvas width="96" height="56" aria-hidden="true"></canvas><span>' + name + '</span><small></small></button>').join('');
-function drawMotifs() { // previews in the chosen colour; locked colours and motifs show the level they open at
+$('trails').innerHTML = [...TRAILS].sort((a, b) => TRAIL_LEVEL[a[0]] - TRAIL_LEVEL[b[0]]).map(([id, name]) => '<button type="button" data-k="trail" data-v="' + id + '"><canvas width="120" height="56" aria-hidden="true"></canvas><span>' + name + '</span><small></small></button>').join('');
+function drawMotifs() {
+  document.querySelectorAll('#trails button').forEach(b => { const cv = b.firstChild, g = cv.getContext('2d'), id = b.dataset.v, open = trailOpen(id);
+    g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, cv.width, cv.height); g.setTransform(1.3, 0, 0, 1.3, 92, 28);
+    const pts = Array.from({ length: 24 }, (_, i) => [-i * 3.6, 0, 0]), drv = { ...TEAMS[ui.team], motif: ui.motif, trail: id };
+    TRAILS.find(t => t[0] === id)[2](g, pts, drv, 1); drawCar({ x: 0, y: 0, a: 0, steer: 0, drv }, g);
+    b.disabled = !open; b.lastChild.textContent = open ? '' : '🔒 ' + L('Niveau ', 'Level ') + TRAIL_LEVEL[id]; }); // previews in the chosen colour; locked colours and motifs show the level they open at
   document.querySelectorAll('#teams button').forEach(b => { const i = +b.dataset.v, open = colorOpen(i); b.disabled = !open; b.textContent = open ? '' : COLOR_LEVEL[i];
     b.title = TEAMS[i].name + (open ? '' : ' · ' + L('niveau ', 'level ') + COLOR_LEVEL[i]); });
   document.querySelectorAll('#motifs button').forEach(b => { const cv = b.firstChild, g = cv.getContext('2d'), open = motifOpen(b.dataset.v); g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, cv.width, cv.height);
@@ -2065,6 +2122,7 @@ document.querySelectorAll('[data-k]').forEach(b => b.addEventListener('click', (
   ui[k] = k === 'laps' || k === 'team' ? +v : v;
   if (k === 'team') store.set('monoplace-gp.team', ui.team);
   if (k === 'motif') store.set('monoplace-gp.motif', ui.motif);
+  if (k === 'trail') store.set('monoplace-gp.trail', ui.trail);
   refreshSetup();
 }));
 
@@ -2421,7 +2479,7 @@ async function hostGame(pub, fixed, rankedWanted) {
   try { net.room = await ROOM.join(name, { host: true }); }
   catch (e) { if (e && e.code === 'taken' && fixed) { NET = null; return false; } lobbyFail(NETMSG[e && e.code] || 'Impossible de créer la partie pour le moment. Réessayez dans un instant.', e && e.code); return true; }
   if (NET !== net) { net.room.leave().catch(() => {}); return true; }
-  net.room.presence({ role: 'host', team: ui.team, motif: ui.motif, nick: myNick(), game: net.cfg, ...(ROOM.p2p ? { rk: rankShare(), lv: lvShare() } : {}) }).catch(() => {});
+  net.room.presence({ role: 'host', team: ui.team, motif: ui.motif, trail: ui.trail, nick: myNick(), game: net.cfg, ...(ROOM.p2p ? { rk: rankShare(), lv: lvShare() } : {}) }).catch(() => {});
   ROOM.presence({ st: 'host', g: name, open: pub, ranked, n: 1 }).catch(() => {});
   if (!pub) location.hash = 'partie-' + code;
   hubGame();
@@ -2436,7 +2494,7 @@ async function joinGame(name, probe) {
   try { net.room = await (probe && ROOM.p2p ? ROOM.join(name, { wait: 12000 }) : ROOM.join(name)); }
   catch (e) { lastJoinErr = e && e.code; if (probe) { NET = null; return false; } lobbyFail(lastJoinErr === 'not_found' ? 'Cette partie n’existe plus, ou le code est faux : vérifiez-le auprès de votre ami.' : NETMSG[lastJoinErr] || 'Impossible de rejoindre cette partie.', lastJoinErr); return false; }
   if (NET !== net) { net.room.leave().catch(() => {}); return false; }
-  net.room.presence({ role: 'guest', team: ui.team, motif: ui.motif, nick: myNick(), ...(ROOM.p2p ? { rk: rankShare(), lv: lvShare() } : {}) }).catch(() => {});
+  net.room.presence({ role: 'guest', team: ui.team, motif: ui.motif, trail: ui.trail, nick: myNick(), ...(ROOM.p2p ? { rk: rankShare(), lv: lvShare() } : {}) }).catch(() => {});
   ROOM.presence({ st: 'play', g: name, open: null, n: null }).catch(() => {});
   if (probe) { // a public slot: stay only if its game is still waiting for players
     let host = null;
@@ -2577,7 +2635,7 @@ function hostStart() {
     let t = clamp(p.presence.team | 0, 0, TEAMS.length - 1);
     if (usedT.has(t)) t = TEAMS.findIndex((_, x) => !usedT.has(x));
     usedT.add(t);
-    return { p: p.peer, by: typeof p.by === 'string' ? p.by : null, nick: cleanNick(p.presence.nick), t, m: cleanMotif(p.presence.motif), s: i + botT.filter(b => b < qTime(p)).length };
+    return { p: p.peer, by: typeof p.by === 'string' ? p.by : null, nick: cleanNick(p.presence.nick), t, m: cleanMotif(p.presence.motif), tr: cleanTrail(p.presence.trail), s: i + botT.filter(b => b < qTime(p)).length };
   });
   net.cfg = { ...net.cfg, state: 'go', seq: Date.now() % 1e9, slots }; net.qAt = 0;
   net.closed = true; hubGame();
@@ -2630,7 +2688,7 @@ function startOnline(g) {
   stopLobbyTick();
   const T = trackFromPayload(g.track), me = selfPeer(NET.room);
   const slots = (Array.isArray(g.slots) ? g.slots : []).filter(s => s && typeof s.p === 'string' && Number.isInteger(s.s) && s.s >= 0 && s.s < 6)
-    .map(s => ({ p: s.p, by: typeof s.by === 'string' ? s.by : null, nick: cleanNick(s.nick), s: s.s, t: clamp(s.t | 0, 0, TEAMS.length - 1), m: cleanMotif(s.m) })).slice(0, 6);
+    .map(s => ({ p: s.p, by: typeof s.by === 'string' ? s.by : null, nick: cleanNick(s.nick), s: s.s, t: clamp(s.t | 0, 0, TEAMS.length - 1), m: cleanMotif(s.m), tr: cleanTrail(s.tr) })).slice(0, 6);
   if (!T || !slots.some(s => s.p === me)) return lobbyFail('Cette course ne peut pas être chargée.');
   startSession({ mode: 'race', T, laps: [3, 5, 10].includes(g.laps) ? g.laps : 3, diff: DIFF[g.diff] ? g.diff : 'normal', rain: g.rain === true,
     hold: clamp(+g.hold || 1, 0.4, 1.5), team: 0, online: { slots, me, host: NET.host, ranked: g.ranked === true } });
@@ -3424,7 +3482,7 @@ const EN = new Map([
 ["Avec les joueurs qui cherchent une partie. Les places libres sont prises par des bots.", "With players looking for a game. Empty places go to bots."],
 ["6 vrais joueurs, un tour de qualification, puis 5 tours. Points au classement.", "6 real players, a qualifying lap, then 5 laps. Ranking points."],
 ["Entre amis", "With friends"], ["Créez une partie et donnez le code à vos amis.", "Create a game and give the code to your friends."], ["Choisir comment jouer", "Choose how to play"], ["Créer la partie entre amis", "Create the game with friends"], ["Créer le championnat entre amis", "Create the championship with friends"],
-["Plus d’options", "More options"], ["Comment jouer", "How to play"], ["Couleur de votre voiture", "Your car colour"], ["Motif", "Livery"],
+["Plus d’options", "More options"], ["Comment jouer", "How to play"], ["Couleur de votre voiture", "Your car colour"], ["Motif", "Livery"], ["Effet de vitesse", "Speed effect"],
 ["L’hôte peut lancer une nouvelle course : restez ici pour rejouer ensemble.", "The host can start a new race: stay here to play again together."], ["Rejouer ensemble", "Play again together"],
 ["Donnez ce code à vos amis : ils le tapent dans « Rejoindre avec un code » sur l’écran d’accueil.", "Give this code to your friends: they type it in “Join with a code” on the home screen."],
 ["Plein écran", "Full screen"], ["Quitter le plein écran", "Exit full screen"], ["Affichage", "Display"],
