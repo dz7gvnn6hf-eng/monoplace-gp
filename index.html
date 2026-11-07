@@ -1654,9 +1654,9 @@ let XP = Math.max(0, Math.floor(+store.get(XP_KEY) || 0));
 const xpNeed = n => 100 + 20 * (n - 1); // XP to go from level n to n + 1
 function levelOf(xp) { let n = 1; while (xp >= xpNeed(n)) { xp -= xpNeed(n); n++; } return [n, xp, xpNeed(n)]; }
 // One unlock track: the 8 extra colours and the 10 motifs take turns, further and further apart.
-const MOTIF_LEVEL = { classic: 1, stripe: 4, twin: 8, split: 16, sash: 22, fade: 31, bolt: 43, tiger: 47, camo: 59, flames: 71, neon: 76, tribal: 88 };
-const COLOR_LEVEL = [1, 1, 1, 1, 1, 1, 2, 67, 13, 19, 6, 39, 55, 28]; // by TEAMS index: the first six are free
-const TRAIL_LEVEL = { none: 1, trail: 10, fire: 25, volt: 35, glow: 51, rainbow: 63, sparks: 81, ghost: 100 };
+const MOTIF_LEVEL = { classic: 1, stripe: 3, twin: 5, split: 8, sash: 10, fade: 13, bolt: 16, tiger: 17, camo: 20, flames: 23, neon: 24, tribal: 26 };
+const COLOR_LEVEL = [1, 1, 1, 1, 1, 1, 2, 22, 7, 9, 4, 15, 19, 12]; // by TEAMS index: the first six are free
+const TRAIL_LEVEL = { none: 1, trail: 6, fire: 11, volt: 14, glow: 18, rainbow: 21, sparks: 25, ghost: 27 };
 const colorOpen = i => levelOf(XP)[0] >= (COLOR_LEVEL[i] || 1);
 const motifOpen = id => levelOf(XP)[0] >= (MOTIF_LEVEL[id] || 1);
 const trailOpen = id => levelOf(XP)[0] >= (TRAIL_LEVEL[id] || 1);
