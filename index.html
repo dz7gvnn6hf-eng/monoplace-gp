@@ -212,6 +212,9 @@ h1 span{color:var(--red)}
 .lvl .bar{height:10px;background:var(--panel-hi)}
 .lvl .bar i{display:block;height:100%;background:var(--yellow)}
 .lvl span{font-size:14px;color:var(--muted);font-variant-numeric:tabular-nums}
+.wl{display:flex;align-items:center;gap:8px;min-width:0}
+.wl > span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.wl .lvlb{margin-left:0;flex:none}
 .lvlb{margin-left:8px;padding:2px 6px;background:var(--yellow);color:var(--ink);font:800 13px/1 var(--f-display)}
 .xpline{margin:0;color:var(--muted)}
 .xpline b{color:var(--yellow);font-weight:700}
@@ -552,7 +555,7 @@ label.btn{cursor:pointer;display:inline-block}
       <p class="lbl">6 vrais pilotes, qualifs puis 5 tours, sans bots</p>
       <div class="tblwrap">
         <table class="res">
-          <thead><tr><th>Pos</th><th>Pilote</th><th class="r">Niv.</th><th class="r">Points</th><th class="r">Courses</th><th class="r">Victoires</th></tr></thead>
+          <thead><tr><th>Pos</th><th>Pilote</th><th class="r">Points</th><th class="r">Courses</th><th class="r">Victoires</th></tr></thead>
           <tbody id="rkBody"></tbody>
         </table>
       </div>
@@ -568,7 +571,7 @@ label.btn{cursor:pointer;display:inline-block}
     <div class="grp" id="rkLevels" hidden>
       <div class="tblwrap">
         <table class="res">
-          <thead><tr><th>Pos</th><th>Pilote</th><th class="r">Niveau</th><th class="r">XP</th></tr></thead>
+          <thead><tr><th>Pos</th><th>Pilote</th><th class="r">XP</th></tr></thead>
           <tbody id="lvBody"></tbody>
         </table>
       </div>
@@ -2811,8 +2814,8 @@ async function renderRanking() {
   if (tok !== rkTok) return;
   $('rkBody').replaceChildren(...rows.map((r, i) => {
     const tr = document.createElement('tr'); tr.className = r.me ? 'me' : '';
-    [i + 1, r.me ? 'Vous' : (DB ? ps[r.id] && ps[r.id].name : r.name) || 'Pilote', (DB ? null : lvOf(r.id)) || '—', r.p, r.r, r.w].forEach((v, k) => {
-      const td = document.createElement('td'); td.className = k === 0 ? 'num' : k === 1 ? '' : 'r num'; td.textContent = v; tr.append(td);
+    [i + 1, r.me ? 'Vous' : (DB ? ps[r.id] && ps[r.id].name : r.name) || 'Pilote', r.p, r.r, r.w].forEach((v, k) => {
+      const td = document.createElement('td'); td.className = k === 0 ? 'num' : k === 1 ? '' : 'r num'; if (k === 1) nameWithLevel(td, v, r.id); else td.textContent = v; tr.append(td);
     });
     return tr;
   }));
@@ -2838,12 +2841,16 @@ function lvMerge(list) {
 }
 const lvOf = id => id === PID ? levelOf(XP)[0] : lvLocal[id] ? levelOf(lvLocal[id].x)[0] : null; // null: never met
 const lvBadge = id => { const n = DB ? null : lvOf(id); if (!n) return null; const b = document.createElement('span'); b.className = 'lvlb'; b.textContent = L('Niv. ', 'Lv ') + n; return b; };
+function nameWithLevel(box, name, id) { // the name (cut with … if long) and the yellow level badge right after it
+  const t = document.createElement('span'); t.textContent = name; box.classList.add('wl'); box.replaceChildren(t);
+  const b = lvBadge(id); if (b) box.append(b);
+}
 function renderLevels() {
   lvMine();
   const rows = Object.entries(lvLocal).map(([id, e]) => ({ id, me: id === PID, name: id === PID ? myNick() : e.n, x: e.x })).sort((a, b) => b.x - a.x).slice(0, 100);
   $('lvBody').replaceChildren(...rows.map((r, i) => {
     const tr = document.createElement('tr'); tr.className = r.me ? 'me' : '';
-    [i + 1, r.me ? 'Vous' : r.name || 'Pilote', levelOf(r.x)[0], r.x].forEach((v, k) => { const td = document.createElement('td'); td.className = k === 0 ? 'num' : k === 1 ? '' : 'r num'; td.textContent = v; tr.append(td); });
+    [i + 1, r.me ? 'Vous' : r.name || 'Pilote', r.x].forEach((v, k) => { const td = document.createElement('td'); td.className = k === 0 ? 'num' : k === 1 ? '' : 'r num'; if (k === 1) nameWithLevel(td, v, r.id); else td.textContent = v; tr.append(td); });
     return tr;
   }));
   $('lvNote').textContent = 'L’XP vient des courses sur les circuits officiels. Les niveaux se transmettent entre les joueurs qui se retrouvent en ligne.';
@@ -2894,9 +2901,8 @@ async function renderLaps() {
     li.className = r.me ? 'me' : '';
     p.className = 'p'; p.textContent = i + 1;
     c.className = 'c'; c.style.background = /^#[0-9a-f]{6}$/i.test(r.c || '') ? r.c : 'var(--muted)';
-    n.className = 'n'; n.textContent = r.me ? 'Vous' : (DB ? ps[r.id] && ps[r.id].name : r.name) || 'Pilote';
+    n.className = 'n'; nameWithLevel(n, r.me ? 'Vous' : (DB ? ps[r.id] && ps[r.id].name : r.name) || 'Pilote', r.id);
     t.className = 't'; t.textContent = fmt(r.t);
-    const lb = lvBadge(r.id); if (lb) t.prepend(lb);
     li.append(p, c, n, t); return li;
   }));
   $('lapNote').textContent = rows.length ? 'Le meilleur tour de chaque joueur sur ce circuit, en Chrono ou en course. Le vôtre y est ajouté automatiquement.' + (DB ? '' : ' Les temps se transmettent entre les joueurs qui se retrouvent en ligne.')
