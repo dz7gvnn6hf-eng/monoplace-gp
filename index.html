@@ -1601,6 +1601,7 @@ function raceBase() {
 }
 function giveXp(pos) {
   if (G.xp || G.attract || G.mode !== 'race' || G.quali) return;
+  if (!OFFICIAL_IDS.has(G.T.def.id)) { G.xp = { none: true }; return; } // player-made circuits could be made tiny to farm XP
   let add = pos >= 1 && pos <= 6 ? raceBase() * POS_XP[pos - 1] : 0, bonus = 0; // a retired car gets nothing
   const nc = G.netChamp, lastSolo = G.champ && !G.online && ui.champ && ui.champ.round === DEFS.length - 1, lastNet = nc && nc.round === DEFS.length - 1;
   if (lastSolo || lastNet) { // end of a championship: a bonus by final standing
@@ -1795,7 +1796,8 @@ function renderResults() {
   $('resRank').hidden = $('resRankBtn').hidden = !G.ranked;
   if (G.ranked) $('resRank').textContent = G.rankPts != null ? 'Partie classée : +' + G.rankPts + ' points au classement.' : 'Partie classée : vos points sont comptés quand vous franchissez la ligne.';
   $('resXp').hidden = !G.xp;
-  if (G.xp) { const x = G.xp, [n, have, need] = levelOf(XP);
+  if (G.xp && G.xp.none) $('resXp').textContent = txt('Pas d’XP sur les circuits créés par les joueurs : seuls les circuits officiels en donnent.', 'No XP on player-made circuits: only official circuits give XP.');
+  else if (G.xp) { const x = G.xp, [n, have, need] = levelOf(XP);
     $('resXp').innerHTML = '<b>+' + x.add + ' XP</b>' + (x.bonus ? ' <span>' + txt('dont ', 'incl. ') + x.bonus + txt(' de bonus championnat', ' championship bonus') + '</span>' : '') +
       ' · ' + (x.after > x.before ? '<b class="up">' + txt('Niveau ', 'Level ') + n + ' !</b>' : txt('Niveau ', 'Level ') + n + ' · ' + have + ' / ' + need + ' XP') +
       (x.opened.length ? '<br>' + txt('Débloqué : ', 'Unlocked: ') + esc(x.opened.join(', ')) : ''); }
