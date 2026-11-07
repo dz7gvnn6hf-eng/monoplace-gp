@@ -201,6 +201,10 @@ h1 span{color:var(--red)}
 .swatches{display:flex;flex-wrap:wrap;gap:8px;background:var(--panel-hi);padding:7px}
 .swatches button{width:30px;height:30px;box-shadow:inset 0 0 0 2px rgba(0,0,0,.3)}
 .swatches button[aria-pressed="true"]{outline:2px solid var(--fg);outline-offset:2px}
+.motifs{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:6px;background:var(--panel-hi);padding:6px}
+.motifs button{display:grid;justify-items:center;gap:2px;padding:4px 2px 6px;font:600 13px/1.1 var(--f-body);color:var(--muted);text-align:center}
+.motifs canvas{width:96px;height:56px;max-width:100%}
+.motifs button[aria-pressed="true"]{background:var(--panel-sel);color:var(--fg);box-shadow:inset 0 0 0 1px var(--fg)}
 .board{list-style:none;margin:0;padding:0;display:grid;gap:2px}
 .board li{display:grid;grid-template-columns:22px 4px minmax(0,1fr) auto;gap:8px;align-items:center;padding:7px 10px;background:var(--panel-hi);font-size:14px}
 .board li.me{box-shadow:inset 0 0 0 1px var(--fg)}
@@ -503,6 +507,7 @@ label.btn{cursor:pointer;display:inline-block}
       </div>
     </div>
     <div class="grp"><p class="lbl">Couleur de votre voiture</p><div class="swatches" id="teams"></div></div>
+    <div class="grp"><p class="lbl">Motif</p><div class="motifs" id="motifs"></div></div>
     <label class="grp"><span class="lbl">Pseudo</span><input id="nick" class="input" maxlength="20" autocomplete="off" spellcheck="false"></label>
     <p class="note">Votre pseudo s’affiche pour les autres joueurs en ligne. Votre photo reste sur cet appareil : les autres ne la voient pas.</p>
     <div class="actions"><button id="pfClose" class="btn" type="button">Fermer</button></div>
@@ -1021,7 +1026,7 @@ function startSession(o) {
       usedS.add(s.s); usedT.add(s.t);
       const me = s.p === o.online.me;
       const nk = s.nick || 'Pilote', code = nk.normalize('NFD').replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase() || 'P' + (6 - s.s);
-      const c = makeCar(T, s.s, { ...TEAMS[s.t], code: me ? 'VOUS' : code, name: me ? 'Vous' : nk }, me, 0, 0);
+      const c = makeCar(T, s.s, { ...TEAMS[s.t], motif: cleanMotif(s.m), code: me ? 'VOUS' : code, name: me ? 'Vous' : nk }, me, 0, 0);
       if (me) G.player = c; else { c.remote = true; c.auto = false; c.peer = s.p; c.by = s.by; }
       G.cars.push(c);
     }
@@ -1035,7 +1040,7 @@ function startSession(o) {
     }
     G.online = { host: o.online.host, lastPub: 0 };
   } else {
-    const team = o.team || 0, me = { ...TEAMS[team], code: 'VOUS', name: 'Vous' };
+    const team = o.team || 0, me = { ...TEAMS[team], motif: ui.motif, code: 'VOUS', name: 'Vous' };
     if (o.mode === 'tt') G.cars.push(G.player = makeCar(T, 0, me, true, 0, 0));
     else {
       const others = TEAMS.filter((_, i) => i !== team);
@@ -1506,6 +1511,74 @@ function drawPit(T) {
 // Body outline [x, y, how far a hit pushes it in]; the nose also crumples.
 const BODY = [[22, 0, 0], [15, -2.5, .3], [6, -3.5, .3], [2, -7, .35], [-4, -7, .55], [-11, -7, .3], [-17, -3.5, .2], [-19, -3.5, 0],
   [-19, 3.5, 0], [-17, 3.5, .2], [-11, 7, .3], [-4, 7, .55], [2, 7, .35], [6, 3.5, .3], [15, 2.5, .3]];
+// ---------- Liveries: a motif painted in the car's colours (body, second colour, helmet colour) ----------
+const MOTIFS = (() => {
+  const halfW = x => { const pts = BODY.slice(0, 8).map(([px, py]) => [px, -py]); // body half width at x, from the outline
+    for (let i = 0; i < pts.length - 1; i++) { const [x0, y0] = pts[i], [x1, y1] = pts[i + 1]; if (x <= x0 && x >= x1) return x0 === x1 ? Math.max(y0, y1) : y0 + (y1 - y0) * (x - x0) / (x1 - x0); }
+    return 0; };
+  const poly = (g, pts) => { g.beginPath(); pts.forEach(([x, y]) => g.lineTo(x, y)); g.closePath(); g.fill(); };
+  const rect = (g, c, x, y, w, h) => { g.fillStyle = c; g.fillRect(x, y, w, h); };
+  const mix = (h, t, k) => '#' + [1, 3, 5].map(i => Math.round(parseInt(h.slice(i, i + 2), 16) * (1 - k) + t * k).toString(16).padStart(2, '0')).join('');
+  return [
+    ['classic', L('Classique', 'Classic'), (g, d) => rect(g, d.alt, -16, -1.3, 13, 2.6)],
+    ['stripe', L('Bande centrale', 'Centre stripe'), (g, d) => { rect(g, d.alt, -20, -2.3, 44, 4.6); rect(g, d.helmet, -20, -3.1, 44, .8); rect(g, d.helmet, -20, 2.3, 44, .8); }],
+    ['twin', L('Double bande', 'Twin stripes'), (g, d) => { rect(g, d.alt, -20, -4, 44, 1.6); rect(g, d.alt, -20, 2.4, 44, 1.6); }],
+    ['split', L('Bicolore', 'Two-tone'), (g, d) => { g.fillStyle = d.alt; poly(g, [[-20, -8], [1, -8], [-5, 8], [-20, 8]]); rect(g, d.helmet, -20, -.6, 44, 1.2); }],
+    ['tiger', L('Tigre', 'Tiger'), (g, d) => { // tapered stripes coming in from both edges, long and short in turn
+      g.fillStyle = d.alt;
+      [20, 16.8, 13.6, 10.4, 7.2, 4, .5, -3, -6.5, -10, -13.5, -16.8].forEach((x, k) => {
+        for (const s of [-1, 1]) { const off = ((k * 7 + (s > 0 ? 3 : 0)) % 5 - 2) * .22, x0 = x + off, h = halfW(x0), len = h * ((k + (s > 0)) % 2 ? .45 : .72), w = Math.max(.45, h * .16);
+          g.beginPath(); g.moveTo(x0 + w, s * (h + 1)); g.quadraticCurveTo(x0 + .2, s * (h - len * .55), x0 - 1.4 - h * .12, s * (h - len));
+          g.quadraticCurveTo(x0 - w - .6, s * (h - len * .45), x0 - w, s * (h + 1)); g.closePath(); g.fill(); } }); }],
+    ['fade', L('Dégradé', 'Fade'), (g, d) => { const gr = g.createLinearGradient(22, 0, -19, 0); gr.addColorStop(0, d.color); gr.addColorStop(.35, d.color); gr.addColorStop(1, '#0b0c0f');
+      g.fillStyle = gr; g.fillRect(-20, -8, 44, 16); rect(g, d.alt, 8, -.7, 14, 1.4); }],
+    ['flames', L('Flammes', 'Flames'), g => { // hot-rod flames: solid at the nose, the back edge breaks into tongues
+      const flame = () => { g.beginPath(); g.moveTo(24, 0);
+        for (const s of [-1, 1]) {
+          const Y = y => s * y, seg = s < 0 ? [['b', 14, 3.6, 2, 8.6, -15, 6.4], ['q', -7, 5.6, -3, 4.2], ['q', -8, 4.2, -12, 2.8], ['q', -5, 2, 1, 1.6], ['q', -4, 1.6, -8, 0]]
+            : [['q', -4, 1.6, 1, 1.6], ['q', -5, 2, -12, 2.8], ['q', -8, 4.2, -3, 4.2], ['q', -7, 5.6, -15, 6.4], ['b', 2, 8.6, 14, 3.6, 24, 0]];
+          for (const [k, ...v] of seg) k === 'b' ? g.bezierCurveTo(v[0], Y(v[1]), v[2], Y(v[3]), v[4], Y(v[5])) : g.quadraticCurveTo(v[0], Y(v[1]), v[2], Y(v[3]));
+        }
+        g.closePath(); };
+      const gr = g.createLinearGradient(24, 0, -15, 0); gr.addColorStop(0, '#fff3b0'); gr.addColorStop(.3, '#ffc21e'); gr.addColorStop(.62, '#ff7a1a'); gr.addColorStop(1, '#d42a18');
+      flame(); g.fillStyle = gr; g.fill(); g.strokeStyle = '#f4f5f7'; g.lineWidth = .5; g.stroke();
+      g.save(); g.translate(10, 0); g.scale(.6, .62); flame(); g.fillStyle = 'rgba(255,240,160,.6)'; g.fill(); g.restore(); }],
+    ['bolt', L('Éclair', 'Lightning'), (g, d) => { const bolt = [[17, .2], [2, -4.6], [3, -1], [-17, -5.6], [5.5, 5.4], [4.5, 1.6], [17, 4.4]];
+      g.fillStyle = d.helmet; poly(g, bolt.map(([x, y]) => [x + .8, y + .8])); g.fillStyle = d.alt; poly(g, bolt); }],
+    ['sash', L('Écharpe', 'Sash'), (g, d) => { g.fillStyle = d.alt; poly(g, [[9, -8], [14, -8], [-1, 8], [-6, 8]]); g.fillStyle = d.helmet; poly(g, [[14.5, -8], [16, -8], [1, 8], [-.5, 8]]); }],
+    ['camo', L('Camouflage', 'Camouflage'), (g, d) => { // layers of soft blobs in shades of the body colour, then a fine grain
+      let seed = 11; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+      const blob = (cx, cy, r, col) => { const n = 9, pts = [];
+        for (let k = 0; k < n; k++) { const a = k / n * Math.PI * 2, rr = r * (.55 + rnd() * .7); pts.push([cx + Math.cos(a) * rr * 1.6, cy + Math.sin(a) * rr]); }
+        const mid = k => [(pts[k][0] + pts[(k + 1) % n][0]) / 2, (pts[k][1] + pts[(k + 1) % n][1]) / 2];
+        g.fillStyle = col; g.beginPath(); g.moveTo(...mid(n - 1)); for (let k = 0; k < n; k++) g.quadraticCurveTo(...pts[k], ...mid(k)); g.fill(); };
+      for (const [count, r0, r1, col] of [[14, 2, 3.2, mix(d.color, 225, .4)], [18, 1.4, 2.4, mix(d.color, 0, .4)], [20, .9, 1.7, mix(d.color, 0, .72)], [26, .35, .8, mix(d.color, 120, .5)]])
+        for (let i = 0; i < count; i++) blob(-20 + rnd() * 44, -8 + rnd() * 16, r0 + rnd() * (r1 - r0), col);
+      for (let i = 0; i < 260; i++) { g.fillStyle = rnd() < .5 ? 'rgba(0,0,0,.22)' : 'rgba(255,255,255,.14)'; g.fillRect(-20 + rnd() * 44, -8 + rnd() * 16, .22, .22); } }],
+    ['neon', L('Néon', 'Neon'), (g, d) => { // dark body, glowing lines in the body colour (the second colour when the body is dark)
+      const glow = parseInt(d.color.slice(1, 3), 16) + parseInt(d.color.slice(3, 5), 16) + parseInt(d.color.slice(5, 7), 16) < 180 ? d.alt : d.color;
+      g.fillStyle = 'rgba(10,12,16,.93)'; g.fillRect(-20, -8, 45, 16);
+      const paths = () => { g.beginPath(); BODY.forEach(([x, y], k) => (k ? g.lineTo : g.moveTo).call(g, x * .93 - .2, y * .78)); g.closePath();
+        g.moveTo(21, 0); g.lineTo(6, 0); g.moveTo(-6, 0); g.lineTo(-18, 0);
+        for (const s of [-1, 1]) { g.moveTo(3, s * 5.6); g.lineTo(-9, s * 5.6); g.lineTo(-14, s * 2.4); } };
+      for (const [w, a, col] of [[2.4, .14, glow], [1.3, .3, glow], [.55, 1, glow], [.2, .9, '#ffffff']]) { g.globalAlpha = a; g.strokeStyle = col; g.lineWidth = w; g.lineJoin = 'round'; paths(); g.stroke(); }
+      g.globalAlpha = 1; }],
+  ];
+})();
+const MOTIF_IDS = MOTIFS.map(m => m[0]);
+const cleanMotif = m => MOTIF_IDS.includes(m) ? m : 'classic';
+const LIVERY = new Map(); // motif + colours → painted canvas, so a car costs one drawImage per frame
+function livery(d) {
+  const key = d.motif + d.color + d.alt + d.helmet;
+  let cv = LIVERY.get(key);
+  if (!cv) {
+    const S = 6; cv = document.createElement('canvas'); cv.width = 45 * S; cv.height = 18 * S;
+    const g = cv.getContext('2d'); g.scale(S, S); g.translate(20, 9); MOTIFS.find(m => m[0] === d.motif)[2](g, d);
+    LIVERY.set(key, cv);
+  }
+  return cv;
+}
+
 function drawCar(c, g = ctx) {
   const d = c.drv, dm = c.dmg || 0, wreck = c.wreck > 0, s = c.pull > 0 ? 1 : -1, k = clamp((dm - 0.15) / 0.6, 0, 1); // s: the side that took the hits
   g.save(); g.translate(c.x + 4, c.y + 5); g.rotate(c.a); g.fillStyle = 'rgba(0,0,0,.3)'; g.fillRect(-22, -11, 44, 22); g.restore();
@@ -1520,14 +1593,15 @@ function drawCar(c, g = ctx) {
     if (dm > 0.6) { g.save(); g.translate(-20.5, 0); g.rotate(s * 0.35); g.fillRect(-2.5, -10, 5, 20); g.restore(); } else g.fillRect(-23, -10, 5, 20);
   }
   if (!wreck && dm <= 0.5) { if (dm > 0.3) g.fillRect(19, s > 0 ? -11 : 0, 4, 11); else g.fillRect(19, -11, 4, 22); } // front wing: half gone, then all of it
-  g.fillStyle = wreck ? '#2a2a2d' : d.color; g.beginPath();
-  for (const [px, py, w] of BODY) g.lineTo(px > 20 ? px - 3 * k : px, px > 20 ? s * 1.5 * k : py * s > 0 ? py * (1 - w * k) : py);
-  g.closePath(); g.fill();
+  const body = () => { g.beginPath(); for (const [px, py, w] of BODY) g.lineTo(px > 20 ? px - 3 * k : px, px > 20 ? s * 1.5 * k : py * s > 0 ? py * (1 - w * k) : py); g.closePath(); };
+  g.fillStyle = wreck ? '#2a2a2d' : d.color; body(); g.fill();
+  const lv = !wreck && d.motif && d.motif !== 'classic' ? livery(d) : null;
+  if (lv) { g.save(); body(); g.clip(); g.drawImage(lv, -20, -9, 45, 18); g.restore(); }
   if (k > 0.25 || wreck) { // exposed carbon and scratches on the hit side
     g.fillStyle = 'rgba(12,12,15,.6)'; g.beginPath(); g.ellipse(-4, s * 3.6, 4 + 3 * k, 1.2 + 1.4 * k, 0, 0, 7); g.fill();
     g.strokeStyle = 'rgba(12,12,15,.55)'; g.lineWidth = 0.8; g.beginPath(); g.moveTo(10, s * 1); g.lineTo(5, s * 2.6); g.moveTo(-9, s * 1.5); g.lineTo(-14, s * 2.2); g.stroke();
   }
-  if (!wreck) { g.fillStyle = d.alt; g.fillRect(-16, -1.3, 13, 2.6); }
+  if (!wreck && !lv) { g.fillStyle = d.alt; g.fillRect(-16, -1.3, 13, 2.6); }
   g.fillStyle = '#0b0c0f'; g.beginPath(); g.ellipse(0, 0, 4.6, 3, 0, 0, 7); g.fill();
   if (!wreck) { g.fillStyle = d.helmet; disc(g, -0.6, 0, 2.3); }
   if (wreck || dm > 0.85) { // flames from the engine
@@ -1744,10 +1818,15 @@ function hud(dt) {
 }
 
 // ---------- Home, setup and track list ----------
-const ui = { mode: 'race', tid: 'lac', laps: 3, diff: 'normal', weather: 'dry', team: Math.min(TEAMS.length - 1, Math.max(0, store.get('monoplace-gp.team') | 0)), champ: null, quali: '1', sort: 'pop', friends: false };
+const ui = { mode: 'race', tid: 'lac', laps: 3, diff: 'normal', weather: 'dry', team: Math.min(TEAMS.length - 1, Math.max(0, store.get('monoplace-gp.team') | 0)), champ: null, quali: '1', sort: 'pop', friends: false, motif: cleanMotif(store.get('monoplace-gp.motif')) };
 const MODE_NAMES = { race: 'Grand Prix', champ: L('Championnat', 'Championship'), tt: L('Chrono', 'Time Trial') };
 const recTxt = id => { const r = records[id]; return r ? 'Record <b>' + fmt(r.lap) + '</b>' : 'Pas encore de record'; };
 
+$('motifs').innerHTML = MOTIFS.map(([id, name]) => '<button type="button" data-k="motif" data-v="' + id + '"><canvas width="96" height="56" aria-hidden="true"></canvas><span>' + name + '</span></button>').join('');
+function drawMotifs() { // previews in the chosen colour
+  document.querySelectorAll('#motifs button').forEach(b => { const cv = b.firstChild, g = cv.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, cv.width, cv.height);
+    g.setTransform(1.75, 0, 0, 1.75, 46, 28); drawCar({ x: 0, y: 0, a: 0, steer: 0, drv: { ...TEAMS[ui.team], motif: b.dataset.v } }, g); });
+}
 $('teams').innerHTML = TEAMS.map((t, i) => '<button type="button" data-k="team" data-v="' + i + '" aria-label="Écurie ' + t.name + '" title="' + t.name + '" style="background:' + t.color + '"></button>').join('');
 $('rounds').innerHTML = DEFS.map((d, i) => '<li><span class="n">' + (i + 1) + '</span><span>' + esc(d.name) + '</span></li>').join('');
 
@@ -1870,6 +1949,7 @@ $('trackSearch').addEventListener('input', renderTrackList);
 
 function refreshSetup() {
   document.querySelectorAll('[data-k]').forEach(b => b.setAttribute('aria-pressed', String(ui[b.dataset.k]) === b.dataset.v));
+  drawMotifs();
   if (!findDef(ui.tid)) ui.tid = 'lac';
   const mode = ui.mode, champ = mode === 'champ', def = findDef(ui.tid), r = records[ui.tid];
   $('setupTitle').textContent = MODE_NAMES[mode];
@@ -1903,6 +1983,7 @@ document.querySelectorAll('[data-k]').forEach(b => b.addEventListener('click', (
   const k = b.dataset.k, v = b.dataset.v;
   ui[k] = k === 'laps' || k === 'team' ? +v : v;
   if (k === 'team') store.set('monoplace-gp.team', ui.team);
+  if (k === 'motif') store.set('monoplace-gp.motif', ui.motif);
   refreshSetup();
 }));
 
@@ -2122,7 +2203,7 @@ const isPlayerPeer = p => p.kind === 'viewer' && (p.presence.role === 'host' || 
 // A game is a star: the host owns the PeerJS id of the game's name and relays everyone's presence to every guest.
 // It mimics the parts of the room capability the game uses (peers, presence, join, leave).
 const P2P_PREFIX = 'monoplace-gp-v1-'; // the names every version so far has used: old and new pages still find each other
-const VERSION = 34; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
+const VERSION = 35; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
 // Relay for players whose networks refuse direct connections: turn.js, next to the page, holds the owner's own TURN account.
 const RELAY = window.TURN_CONFIG && TURN_CONFIG.username && TURN_CONFIG.credential ? TURN_CONFIG : null;
 const PEER_OPTS = RELAY ? { debug: 0, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, RELAY] } } : { debug: 0 };
@@ -2259,7 +2340,7 @@ async function hostGame(pub, fixed, rankedWanted) {
   try { net.room = await ROOM.join(name, { host: true }); }
   catch (e) { if (e && e.code === 'taken' && fixed) { NET = null; return false; } lobbyFail(NETMSG[e && e.code] || 'Impossible de créer la partie pour le moment. Réessayez dans un instant.', e && e.code); return true; }
   if (NET !== net) { net.room.leave().catch(() => {}); return true; }
-  net.room.presence({ role: 'host', team: ui.team, nick: myNick(), game: net.cfg, ...(ROOM.p2p ? { rk: rankShare() } : {}) }).catch(() => {});
+  net.room.presence({ role: 'host', team: ui.team, motif: ui.motif, nick: myNick(), game: net.cfg, ...(ROOM.p2p ? { rk: rankShare() } : {}) }).catch(() => {});
   ROOM.presence({ st: 'host', g: name, open: pub, ranked, n: 1 }).catch(() => {});
   if (!pub) location.hash = 'partie-' + code;
   hubGame();
@@ -2274,7 +2355,7 @@ async function joinGame(name, probe) {
   try { net.room = await (probe && ROOM.p2p ? ROOM.join(name, { wait: 12000 }) : ROOM.join(name)); }
   catch (e) { lastJoinErr = e && e.code; if (probe) { NET = null; return false; } lobbyFail(lastJoinErr === 'not_found' ? 'Cette partie n’existe plus, ou le code est faux : vérifiez-le auprès de votre ami.' : NETMSG[lastJoinErr] || 'Impossible de rejoindre cette partie.', lastJoinErr); return false; }
   if (NET !== net) { net.room.leave().catch(() => {}); return false; }
-  net.room.presence({ role: 'guest', team: ui.team, nick: myNick(), ...(ROOM.p2p ? { rk: rankShare() } : {}) }).catch(() => {});
+  net.room.presence({ role: 'guest', team: ui.team, motif: ui.motif, nick: myNick(), ...(ROOM.p2p ? { rk: rankShare() } : {}) }).catch(() => {});
   ROOM.presence({ st: 'play', g: name, open: null, n: null }).catch(() => {});
   if (probe) { // a public slot: stay only if its game is still waiting for players
     let host = null;
@@ -2412,7 +2493,7 @@ function hostStart() {
     let t = clamp(p.presence.team | 0, 0, TEAMS.length - 1);
     if (usedT.has(t)) t = TEAMS.findIndex((_, x) => !usedT.has(x));
     usedT.add(t);
-    return { p: p.peer, by: typeof p.by === 'string' ? p.by : null, nick: cleanNick(p.presence.nick), t, s: net.ranked ? i : 5 - i };
+    return { p: p.peer, by: typeof p.by === 'string' ? p.by : null, nick: cleanNick(p.presence.nick), t, m: cleanMotif(p.presence.motif), s: net.ranked ? i : 5 - i };
   });
   net.cfg = { ...net.cfg, state: 'go', seq: Date.now() % 1e9, slots };
   net.closed = true; hubGame();
@@ -2465,7 +2546,7 @@ function startOnline(g) {
   stopLobbyTick();
   const T = trackFromPayload(g.track), me = selfPeer(NET.room);
   const slots = (Array.isArray(g.slots) ? g.slots : []).filter(s => s && typeof s.p === 'string' && Number.isInteger(s.s) && s.s >= 0 && s.s < 6)
-    .map(s => ({ p: s.p, by: typeof s.by === 'string' ? s.by : null, nick: cleanNick(s.nick), s: s.s, t: clamp(s.t | 0, 0, TEAMS.length - 1) })).slice(0, 6);
+    .map(s => ({ p: s.p, by: typeof s.by === 'string' ? s.by : null, nick: cleanNick(s.nick), s: s.s, t: clamp(s.t | 0, 0, TEAMS.length - 1), m: cleanMotif(s.m) })).slice(0, 6);
   if (!T || !slots.some(s => s.p === me)) return lobbyFail('Cette course ne peut pas être chargée.');
   startSession({ mode: 'race', T, laps: [3, 5, 10].includes(g.laps) ? g.laps : 3, diff: DIFF[g.diff] ? g.diff : 'normal', rain: g.rain === true,
     hold: clamp(+g.hold || 1, 0.4, 1.5), team: 0, online: { slots, me, host: NET.host, ranked: g.ranked === true } });
@@ -3219,7 +3300,7 @@ const EN = new Map([
 ["Avec les joueurs qui cherchent une partie. Les places libres sont prises par des bots.", "With players looking for a game. Empty places go to bots."],
 ["6 vrais joueurs, un tour de qualification, puis 5 tours. Points au classement.", "6 real players, a qualifying lap, then 5 laps. Ranking points."],
 ["Entre amis", "With friends"], ["Créez une partie et donnez le code à vos amis.", "Create a game and give the code to your friends."], ["Choisir comment jouer", "Choose how to play"], ["Créer la partie entre amis", "Create the game with friends"], ["Créer le championnat entre amis", "Create the championship with friends"],
-["Plus d’options", "More options"], ["Comment jouer", "How to play"], ["Couleur de votre voiture", "Your car colour"],
+["Plus d’options", "More options"], ["Comment jouer", "How to play"], ["Couleur de votre voiture", "Your car colour"], ["Motif", "Livery"],
 ["L’hôte peut lancer une nouvelle course : restez ici pour rejouer ensemble.", "The host can start a new race: stay here to play again together."], ["Rejouer ensemble", "Play again together"],
 ["Donnez ce code à vos amis : ils le tapent dans « Rejoindre avec un code » sur l’écran d’accueil.", "Give this code to your friends: they type it in “Join with a code” on the home screen."],
 ["Plein écran", "Full screen"], ["Quitter le plein écran", "Exit full screen"], ["Affichage", "Display"],
