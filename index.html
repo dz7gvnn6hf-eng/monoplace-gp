@@ -525,6 +525,7 @@ label.btn{cursor:pointer;display:inline-block}
     <div class="grp"><p class="lbl">Effet de vitesse</p><div class="motifs" id="trails"></div></div>
     <label class="grp"><span class="lbl">Pseudo</span><input id="nick" class="input" maxlength="20" autocomplete="off" spellcheck="false"></label>
     <p class="note">Votre pseudo s’affiche pour les autres joueurs en ligne. Votre photo reste sur cet appareil : les autres ne la voient pas.</p>
+    <div class="grp" id="cgAcc" hidden><p class="lbl">Compte CrazyGames</p><p class="note" id="cgAccTxt"></p><div class="actions"><button id="cgLogin" class="btn" type="button" hidden>Se connecter</button></div></div>
     <div class="actions"><button id="pfClose" class="btn" type="button">Fermer</button></div>
   </div>
 </section>
@@ -690,7 +691,26 @@ const rng = s => () => { s |= 0; s = s + 0x6D2B79F5 | 0; let t = Math.imul(s ^ s
 const hashId = s => { let h = 7; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return Math.abs(h); };
 const CODE_ABC = 'abcdefghjkmnpqrstuvwxyz23456789';
 const randCode = n => Array.from(crypto.getRandomValues(new Uint8Array(n)), b => CODE_ABC[b % CODE_ABC.length]).join('');
-const store = { get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* storage blocked: kept for this visit only */ } }, del(k) { try { localStorage.removeItem(k); } catch (e) { /* ignore */ } } };
+// On CrazyGames, progress is kept in the SDK's data module: it follows the player's account on every device (a guest's stays on this device and joins the account at sign-in).
+// The module holds 1 MB at most, so ghosts and the cache of other players' circuits stay in this device's storage. If the module is off, everything falls back to local storage.
+const cgData = () => { try { return window.MGP_PORTAL === 'crazygames' && window.CrazyGames && window.CrazyGames.SDK && window.CrazyGames.SDK.data || null; } catch (e) { return null; } };
+const localOnly = k => k.startsWith('monoplace-gp.ghost2.') || k === 'monoplace-gp.gallery';
+const store = {
+  get(k) {
+    const d = !localOnly(k) && cgData();
+    if (d) { try { const v = d.getItem(k); return v == null ? null : JSON.parse(v); } catch (e) { /* module off or unreadable: local storage below */ } }
+    try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; }
+  },
+  set(k, v) {
+    const d = !localOnly(k) && cgData(), j = JSON.stringify(v);
+    if (d) { try { d.setItem(k, j); return; } catch (e) { /* module off or full: local storage below */ } }
+    try { localStorage.setItem(k, j); } catch (e) { /* storage blocked: kept for this visit only */ }
+  },
+  del(k) {
+    const d = !localOnly(k) && cgData();
+    if (d) { try { d.removeItem(k); return; } catch (e) { /* local storage below */ } }
+    try { localStorage.removeItem(k); } catch (e) { /* ignore */ }
+  } };
 const LANG = store.get('monoplace-gp.lang') === 'fr' ? 'fr' : 'en', L = (fr, en) => LANG === 'en' ? en : fr;
 const txt = L; // same, for places where L is the race leader
 
@@ -2243,6 +2263,9 @@ function cgSettings(st) {
 function cgUser(u) { // a signed-in CrazyGames player plays under their username, so friends recognise each other
   const name = u && cleanNick(u.username);
   $('nick').disabled = !!name;
+  $('cgAcc').hidden = false; $('cgLogin').hidden = !!name;
+  $('cgAccTxt').textContent = name ? L('Connecté : votre niveau, vos déblocages, vos records et vos circuits sont sauvegardés sur votre compte, sur tous vos appareils.', 'Signed in: your level, unlocks, records and circuits are saved on your account, on all your devices.')
+    : L('Connectez-vous à CrazyGames pour garder votre progression sur tous vos appareils. Sans compte, elle reste sur cet appareil.', 'Sign in to CrazyGames to keep your progress on all your devices. Without an account it stays on this device.');
   if (!name) return;
   $('nick').value = name; store.set('monoplace-gp.nick', name); refreshProfile(); if (hub) hub.share();
 }
@@ -2260,7 +2283,7 @@ async function cgInit() {
   if (sdk.environment !== 'crazygames' && sdk.environment !== 'local') return;
   CG = sdk;
   cgSettings(sdk.game.settings); sdk.game.addSettingsChangeListener(cgSettings);
-  if (sdk.user.isUserAccountAvailable) { sdk.user.getUser().then(cgUser, () => {}); sdk.user.addAuthListener(cgUser); }
+  if (sdk.user.isUserAccountAvailable) { sdk.user.getUser().then(cgUser, () => cgUser(null)); sdk.user.addAuthListener(cgUser); $('cgLogin').addEventListener('click', () => { try { Promise.resolve(sdk.user.showAuthPrompt()).catch(() => {}); } catch (e) { /* prompt unavailable */ } }); }
   sdk.game.addJoinRoomListener(cgJoin);
   if (sdk.game.inviteParams) cgJoin(sdk.game.inviteParams);
   else if (sdk.game.isInstantMultiplayer && ROOM && !NET) { ui.mode = 'race'; hostGame(false); } // a party leader goes straight into a new private game
@@ -2405,7 +2428,7 @@ const isPlayerPeer = p => p.kind === 'viewer' && (p.presence.role === 'host' || 
 // A game is a star: the host owns the PeerJS id of the game's name and relays everyone's presence to every guest.
 // It mimics the parts of the room capability the game uses (peers, presence, join, leave).
 const P2P_PREFIX = 'monoplace-gp-v1-'; // the names every version so far has used: old and new pages still find each other
-const VERSION = 44; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
+const VERSION = 45; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
 // Relay for players whose networks refuse direct connections: turn.js, next to the page, holds the owner's own TURN account.
 const RELAY = window.TURN_CONFIG && TURN_CONFIG.username && TURN_CONFIG.credential ? TURN_CONFIG : null;
 const PEER_OPTS = RELAY ? { debug: 0, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, RELAY] } } : { debug: 0 };
@@ -3425,6 +3448,7 @@ $('delAcc').addEventListener('click', async () => {
   if (!$('delAcc').dataset.armed) return delArm(true);
   $('delAcc').disabled = true;
   if (DB && ME) await Promise.allSettled(['laps', 'ghosts', 'votes', 'ranked', 'circuits'].map(c => DB.doc(c + '/' + ME).delete()));
+  const cd = cgData(); if (cd) { try { cd.clear(); } catch (e) { /* module off */ } }
   try { for (const key of Object.keys(localStorage)) if (key.startsWith('monoplace-gp.')) localStorage.removeItem(key); } catch (e) { /* storage blocked: nothing kept anyway */ }
   location.reload();
 });
@@ -3558,6 +3582,9 @@ if (matchMedia('(pointer: coarse)').matches) document.body.classList.add('touch'
 // ---------- Language: English unless the player picked French ----------
 // Texts are written in French; this dictionary turns every text the page shows into English as it appears.
 const EN = new Map([
+["Compte CrazyGames", "CrazyGames account"], ["Se connecter", "Sign in"],
+["Connecté : votre niveau, vos déblocages, vos records et vos circuits sont sauvegardés sur votre compte, sur tous vos appareils.", "Signed in: your level, unlocks, records and circuits are saved on your account, on all your devices."],
+["Connectez-vous à CrazyGames pour garder votre progression sur tous vos appareils. Sans compte, elle reste sur cet appareil.", "Sign in to CrazyGames to keep your progress on all your devices. Without an account it stays on this device."],
 ["Faux départ · +5 s", "False start · +5 s"], ["Faux départ · +5 s sur ce tour", "False start · +5 s on this lap"], ["N’accélérez pas avant l’extinction des feux", "Don’t accelerate before the lights go out"],
 ["Faux départ : n’accélérez pas quand les cinq feux sont allumés, attendez qu’ils s’éteignent, sinon +5 s.", "False start: don’t accelerate while the five lights are on, wait for them to go out, or it’s +5 s."],
 ["Comment voulez-vous jouer ?", "How do you want to play?"], ["Contre les bots", "Against bots"], ["Choisissez le circuit, les tours et le niveau des bots.", "Choose the circuit, the laps and how good the bots are."],
