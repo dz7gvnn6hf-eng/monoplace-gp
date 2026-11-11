@@ -1620,15 +1620,15 @@ const MOTIFS = (() => {
 const MOTIF_IDS = MOTIFS.map(m => m[0]);
 const TRAILS = (() => {
   const off = (q, back, lat) => [q[0] - Math.cos(q[2]) * back - Math.sin(q[2]) * lat, q[1] - Math.sin(q[2]) * back + Math.cos(q[2]) * lat]; // a point behind / beside the car
-  const ribbon = (g, pts, back, lat, w, col, k) => { // a band that fades and thins toward the oldest position
+  const ribbon = (g, pts, back, lat, w, col, k, pow = 2, taper = .7) => { // a band that fades and thins toward the oldest position
     g.lineCap = 'round';
     for (let i = 0; i < pts.length - 1; i++) { const t = i / (pts.length - 1), a = off(pts[i], back, lat), b = off(pts[i + 1], back, lat);
-      g.globalAlpha = k * (1 - t) ** 2; g.strokeStyle = col; g.lineWidth = w * (1 - t * .7); g.beginPath(); g.moveTo(...a); g.lineTo(...b); g.stroke(); }
+      g.globalAlpha = k * (1 - t) ** pow; g.strokeStyle = col; g.lineWidth = w * (1 - t * taper); g.beginPath(); g.moveTo(...a); g.lineTo(...b); g.stroke(); }
     g.globalAlpha = 1; };
   const along = (pts, t) => pts[Math.min(pts.length - 1, Math.round(t * (pts.length - 1)))];
   return [
     ['none', L('Aucun', 'None'), () => {}],
-    ['trail', L('Traînée', 'Trail'), (g, pts, d, k) => { for (const s of [-1, 1]) ribbon(g, pts, 15, s * 9.5, 3.4, d.color, k); }],
+    ['trail', L('Traînée', 'Trail'), (g, pts, d, k) => { for (const s of [-1, 1]) ribbon(g, pts.slice(0, 15), 15, s * 9.5, 3.2, d.color, k * .8, 3.6, .95); }], // short, and gone before the end
     ['fire', L('Feu', 'Fire'), (g, pts, d, k) => {
       for (let j = 0; j < 30; j++) { const t = Math.random(), q = along(pts, t * .45), [x, y] = off(q, 20 + Math.random() * 4, (Math.random() - .5) * (2 + t * 10));
         g.globalAlpha = k * (1 - t) * .9; g.fillStyle = t < .25 ? '#fff1a8' : t < .55 ? '#ffb21e' : t < .8 ? '#ff6a1a' : '#9a1c10'; disc(g, x, y, (1 - t) * 3.4 + .6); }
@@ -2358,7 +2358,7 @@ const isPlayerPeer = p => p.kind === 'viewer' && (p.presence.role === 'host' || 
 // A game is a star: the host owns the PeerJS id of the game's name and relays everyone's presence to every guest.
 // It mimics the parts of the room capability the game uses (peers, presence, join, leave).
 const P2P_PREFIX = 'monoplace-gp-v1-'; // the names every version so far has used: old and new pages still find each other
-const VERSION = 39; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
+const VERSION = 40; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
 // Relay for players whose networks refuse direct connections: turn.js, next to the page, holds the owner's own TURN account.
 const RELAY = window.TURN_CONFIG && TURN_CONFIG.username && TURN_CONFIG.credential ? TURN_CONFIG : null;
 const PEER_OPTS = RELAY ? { debug: 0, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, RELAY] } } : { debug: 0 };
