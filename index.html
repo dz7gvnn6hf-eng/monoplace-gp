@@ -1239,10 +1239,15 @@ function scStep() {
 }
 
 // A car driven by another player: glide towards the last position they sent, extrapolated by their speed.
+// Another player's car between two messages: keep it moving along its last speed, but only for a moment
+// (a late message must not send it through the walls), slide toward where it really is, and turn it smoothly.
 function netStep(c) {
   if (!c.netOk) return;
-  c.tx += c.vx * H; c.ty += c.vy * H;
-  c.x += c.vx * H + (c.tx - c.x) * 0.12; c.y += c.vy * H + (c.ty - c.y) * 0.12;
+  c.netAge = (c.netAge || 0) + H;
+  const ext = clamp(1 - (c.netAge - 0.15) / 0.35, 0, 1);
+  c.tx += c.vx * H * ext; c.ty += c.vy * H * ext;
+  c.x += c.vx * H * ext + (c.tx - c.x) * 0.06; c.y += c.vy * H * ext + (c.ty - c.y) * 0.06;
+  if (c.ta != null) c.a += wrapA(c.ta - c.a) * 0.18;
 }
 
 function physics(c) {
@@ -1654,9 +1659,9 @@ let XP = Math.max(0, Math.floor(+store.get(XP_KEY) || 0));
 const xpNeed = n => 100 + 20 * (n - 1); // XP to go from level n to n + 1
 function levelOf(xp) { let n = 1; while (xp >= xpNeed(n)) { xp -= xpNeed(n); n++; } return [n, xp, xpNeed(n)]; }
 // One unlock track: the 8 extra colours and the 10 motifs take turns, further and further apart.
-const MOTIF_LEVEL = { classic: 1, stripe: 4, twin: 6, split: 9, sash: 11, fade: 14, bolt: 17, tiger: 18, camo: 21, flames: 24, neon: 25, tribal: 27 };
-const COLOR_LEVEL = [1, 1, 1, 1, 1, 1, 3, 23, 8, 10, 5, 16, 20, 13]; // by TEAMS index: the first six are free
-const TRAIL_LEVEL = { none: 1, trail: 7, fire: 12, volt: 15, glow: 19, rainbow: 22, sparks: 26, ghost: 28 };
+const MOTIF_LEVEL = { classic: 1, stripe: 3, twin: 5, split: 8, sash: 10, fade: 13, bolt: 16, tiger: 17, camo: 20, flames: 23, neon: 24, tribal: 26 };
+const COLOR_LEVEL = [1, 1, 1, 1, 1, 1, 2, 22, 7, 9, 4, 15, 19, 12]; // by TEAMS index: the first six are free
+const TRAIL_LEVEL = { none: 1, trail: 6, fire: 11, volt: 14, glow: 18, rainbow: 21, sparks: 25, ghost: 27 };
 const colorOpen = i => levelOf(XP)[0] >= (COLOR_LEVEL[i] || 1);
 const motifOpen = id => levelOf(XP)[0] >= (MOTIF_LEVEL[id] || 1);
 const trailOpen = id => levelOf(XP)[0] >= (TRAIL_LEVEL[id] || 1);
@@ -2342,7 +2347,7 @@ const isPlayerPeer = p => p.kind === 'viewer' && (p.presence.role === 'host' || 
 // A game is a star: the host owns the PeerJS id of the game's name and relays everyone's presence to every guest.
 // It mimics the parts of the room capability the game uses (peers, presence, join, leave).
 const P2P_PREFIX = 'monoplace-gp-v1-'; // the names every version so far has used: old and new pages still find each other
-const VERSION = 36; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
+const VERSION = 37; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
 // Relay for players whose networks refuse direct connections: turn.js, next to the page, holds the owner's own TURN account.
 const RELAY = window.TURN_CONFIG && TURN_CONFIG.username && TURN_CONFIG.credential ? TURN_CONFIG : null;
 const PEER_OPTS = RELAY ? { debug: 0, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, RELAY] } } : { debug: 0 };
@@ -2719,12 +2724,12 @@ function netPublish() {
 function applyNet(c, a, o) {
   if (a.length < o + 13) return;
   const v = i => { const n = a[o + i]; return Number.isFinite(n) ? n : 0; };
-  c.tx = v(0); c.ty = v(1); c.a = v(2); c.vx = clamp(v(3), -900, 900); c.vy = clamp(v(4), -900, 900); c.steer = clamp(v(5), -1, 1);
+  c.tx = v(0); c.ty = v(1); c.ta = v(2); c.netAge = 0; c.vx = clamp(v(3), -900, 900); c.vy = clamp(v(4), -900, 900); c.steer = clamp(v(5), -1, 1);
   c.dist = v(6); c.lap = v(7) | 0; c.best = v(10) || null; c.pitted = !!v(11); c.pen = v(12);
   if (v(8) && !c.fin) { c.fin = true; c.finT = v(9); c.finLap = c.lap; G.leaderDone = true; }
   if (a.length >= o + 16) { const w = v(15) > 0; c.dmg = clamp(v(13), 0, 1); c.pull = v(14) > 0 ? 1 : -1; if (w && !(c.wreck > 0)) boom(c); c.wreck = w ? 1 : 0; }
   if (a.length >= o + 17 && v(16) > 0) c.out = true; // pages from before damage was shared send 13
-  if (!c.netOk || Math.hypot(c.tx - c.x, c.ty - c.y) > 80) { c.x = c.tx; c.y = c.ty; c.netOk = true; }
+  if (!c.netOk || Math.hypot(c.tx - c.x, c.ty - c.y) > 300) { c.x = c.tx; c.y = c.ty; c.a = c.ta; c.netOk = true; } // only a real jump (reset after a crash) is shown as one
 }
 function netSync(dt) {
   if (!NET || !NET.room) return;
