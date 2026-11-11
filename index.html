@@ -729,8 +729,15 @@ const DEFS = [
   { id: 'cretes', name: L('Col des Crêtes', 'Ridge Pass'), blurb: 'Lacets techniques à flanc de montagne et grande courbe rapide au retour.',
     theme: { out: '#5e5038', run: '#9a8a5c', stripe: '#938356', wall: '#26231f', dash: '#f1c22e', asph: '#3b3d42', deco: 'rocks', d1: '#4b402c', d2: '#7a6d4f' },
     verts: [[0,0,300],[3200,0,200],[3200,700,170],[1800,700,170],[1800,1150,170],[3200,1150,200],[3200,1900,300],[200,1900,350],[700,1100,250],[-200,500,300]] },
+  { id: 'dunes', name: L('Piste des Dunes', 'Dune Run'), blurb: 'Grandes lignes droites dans le désert, avec un détour serré qui casse la vitesse.',
+    theme: { out: '#c9a86a', run: '#dcc08a', stripe: '#d4b87f', wall: '#5b4a33', dash: '#e8392a', asph: '#4a4640', deco: 'rocks', d1: '#a88a52', d2: '#c4a46a' },
+    verts: [[0,0,450],[3600,0,600],[3800,1800,400],[2800,1900,200],[2500,1300,200],[1700,1300,250],[1500,2300,350],[200,2400,500],[-400,1200,450]] },
+  { id: 'neige', name: L('Col Blanc', 'Snow Pass'), blurb: 'Virages techniques dans la neige, avec des épingles qui s’enchaînent.',
+    theme: { out: '#dfe8f0', run: '#f4f8fb', stripe: '#e8eff5', wall: '#7b8794', dash: '#3a7bd5', asph: '#3b4450', deco: 'trees', d1: '#274638', d2: '#3a6a54' },
+    verts: [[0,0,350],[2800,0,300],[3300,700,250],[2500,1100,200],[3300,1500,220],[2700,2100,300],[1200,2100,250],[900,1500,170],[400,1800,170],[-100,1200,300],[-300,500,300]] },
 ];
 const OFFICIAL_IDS = new Set(DEFS.map(d => d.id));
+const CHAMP = DEFS.slice(0, 4); // the championship stays at the four original circuits
 
 // Fillet each corner with a tangent arc, then sample the loop every ~DS px.
 function sampleTrack(verts) {
@@ -1751,7 +1758,7 @@ function giveXp(pos) {
   if (G.xp || G.attract || G.mode !== 'race' || G.quali) return;
   if (!OFFICIAL_IDS.has(G.T.def.id)) { G.xp = { none: true }; return; } // player-made circuits could be made tiny to farm XP
   let add = pos >= 1 && pos <= 6 ? raceBase() * POS_XP[pos - 1] : 0, bonus = 0; // a retired car gets nothing
-  const nc = G.netChamp, lastSolo = G.champ && !G.online && ui.champ && ui.champ.round === DEFS.length - 1, lastNet = nc && nc.round === DEFS.length - 1;
+  const nc = G.netChamp, lastSolo = G.champ && !G.online && ui.champ && ui.champ.round === CHAMP.length - 1, lastNet = nc && nc.round === CHAMP.length - 1;
   if (lastSolo || lastNet) { // end of a championship: a bonus by final standing
     const rows = lastNet ? netChampRows() : champRows(), fp = rows.findIndex(r => lastNet ? r.me : r.c.isPlayer) + 1;
     bonus = fp >= 1 && fp <= 6 ? raceBase() * 1.5 * POS_XP[fp - 1] : 0;
@@ -1943,7 +1950,7 @@ function renderResults() {
     if (c.pen) t += ' <span class="pen">(pén. +' + c.pen + ' s)</span>';
     return row(c.isPlayer ? 'me' : '', [['num', i + 1], ['', chip(c.drv)], ['r num', t], ['r num' + (c.best === fast ? ' fl' : ''), fmt(c.best)]]);
   }).join('');
-  const nc = G.netChamp, lastNet = nc && nc.round === DEFS.length - 1;
+  const nc = G.netChamp, lastNet = nc && nc.round === CHAMP.length - 1;
   $('champBox').hidden = !G.champ && !nc;
   $('againBtn').hidden = !!G.online && !G.online.host;
   $('resNet').hidden = !G.online || G.online.host || (nc && !lastNet);
@@ -1960,12 +1967,12 @@ function renderResults() {
   if (nc) {
     const rows = netChampRows(), mineP = rows.findIndex(r => r.me) + 1;
     $('champTitle').textContent = lastNet ? 'Classement final du championnat · ' + (mineP === 1 ? 'vous êtes champion' : 'vous terminez P' + mineP)
-      : 'Championnat · après la manche ' + (nc.round + 1) + ' sur ' + DEFS.length + (G.online.host ? '' : ' · l’hôte lance la manche suivante');
+      : 'Championnat · après la manche ' + (nc.round + 1) + ' sur ' + CHAMP.length + (G.online.host ? '' : ' · l’hôte lance la manche suivante');
     $('champBody').innerHTML = rows.map((r, i) => row(r.me ? 'me' : '', [['num', i + 1], ['', chip({ color: r.color, name: r.me ? 'Vous' : r.name || 'Pilote' })], ['r num', '+' + r.add], ['r num', r.pts]])).join('');
     $('againTxt').textContent = lastNet ? 'Rejouer ensemble' : 'Manche suivante';
   } else if (G.champ) {
-    const rows = champRows(), last = ui.champ.round === DEFS.length - 1, mineP = rows.findIndex(r => r.c.isPlayer) + 1;
-    $('champTitle').textContent = last ? 'Classement final du championnat · ' + (mineP === 1 ? 'vous êtes champion' : 'vous terminez P' + mineP) : 'Championnat · après la manche ' + (ui.champ.round + 1) + ' sur ' + DEFS.length;
+    const rows = champRows(), last = ui.champ.round === CHAMP.length - 1, mineP = rows.findIndex(r => r.c.isPlayer) + 1;
+    $('champTitle').textContent = last ? 'Classement final du championnat · ' + (mineP === 1 ? 'vous êtes champion' : 'vous terminez P' + mineP) : 'Championnat · après la manche ' + (ui.champ.round + 1) + ' sur ' + CHAMP.length;
     $('champBody').innerHTML = rows.map((r, i) => row(r.c.isPlayer ? 'me' : '', [['num', i + 1], ['', chip(r.c.drv)], ['r num', '+' + r.add], ['r num', r.pts]])).join('');
     $('againTxt').textContent = last ? 'Nouveau championnat' : 'Course suivante';
   } else $('againTxt').textContent = G.online ? 'Rejouer ensemble' : 'Rejouer';
@@ -2049,7 +2056,7 @@ function drawMotifs() {
     g.setTransform(1.75, 0, 0, 1.75, 46, 28); drawCar({ x: 0, y: 0, a: 0, steer: 0, drv: { ...TEAMS[ui.team], motif: b.dataset.v } }, g); });
 }
 $('teams').innerHTML = TEAMS.map((t, i) => [t, i]).sort((a, b) => COLOR_LEVEL[a[1]] - COLOR_LEVEL[b[1]]).map(([t, i]) => '<button type="button" data-k="team" data-v="' + i + '" aria-label="Écurie ' + t.name + '" title="' + t.name + '" style="background:' + t.color + '"></button>').join('');
-$('rounds').innerHTML = DEFS.map((d, i) => '<li><span class="n">' + (i + 1) + '</span><span>' + esc(d.name) + '</span></li>').join('');
+$('rounds').innerHTML = CHAMP.map((d, i) => '<li><span class="n">' + (i + 1) + '</span><span>' + esc(d.name) + '</span></li>').join('');
 
 // Illustrations on the three mode cards
 // Your best record on an official circuit (the selected one first), for the Chrono card.
@@ -2185,12 +2192,12 @@ function refreshSetup() {
   document.querySelectorAll('.pick:not([data-pick="bots"])').forEach(b => { b.disabled = !ROOM; });
   $('inviteBtn').textContent = champ ? 'Championnat entre amis' : 'Inviter des amis';
   $('inviteBtn').disabled = !ROOM;
-  $('netNote').textContent = ROOM && champ ? 'Invitez vos amis avec un code : les ' + DEFS.length + ' manches s’enchaînent et les points s’additionnent. Les places libres sont prises par des bots.' : ROOM ? '' : window.claude ? 'Le jeu en ligne demande d’être connecté à claude.ai et invité sur cette page.' : 'Le jeu en ligne n’a pas pu se charger : vérifiez votre connexion puis rechargez la page.';
+  $('netNote').textContent = ROOM && champ ? 'Invitez vos amis avec un code : les ' + CHAMP.length + ' manches s’enchaînent et les points s’additionnent. Les places libres sont prises par des bots.' : ROOM ? '' : window.claude ? 'Le jeu en ligne demande d’être connecté à claude.ai et invité sur cette page.' : 'Le jeu en ligne n’a pas pu se charger : vérifiez votre connexion puis rechargez la page.';
   $('gpNote').textContent = ROOM ? '' : $('netNote').textContent;
   if (champ) {
     $('capName').textContent = 'Championnat';
-    $('capMeta').textContent = DEFS.length + ' manches · 25, 18, 15, 12, 10, 8 points';
-    $('capBlurb').textContent = DEFS.map(d => d.name).join(', puis ') + '.';
+    $('capMeta').textContent = CHAMP.length + ' manches · 25, 18, 15, 12, 10, 8 points';
+    $('capBlurb').textContent = CHAMP.map(d => d.name).join(', puis ') + '.';
   } else {
     const O = outlineOf(def);
     $('capName').textContent = def.name;
@@ -2294,7 +2301,7 @@ function startAttract() { ED = null; startSession({ mode: 'race', tid: ui.tid, l
 function goHome() { leaveGame(); startAttract(); show('home'); }
 function openSetup(mode, friends = false) { ui.mode = mode; ui.friends = friends; refreshSetup(); show('menu'); }
 function startRace(o) { leaveGame(); startSession(o); show(null); $('pauseTrack').textContent = $('resTrack').textContent = G.T.def.name + (G.rain ? ' · pluie' : ''); $('restartBtn').hidden = false; }
-function startChampRound() { launch({ mode: 'race', champ: true, tid: DEFS[ui.champ.round].id, laps: ui.laps, diff: ui.diff, rain: weatherPick(), team: ui.team }); }
+function startChampRound() { launch({ mode: 'race', champ: true, tid: CHAMP[ui.champ.round].id, laps: ui.laps, diff: ui.diff, rain: weatherPick(), team: ui.team }); }
 // A race with qualifying starts with one timed lap alone on track (weather already decided).
 function launch(o) { startRace({ mode: 'tt', tid: o.tid, rain: o.rain, team: o.team, quali: o }); } // every race starts with a qualifying lap
 
@@ -2362,9 +2369,9 @@ $('pauseBtn').addEventListener('click', pause);
 $('resumeBtn').addEventListener('click', resume);
 $('restartBtn').addEventListener('click', () => startRace(G.opts));
 $('againBtn').addEventListener('click', () => {
-  if (G.online) return G.netChamp && G.netChamp.round < DEFS.length - 1 ? hostNextRound() : hostBackToLobby();
+  if (G.online) return G.netChamp && G.netChamp.round < CHAMP.length - 1 ? hostNextRound() : hostBackToLobby();
   if (!G.champ) return G.opts.grid ? launch({ ...G.opts, grid: null }) : startRace(G.opts);
-  if (ui.champ.round === DEFS.length - 1) { ui.champ = { round: 0, pts: {} }; return startChampRound(); }
+  if (ui.champ.round === CHAMP.length - 1) { ui.champ = { round: 0, pts: {} }; return startChampRound(); }
   for (const r of champRows()) ui.champ.pts[r.c.drv.code] = r.pts;
   ui.champ.round++; startChampRound();
 });
@@ -2373,7 +2380,7 @@ $('menuBtn').addEventListener('click', goHome);
 $('editBtn').addEventListener('click', () => openEditor(mine.find(c => c.id === ui.tid)));
 $('dupBtn').addEventListener('click', () => {
   const d = findDef(ui.tid); if (!d) return;
-  openEditor({ id: null, name: ('Copie de ' + d.name).slice(0, 28), env: d.custom ? d.env : Math.max(0, DEFS.indexOf(d)), verts: d.verts });
+  openEditor({ id: null, name: ('Copie de ' + d.name).slice(0, 28), env: d.custom ? d.env : ({ dunes: 3, neige: 0 }[d.id] ?? Math.max(0, DEFS.indexOf(d))), verts: d.verts });
 });
 // Likes: one per player and circuit, for any circuit but your own (claude.ai: votes documents; elsewhere: the hub's gossip).
 function refreshLike() {
@@ -2428,7 +2435,7 @@ const isPlayerPeer = p => p.kind === 'viewer' && (p.presence.role === 'host' || 
 // A game is a star: the host owns the PeerJS id of the game's name and relays everyone's presence to every guest.
 // It mimics the parts of the room capability the game uses (peers, presence, join, leave).
 const P2P_PREFIX = 'monoplace-gp-v1-'; // the names every version so far has used: old and new pages still find each other
-const VERSION = 45; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
+const VERSION = 46; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
 // Relay for players whose networks refuse direct connections: turn.js, next to the page, holds the owner's own TURN account.
 const RELAY = window.TURN_CONFIG && TURN_CONFIG.username && TURN_CONFIG.credential ? TURN_CONFIG : null;
 const PEER_OPTS = RELAY ? { debug: 0, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, RELAY] } } : { debug: 0 };
@@ -2749,7 +2756,7 @@ function hostStart() {
 
 // Championship with friends. The host keeps the totals in its game object; each page shows them plus this race's points.
 function cleanChamp(c) {
-  if (!c || typeof c !== 'object' || !Number.isInteger(c.round) || c.round < 0 || c.round >= DEFS.length) return null;
+  if (!c || typeof c !== 'object' || !Number.isInteger(c.round) || c.round < 0 || c.round >= CHAMP.length) return null;
   const pts = {}, names = {}, src = c.pts && typeof c.pts === 'object' ? c.pts : {}, nm = c.names && typeof c.names === 'object' ? c.names : {};
   for (const k of Object.keys(src).slice(0, 24)) if (typeof k === 'string' && k.length <= 64 && Number.isInteger(src[k]) && src[k] >= 0 && src[k] <= 1000) { pts[k] = src[k]; names[k] = cleanNick(nm[k]) || 'Pilote'; }
   return { round: c.round, pts, names };
@@ -2766,10 +2773,10 @@ function netChampRows() {
 // The host moves everyone on to the next circuit, with the totals so far.
 function hostNextRound() {
   const net = NET, nc = G.netChamp;
-  if (!net || !net.host || !nc || nc.round >= DEFS.length - 1) return;
+  if (!net || !net.host || !nc || nc.round >= CHAMP.length - 1) return;
   const pts = {}, names = {};
   for (const r of netChampRows()) { pts[r.k] = r.pts; names[r.k] = r.name || 'Pilote'; }
-  net.cfg = { ...net.cfg, track: trackPayload(DEFS[nc.round + 1]), rain: weatherPick(), hold: 0.4 + Math.random() * 1.1, champ: { round: nc.round + 1, pts, names } };
+  net.cfg = { ...net.cfg, track: trackPayload(CHAMP[nc.round + 1]), rain: weatherPick(), hold: 0.4 + Math.random() * 1.1, champ: { round: nc.round + 1, pts, names } };
   hostQuali();
 }
 
@@ -2778,7 +2785,7 @@ function hostBackToLobby() {
   const net = NET;
   if (!net || !net.host || !net.room) return;
   net.cfg = { ...net.cfg, state: 'lobby', seq: Date.now() % 1e9, slots: null, players: null,
-    ...(net.cfg.champ ? { champ: { round: 0, pts: {}, names: {} }, track: trackPayload(DEFS[0]) } : {}) };
+    ...(net.cfg.champ ? { champ: { round: 0, pts: {}, names: {} }, track: trackPayload(CHAMP[0]) } : {}) };
   net.closed = false; net.qAt = 0; net.gridAt = 0; net.botT = null; net.autoAt = Date.now() + 30000;
   net.room.presence({ game: net.cfg, q: null }).catch(() => {});
   ROOM.presence({ st: 'host', g: net.name, open: net.pub, ranked: net.ranked, n: net.n || 1 }).catch(() => {});
@@ -2884,7 +2891,7 @@ function renderLobby(humans) {
   const net = NET, g = net.cfg || {}, tok = ++lobbyTok;
   lobbyKind(g);
   const tname = g.track ? (OFFICIAL_IDS.has(g.track.id) ? findDef(g.track.id).name : String(g.track.name || 'Circuit perso').slice(0, 28)) : '…';
-  $('lbTrack').textContent = (g.champ && Number.isInteger(g.champ.round) ? 'Manche ' + (g.champ.round + 1) + '/' + DEFS.length + ' · ' : '') + tname + ' · ' + ([3, 5, 10].includes(g.laps) ? g.laps : 3) + ' tours' + (g.rain === true ? ' · pluie' : '') + (net.ranked ? ' · sans bots' : ' · bots ' + (DIFF[g.diff] ? g.diff : 'normal'));
+  $('lbTrack').textContent = (g.champ && Number.isInteger(g.champ.round) ? 'Manche ' + (g.champ.round + 1) + '/' + CHAMP.length + ' · ' : '') + tname + ' · ' + ([3, 5, 10].includes(g.laps) ? g.laps : 3) + ' tours' + (g.rain === true ? ' · pluie' : '') + (net.ranked ? ' · sans bots' : ' · bots ' + (DIFF[g.diff] ? g.diff : 'normal'));
   $('lbCodeBox').hidden = net.pub; $('lbCode').textContent = net.code.toUpperCase();
   $('lbLink').hidden = !ROOM.p2p || (!!window.MGP_PORTAL && !CG); // on a games portal the page's own address is not one to share: only the portal's invite link
   $('lbShare').textContent = ROOM.p2p && window.MGP_PORTAL && !CG ? 'Donnez ce code à vos amis : ils le tapent dans « Rejoindre avec un code » sur l’écran d’accueil.'
@@ -3582,6 +3589,8 @@ if (matchMedia('(pointer: coarse)').matches) document.body.classList.add('touch'
 // ---------- Language: English unless the player picked French ----------
 // Texts are written in French; this dictionary turns every text the page shows into English as it appears.
 const EN = new Map([
+["Grandes lignes droites dans le désert, avec un détour serré qui casse la vitesse.", "Big straights through the desert, with a tight detour that kills your speed."],
+["Virages techniques dans la neige, avec des épingles qui s’enchaînent.", "Technical corners in the snow, with hairpins that follow each other."],
 ["Compte CrazyGames", "CrazyGames account"], ["Se connecter", "Sign in"],
 ["Connecté : votre niveau, vos déblocages, vos records et vos circuits sont sauvegardés sur votre compte, sur tous vos appareils.", "Signed in: your level, unlocks, records and circuits are saved on your account, on all your devices."],
 ["Connectez-vous à CrazyGames pour garder votre progression sur tous vos appareils. Sans compte, elle reste sur cet appareil.", "Sign in to CrazyGames to keep your progress on all your devices. Without an account it stays on this device."],
