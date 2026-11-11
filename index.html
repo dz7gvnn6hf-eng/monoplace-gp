@@ -2347,7 +2347,7 @@ const isPlayerPeer = p => p.kind === 'viewer' && (p.presence.role === 'host' || 
 // A game is a star: the host owns the PeerJS id of the game's name and relays everyone's presence to every guest.
 // It mimics the parts of the room capability the game uses (peers, presence, join, leave).
 const P2P_PREFIX = 'monoplace-gp-v1-'; // the names every version so far has used: old and new pages still find each other
-const VERSION = 37; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
+const VERSION = 38; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
 // Relay for players whose networks refuse direct connections: turn.js, next to the page, holds the owner's own TURN account.
 const RELAY = window.TURN_CONFIG && TURN_CONFIG.username && TURN_CONFIG.credential ? TURN_CONFIG : null;
 const PEER_OPTS = RELAY ? { debug: 0, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, RELAY] } } : { debug: 0 };
@@ -2563,9 +2563,10 @@ function lobbyTick() {
       if (older) { const g = older.presence.g; leaveGame(); return joinGame(g); }
     }
     if (humans.length !== net.n) { net.n = humans.length; ROOM.presence({ n: net.n }).catch(() => {}); hubGame(); }
-    if (net.qAt) { // ranked qualifying under way: start once every driver has a time, or after 2 minutes
+    if (net.qAt) { // qualifying under way: once every driver has a time (or after 2 minutes) the grid is shown for a few seconds, then the race starts
       renderOnlineQuali();
-      if ((Date.now() - net.qAt > 10000 && humans.every(p => Number.isFinite(p.presence.q))) || Date.now() - net.qAt > 120000) return hostStart(); // 10 s: last round's times may still be there
+      if (net.gridAt) { if (Date.now() >= net.gridAt) return hostStart(); return; }
+      if ((Date.now() - net.qAt > 10000 && humans.every(p => Number.isFinite(p.presence.q))) || Date.now() - net.qAt > 120000) hostGrid(); // 10 s: last round's times may still be there
       return;
     }
     if (humans.length >= 6 && net.ranked) return hostQuali(); // ranked: only a full grid of six humans starts
@@ -2594,7 +2595,8 @@ function lobbyTick() {
 function hostQuali() {
   const net = NET, humans = net.room.peers().filter(isPlayerPeer).slice(0, 6);
   net.qAt = Date.now(); net.closed = true; hubGame();
-  net.cfg = { ...net.cfg, state: 'quali', seq: Date.now() % 1e9, players: humans.map(p => p.peer) };
+  net.botT = null; net.gridAt = 0;
+  net.cfg = { ...net.cfg, state: 'quali', seq: Date.now() % 1e9, players: humans.map(p => p.peer), bots: null };
   net.room.presence({ game: net.cfg }).catch(() => {});
   ROOM.presence({ st: 'play', open: false }).catch(() => {});
   startOnlineQuali(net.cfg);
@@ -2603,7 +2605,7 @@ function hostQuali() {
 function startOnlineQuali(g) {
   const T = trackFromPayload(g.track);
   if (!T) return lobbyFail('Ce circuit ne peut pas être chargé.');
-  NET.qStarted = true;
+  NET.qStarted = true; NET.gridSeen = 0;
   NET.room.presence({ q: null }).catch(() => {});
   if (!lobbyTimer) startLobbyTick(); // after a championship round the tick was stopped: it watches for the start
   startSession({ mode: 'tt', T, rain: g.rain === true, team: ui.team, quali: { online: true } });
@@ -2615,26 +2617,41 @@ function startOnlineQuali(g) {
 const qTime = p => Number.isFinite(p.presence.q) && p.presence.q > 5 ? p.presence.q : Infinity;
 function renderOnlineQuali() {
   if (!NET || !NET.room || el.quali.hidden) return;
-  const humans = NET.room.peers().filter(isPlayerPeer).sort((a, b) => qTime(a) - qTime(b)), best = qTime(humans[0] || { presence: {} });
-  const ids = humans.map(p => p.by).filter(id => id && !(id in NAMES));
+  const peers = NET.room.peers().filter(isPlayerPeer);
+  const ids = peers.map(p => p.by).filter(id => id && !(id in NAMES));
   if (USER && ids.length) USER.profiles(ids).then(ps => ids.forEach(id => { NAMES[id] = (ps[id] && ps[id].name) || ''; }));
-  $('qBody').replaceChildren(...humans.map((p, i) => {
-    const tr = document.createElement('tr'), t = qTime(p), me = p.isMe && p.sameTab;
-    tr.className = me ? 'me' : '';
-    const cells = [i + 1, me ? 'Vous' : (p.by && NAMES[p.by]) || cleanNick(p.presence.nick) || 'Pilote', isFinite(t) ? fmt(t) : 'en piste', isFinite(t) && i ? gapF(t - best) : ''];
-    cells.forEach((v, k) => { const td = document.createElement('td'); td.className = k === 0 ? 'num' : k === 1 ? '' : 'r num'; td.textContent = v; tr.append(td); });
+  const rows = peers.map(p => ({ me: p.isMe && p.sameTab, name: (p.isMe && p.sameTab) ? 'Vous' : (p.by && NAMES[p.by]) || cleanNick(p.presence.nick) || 'Pilote', t: qTime(p) }));
+  const fixed = Array.isArray(NET.cfg && NET.cfg.bots); // the host has fixed the grid: bots' times are in
+  if (fixed) for (const b of NET.cfg.bots.slice(0, 5)) if (Array.isArray(b) && Number.isFinite(b[1]) && b[1] > 5 && b[1] < 900) rows.push({ me: false, name: cleanNick(b[0]) || 'Bot', t: b[1] });
+  rows.sort((a, b) => a.t - b.t); const best = rows[0] ? rows[0].t : Infinity;
+  $('qBody').replaceChildren(...rows.map((r, i) => {
+    const tr = document.createElement('tr'); tr.className = r.me ? 'me' : '';
+    [i + 1, r.name, isFinite(r.t) ? fmt(r.t) : 'en piste', isFinite(r.t) && i ? gapF(r.t - best) : ''].forEach((v, k) => { const td = document.createElement('td'); td.className = k === 0 ? 'num' : k === 1 ? '' : 'r num'; td.textContent = v; tr.append(td); });
     return tr;
   }));
-  const done = humans.filter(p => isFinite(qTime(p))).length;
-  $('qNote').textContent = done < humans.length ? 'En attente des autres pilotes : ' + done + '/' + humans.length + ' ont fini leur tour. La course part dès que tout le monde a un temps (2 minutes au plus).' : 'Tous les temps sont là : la course va partir.';
+  const done = peers.filter(p => isFinite(qTime(p))).length;
+  if (fixed) { // countdown: the host counts exactly, guests count from the moment the grid reached them
+    if (!NET.gridSeen) NET.gridSeen = Date.now();
+    const left = Math.max(0, Math.ceil(((NET.gridAt || NET.gridSeen + GRID_MS) - Date.now()) / 1000));
+    $('qNote').textContent = L('Grille de départ définitive : la course part dans ', 'Final starting grid: the race starts in ') + left + ' s.';
+  } else $('qNote').textContent = done < peers.length ? 'En attente des autres pilotes : ' + done + '/' + peers.length + ' ont fini leur tour. La course part dès que tout le monde a un temps (2 minutes au plus).' : 'Tous les temps sont là : la course va partir.';
 }
 
+const GRID_MS = 10000; // how long everybody sees the qualifying grid before the race
+function hostGrid() { // bots get their own reference lap; the grid shown now is the grid the race uses
+  const net = NET, humans = net.room.peers().filter(isPlayerPeer);
+  const T = trackFromPayload(net.cfg.track), d = DIFF[net.cfg.diff] || DIFF.normal, nb = net.ranked ? 0 : 6 - Math.min(6, humans.length);
+  net.botT = T ? Array.from({ length: nb }, (_, k) => refLap(T, net.cfg.rain === true, d.skill - k * 0.012) * (1 + (Math.random() - 0.5) * 0.008)) : [];
+  net.gridAt = Date.now() + GRID_MS;
+  net.cfg = { ...net.cfg, bots: net.botT.map((t, k) => [RIVALS[k].name, Math.round(t * 1000) / 1000]) };
+  net.room.presence({ game: net.cfg }).catch(() => {});
+}
 function hostStart() {
   const net = NET, humans = net.room.peers().filter(isPlayerPeer);
   humans.sort((a, b) => (b.presence.role === 'host') - (a.presence.role === 'host') || (a.peer < b.peer ? -1 : 1));
   humans.sort((a, b) => qTime(a) - qTime(b)); // the grid follows the qualifying times, pole first
-  const T = trackFromPayload(net.cfg.track), d = DIFF[net.cfg.diff] || DIFF.normal, nb = net.ranked ? 0 : 6 - Math.min(6, humans.length);
-  const botT = T ? Array.from({ length: nb }, (_, k) => refLap(T, net.cfg.rain === true, d.skill - k * 0.012) * (1 + (Math.random() - 0.5) * 0.008)) : [];
+  if (!net.botT) hostGrid();
+  const botT = net.botT; net.botT = null; net.gridAt = 0;
   const usedT = new Set();
   const slots = humans.slice(0, 6).map((p, i) => {
     let t = clamp(p.presence.team | 0, 0, TEAMS.length - 1);
@@ -2642,7 +2659,7 @@ function hostStart() {
     usedT.add(t);
     return { p: p.peer, by: typeof p.by === 'string' ? p.by : null, nick: cleanNick(p.presence.nick), t, m: cleanMotif(p.presence.motif), tr: cleanTrail(p.presence.trail), s: i + botT.filter(b => b < qTime(p)).length };
   });
-  net.cfg = { ...net.cfg, state: 'go', seq: Date.now() % 1e9, slots }; net.qAt = 0;
+  net.cfg = { ...net.cfg, state: 'go', seq: Date.now() % 1e9, slots, bots: null }; net.qAt = 0;
   net.closed = true; hubGame();
   net.room.presence({ game: net.cfg }).catch(() => {});
   ROOM.presence({ st: 'play', open: false }).catch(() => {});
@@ -2681,7 +2698,7 @@ function hostBackToLobby() {
   if (!net || !net.host || !net.room) return;
   net.cfg = { ...net.cfg, state: 'lobby', seq: Date.now() % 1e9, slots: null, players: null,
     ...(net.cfg.champ ? { champ: { round: 0, pts: {}, names: {} }, track: trackPayload(DEFS[0]) } : {}) };
-  net.closed = false; net.qAt = 0; net.autoAt = Date.now() + 30000;
+  net.closed = false; net.qAt = 0; net.gridAt = 0; net.botT = null; net.autoAt = Date.now() + 30000;
   net.room.presence({ game: net.cfg, q: null }).catch(() => {});
   ROOM.presence({ st: 'host', g: net.name, open: net.pub, ranked: net.ranked, n: net.n || 1 }).catch(() => {});
   backToLobby();
