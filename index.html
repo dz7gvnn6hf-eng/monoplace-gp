@@ -444,6 +444,7 @@ label.btn{cursor:pointer;display:inline-block}
       <p class="note" id="boardNote"></p>
     </section>
     <details class="more"><summary>Comment jouer</summary>
+    <p class="note">Faux départ : n’accélérez pas quand les cinq feux sont allumés, attendez qu’ils s’éteignent, sinon +5 s.</p>
     <dl class="keys">
       <dt><kbd>↑</kbd><kbd>Z</kbd></dt><dd>Accélérer</dd>
       <dt><kbd>↓</kbd><kbd>S</kbd></dt><dd>Freiner, puis marche arrière</dd>
@@ -1127,9 +1128,18 @@ function botDrive(c) {
   c.brk = e < -10 ? clamp(-e / 90, 0.15, 1) : 0;
 }
 
+// Jump start: the gas pressed while all five lights are on, before they go out. The car is released early and the driver pays 5 s
+// (added to the finish time in a race, to the lap time in a time trial or qualifying).
+const FS_PEN = 5;
+function falseStart(c) {
+  c.fs = true;
+  if (G.mode === 'tt') c.fsPen = FS_PEN; else c.pen += FS_PEN;
+  toast(G.mode === 'tt' ? 'Faux départ · +5 s sur ce tour' : 'Faux départ · +5 s', 'r'); sfxBeep(200);
+}
 function drive(c) {
   if (c.remote) return;
-  if (G.state === 'countdown' || c.service > 0) { c.thr = 0; c.brk = 0; c.inSteer = 0; return; }
+  if (G.state === 'countdown' && c.isPlayer && !c.auto && !c.fs && !G.attract && !G.sim && G.cd >= 4 && keys.gas) falseStart(c);
+  if ((G.state === 'countdown' && !c.fs) || c.service > 0) { c.thr = 0; c.brk = 0; c.inSteer = 0; return; }
   if (c.auto) return botDrive(c);
   c.inSteer = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
   c.thr = keys.gas ? 1 : 0; c.brk = keys.brake ? 1 : 0;
@@ -1376,7 +1386,7 @@ function sectorDone(c, s) {
 
 function lapDone(c) {
   if (c.fin) return; // cool-down laps after the flag don't count
-  const lt = G.t - c.lapStart; c.lapStart = G.t; c.last = lt;
+  const lt = G.t - c.lapStart + (G.mode === 'tt' ? c.fsPen || 0 : 0); c.fsPen = 0; c.lapStart = G.t; c.last = lt;
   const pb = c.best == null || lt < c.best; if (pb) c.best = lt;
   if (!c.isPlayer) c.ai.form = 1 + (Math.random() - 0.5) * 0.025;
   else {
@@ -1393,13 +1403,14 @@ function lapDone(c) {
     G.rec = [];
   }
   if (G.mode === 'race' && !G.attract && (c.lap >= G.laps || G.leaderDone)) {
-    c.fin = true; c.pen += G.mandatory && !c.pitted ? PIT_PEN : 0; c.finT = G.t + c.pen; c.finLap = c.lap; c.finPassed = c.passed; G.leaderDone = true;
+    const pitPen = G.mandatory && !c.pitted ? PIT_PEN : 0;
+    c.fin = true; c.pen += pitPen; c.finT = G.t + c.pen; c.finLap = c.lap; c.finPassed = c.passed; G.leaderDone = true;
     if (c.isPlayer) {
       G.order.sort(cmp); G.pos = G.order.indexOf(c) + 1;
       G.over = true; G.resAt = G.t + 1.6; c.auto = true; c.ai.skill = 0.8;
       toast(G.pos === 1 ? 'Victoire' : 'Drapeau à damier', G.pos === 1 ? 'p' : '');
       if (G.pos !== 1) sfxChime([523, 659, 784]);
-      if (c.pen) toast('Pénalité +15 s · arrêt non effectué', 'y');
+      if (pitPen) toast('Pénalité +15 s · arrêt non effectué', 'y');
       if (G.ranked) awardRanked(G.pos);
       giveXp(G.pos);
     }
@@ -1909,7 +1920,7 @@ function hud(dt) {
   el.lights.hidden = !(st === 'countdown' || (st === 'race' && G.t < 0.9));
   lightEls.forEach((l, k) => l.classList.toggle('on', k < lit));
   if (lit !== hudLit) { if (lit > hudLit) sfxBeep(lit === 5 ? 880 : 587); hudLit = lit; }
-  const tag = p.service > 0 ? 'Au stand · ' + p.service.toFixed(1).replace('.', ',') + ' s' : p.pz ? 'Limiteur 80 km/h' : G.sc ? (G.sc.gone ? 'Drapeau vert au prochain passage' : 'Voiture de sécurité') : p.tow > 0.3 ? 'Aspiration' : '';
+  const tag = st === 'countdown' && G.cd >= 3.2 && !p.fs && !p.auto ? 'N’accélérez pas avant l’extinction des feux' : p.service > 0 ? 'Au stand · ' + p.service.toFixed(1).replace('.', ',') + ' s' : p.pz ? 'Limiteur 80 km/h' : G.sc ? (G.sc.gone ? 'Drapeau vert au prochain passage' : 'Voiture de sécurité') : p.tow > 0.3 ? 'Aspiration' : '';
   if (el.tag.textContent !== tag) { el.tag.textContent = tag; el.tag.hidden = !tag; }
   // minimap
   const mw = el.mini.clientWidth, mh = el.mini.clientHeight, dpr = Math.min(2, devicePixelRatio || 1);
@@ -2347,7 +2358,7 @@ const isPlayerPeer = p => p.kind === 'viewer' && (p.presence.role === 'host' || 
 // A game is a star: the host owns the PeerJS id of the game's name and relays everyone's presence to every guest.
 // It mimics the parts of the room capability the game uses (peers, presence, join, leave).
 const P2P_PREFIX = 'monoplace-gp-v1-'; // the names every version so far has used: old and new pages still find each other
-const VERSION = 38; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
+const VERSION = 39; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
 // Relay for players whose networks refuse direct connections: turn.js, next to the page, holds the owner's own TURN account.
 const RELAY = window.TURN_CONFIG && TURN_CONFIG.username && TURN_CONFIG.credential ? TURN_CONFIG : null;
 const PEER_OPTS = RELAY ? { debug: 0, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, RELAY] } } : { debug: 0 };
@@ -3500,6 +3511,8 @@ if (matchMedia('(pointer: coarse)').matches) document.body.classList.add('touch'
 // ---------- Language: English unless the player picked French ----------
 // Texts are written in French; this dictionary turns every text the page shows into English as it appears.
 const EN = new Map([
+["Faux départ · +5 s", "False start · +5 s"], ["Faux départ · +5 s sur ce tour", "False start · +5 s on this lap"], ["N’accélérez pas avant l’extinction des feux", "Don’t accelerate before the lights go out"],
+["Faux départ : n’accélérez pas quand les cinq feux sont allumés, attendez qu’ils s’éteignent, sinon +5 s.", "False start: don’t accelerate while the five lights are on, wait for them to go out, or it’s +5 s."],
 ["Comment voulez-vous jouer ?", "How do you want to play?"], ["Contre les bots", "Against bots"], ["Choisissez le circuit, les tours et le niveau des bots.", "Choose the circuit, the laps and how good the bots are."],
 ["Avec les joueurs qui cherchent une partie. Les places libres sont prises par des bots.", "With players looking for a game. Empty places go to bots."],
 ["6 vrais joueurs, un tour de qualification, puis 5 tours. Points au classement.", "6 real players, a qualifying lap, then 5 laps. Ranking points."],
