@@ -301,25 +301,29 @@ label.btn{cursor:pointer;display:inline-block}
   .times{font-size:12px;gap:3px 8px}
   #mini{width:150px;height:96px}
   .speedo b{font-size:36px}.speedo .gear{min-width:46px;font-size:26px}
-  #lights i{width:22px;height:22px}#lights{gap:7px;padding:8px 10px;top:330px}
+  #lights i{width:22px;height:22px}#lights{gap:7px;padding:8px 10px;top:196px}
   .tb{width:68px;height:68px}
   .opts{grid-template-columns:1fr}
   .seg button{font-size:15px}
   .home-top .online{margin:0;flex-basis:100%;order:3;font-size:13px}
 }
-/* A phone held sideways (or any short window): a compact dashboard, so the panels no longer cover the touch buttons. */
+/* Phones: a compact dashboard. The panels are see-through and small, so they no longer hide the road ahead (portrait) or the touch buttons (sideways). */
+@media (max-height:520px), (max-width:520px){
+  .tower{width:116px}
+  .tower li{grid-template-columns:14px 3px 1fr auto;gap:5px;height:19px;padding:0 6px 0 5px;font-size:11px}
+  .tower .p{font-size:12px}.tower .g{font-size:10px}
+  .timing{width:124px;gap:4px}
+  .tpanel{padding:6px 9px 7px;gap:3px}
+  .lapline b{font-size:15px}
+  .cur{font-size:21px}
+  .sectors i{height:13px;font:600 10px/13px var(--f-body)}
+  .times{font-size:11px;gap:2px 8px}
+  .times dt:nth-of-type(-n+3),.times dd:nth-of-type(-n+3){display:none} /* last, best and record lap: the tyres, the car and the pit stop stay (all of it is in the pause menu) */
+  #mini{width:124px;height:66px}
+  .touch .tower,.touch .tpanel,.touch #mini{background:rgba(12,15,21,.58)}
+}
+/* A phone held sideways (or any short window). */
 @media (max-height:520px){
-  .tower{width:128px}
-  .tower li{grid-template-columns:14px 3px 1fr auto;gap:5px;height:20px;padding:0 7px 0 5px;font-size:12px}
-  .tower .p{font-size:13px}.tower .g{font-size:11px}
-  .timing{width:132px;gap:4px}
-  .tpanel{padding:6px 9px 8px;gap:4px}
-  .lapline b{font-size:16px}
-  .cur{font-size:22px}
-  .sectors i{height:14px;font:600 10px/14px var(--f-body)}
-  .times{font-size:12px;gap:2px 8px}
-  .times dt:nth-of-type(-n+3),.times dd:nth-of-type(-n+3){display:none} /* last, best and record lap: the tyres, the car and the pit stop stay */
-  #mini{width:132px;height:72px}
   .speedo b{font-size:32px}.speedo .gear{min-width:40px;font-size:24px}
   .touch .speedo{bottom:8px}
   .touch #tag{bottom:64px}
@@ -2457,7 +2461,7 @@ const isPlayerPeer = p => p.kind === 'viewer' && (p.presence.role === 'host' || 
 // A game is a star: the host owns the PeerJS id of the game's name and relays everyone's presence to every guest.
 // It mimics the parts of the room capability the game uses (peers, presence, join, leave).
 const P2P_PREFIX = 'monoplace-gp-v1-'; // the names every version so far has used: old and new pages still find each other
-const VERSION = 47; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
+const VERSION = 48; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
 // Relay for players whose networks refuse direct connections: turn.js, next to the page, holds the owner's own TURN account.
 const RELAY = window.TURN_CONFIG && TURN_CONFIG.username && TURN_CONFIG.credential ? TURN_CONFIG : null;
 const PEER_OPTS = RELAY ? { debug: 0, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, RELAY] } } : { debug: 0 };
