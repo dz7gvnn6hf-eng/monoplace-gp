@@ -751,7 +751,7 @@ const NSPLIT = 30, VM = 0.88, BRK_PROF = 850, H = 1 / 120;
 // Pit complex left of the main straight. rel = samples from the start line, lat = px from the centre line (left is negative).
 // Entry ramp PA→E1, pit wall E1→X0, exit ramp X0→PB; six garages (one per team) before the line.
 const PA = -110, E1 = -85, X0 = 40, PB = 65, BOX0 = -66, BOXSP = 11, WALL_IN = 136, WALL_OUT = 148, LANE = -186, STALL_IN = 225, STALL = -262, PIT_OUT = 300;
-const PIT_V = 160, PIT_TIME = 2.4, PIT_PEN = 15, SC_V = 300;
+const PIT_V = 160, PIT_TIME = 2.0, PIT_PEN = 15, SC_V = 300;
 const boxRel = k => BOX0 + k * BOXSP;
 const pitOuter = rel => rel < PA || rel > PB ? R0 : rel < E1 ? R0 + (PIT_OUT - R0) * (rel - PA) / (E1 - PA) : rel > X0 ? R0 + (PIT_OUT - R0) * (PB - rel) / (PB - X0) : PIT_OUT;
 const relIdx = (i, N) => i > N / 2 ? i - N : i; // signed samples from the start line
@@ -1482,7 +1482,7 @@ function progress(c) {
   if (G.state !== 'race') return;
   const sp = Math.hypot(c.vx, c.vy), stall = c.pz && c.lat < -STALL_IN + 20;
   if (stall && !c.service && !c.fin && c.pitLap !== c.lap && Math.abs(rel - boxRel(c.box)) <= 4 && sp < 60) {
-    c.service = PIT_TIME + c.dmg * 3; c.pitLap = c.lap; // a damaged wing takes longer to change
+    c.service = PIT_TIME + c.dmg * 1.5; c.pitLap = c.lap; // a damaged wing takes longer to change
     if (c.isPlayer) toast('Arrêt au stand', 'y');
   } else if (c.isPlayer && stall && sp < 40 && !c.wrongBox && Math.abs(rel - boxRel(c.box)) > 4) {
     c.wrongBox = true; toast('Votre garage est le ' + TEAMS[c.drv.i | 0].name.toLowerCase(), 'y');
@@ -2519,7 +2519,7 @@ const isPlayerPeer = p => p.kind === 'viewer' && (p.presence.role === 'host' || 
 // A game is a star: the host owns the PeerJS id of the game's name and relays everyone's presence to every guest.
 // It mimics the parts of the room capability the game uses (peers, presence, join, leave).
 const P2P_PREFIX = 'monoplace-gp-v1-'; // the names every version so far has used: old and new pages still find each other
-const VERSION = 54; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
+const VERSION = 55; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
 // Relay for players whose networks refuse direct connections: turn.js, next to the page, holds the owner's own TURN account.
 const RELAY = window.TURN_CONFIG && TURN_CONFIG.username && TURN_CONFIG.credential ? TURN_CONFIG : null;
 const PEER_OPTS = RELAY ? { debug: 0, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, RELAY] } } : { debug: 0 };
@@ -2576,9 +2576,11 @@ function p2pJoin(name, opts = {}) {
       leave() { close(); return Promise.resolve(); },
     };
     const ok = () => { if (done) return; done = true; clearTimeout(limit); resolve(room); timer = setInterval(host ? tickHost : tickGuest, 66); };
+    let lastSend = 0;
     function tickHost() {
       if (!dirty) return;
-      dirty = false;
+      const now = Date.now(); if (now - lastSend < (others.size >= 3 ? 100 : 60)) return; // a full room: 10 updates a second instead of 15
+      lastSend = now; dirty = false;
       const msg = { t: 'peers', l: room.peers().map(p => ({ peer: p.peer, presence: p.presence })) };
       for (const [, o] of others) if (o.conn.open) { try { o.conn.send(msg); } catch (e) { /* dropped */ } }
     }
@@ -2656,7 +2658,7 @@ async function hostGame(pub, fixed, rankedWanted) {
   try { net.room = await ROOM.join(name, { host: true }); }
   catch (e) { if (e && e.code === 'taken' && fixed) { NET = null; return false; } lobbyFail(NETMSG[e && e.code] || 'Impossible de créer la partie pour le moment. Réessayez dans un instant.', e && e.code); return true; }
   if (NET !== net) { net.room.leave().catch(() => {}); return true; }
-  net.room.presence({ role: 'host', team: ui.team, motif: ui.motif, trail: ui.trail, nick: myNick(), game: net.cfg, ...(ROOM.p2p ? { rk: rankShare(), lv: lvShare() } : {}) }).catch(() => {});
+  net.room.presence({ role: 'host', team: ui.team, motif: ui.motif, trail: ui.trail, nick: myNick(), game: net.cfg, ...(ROOM.p2p ? { rk: rankOwn(), lv: lvOwn() } : {}) }).catch(() => {});
   ROOM.presence({ st: 'host', g: name, open: pub, ranked, n: 1 }).catch(() => {});
   if (!pub) location.hash = 'partie-' + code;
   hubGame();
@@ -2671,7 +2673,7 @@ async function joinGame(name, probe) {
   try { net.room = await (probe && ROOM.p2p ? ROOM.join(name, { wait: 12000 }) : ROOM.join(name)); }
   catch (e) { lastJoinErr = e && e.code; if (probe) { NET = null; return false; } lobbyFail(lastJoinErr === 'not_found' ? 'Cette partie n’existe plus, ou le code est faux : vérifiez-le auprès de votre ami.' : NETMSG[lastJoinErr] || 'Impossible de rejoindre cette partie.', lastJoinErr); return false; }
   if (NET !== net) { net.room.leave().catch(() => {}); return false; }
-  net.room.presence({ role: 'guest', team: ui.team, motif: ui.motif, trail: ui.trail, nick: myNick(), ...(ROOM.p2p ? { rk: rankShare(), lv: lvShare() } : {}) }).catch(() => {});
+  net.room.presence({ role: 'guest', team: ui.team, motif: ui.motif, trail: ui.trail, nick: myNick(), ...(ROOM.p2p ? { rk: rankOwn(), lv: lvOwn() } : {}) }).catch(() => {});
   ROOM.presence({ st: 'play', g: name, open: null, n: null }).catch(() => {});
   if (probe) { // a public slot: stay only if its game is still waiting for players
     let host = null;
@@ -3012,6 +3014,7 @@ function rankRows() {
   if (DB) return Object.entries(RANKED).map(([id, d]) => ({ id, me: id === ME, name: '', p: rnum(d && d.pts), r: rnum(d && d.races), w: rnum(d && d.wins) }));
   return Object.entries(rankLocal).map(([id, d]) => ({ id, me: id === PID, name: id === PID ? myNick() : d.n, p: d.p, r: d.r, w: d.w }));
 }
+const rankOwn = () => { const d = rankLocal[PID]; return d ? [[PID, d.n, d.p, d.r, d.w, d.t]] : []; }; // in a room: just my own line (the room's messages go out many times a second)
 const rankShare = () => Object.entries(rankLocal).sort((a, b) => b[1].p - a[1].p).slice(0, 40).map(([id, d]) => [id, d.n, d.p, d.r, d.w, d.t]);
 // Entries from other players are untrusted: shape-checked, newest wins, and nobody can overwrite your own line.
 function rankMerge(list) {
@@ -3084,6 +3087,7 @@ const LV_KEY = 'monoplace-gp.levels';
 let lvLocal = store.get(LV_KEY) || {};
 const okXp = x => Number.isInteger(x) && x >= 0 && x < 1e8;
 function lvMine() { const cur = lvLocal[PID]; if (cur && cur.x === XP && cur.n === myNick()) return; lvLocal[PID] = { n: myNick(), x: XP, t: Date.now() }; store.set(LV_KEY, lvLocal); }
+const lvOwn = () => { lvMine(); const e = lvLocal[PID]; return [[PID, e.n, e.x, e.t]]; };
 const lvShare = () => { lvMine(); return Object.entries(lvLocal).sort((a, b) => b[1].x - a[1].x).slice(0, 60).map(([id, e]) => [id, e.n, e.x, e.t]); };
 function lvMerge(list) {
   if (!Array.isArray(list)) return;
