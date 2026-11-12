@@ -2405,7 +2405,7 @@ function showQuali() {
   const o = G.quali, T = G.T, d = DIFF[o.diff] || DIFF.normal;
   $('qGo').hidden = $('qRetry').hidden = !!o.online; $('qNote').hidden = !o.online;
   if (o.online) {
-    if (!G.qSent && NET && NET.room) { G.qSent = true; NET.room.presence({ q: Math.round(G.qTime * 1000) / 1000 }).catch(() => {}); }
+    if (!G.qSent && NET && NET.room) { G.qSent = true; NET.room.presence({ q: Math.round(G.qTime * 1000) / 1000, qs: NET.cfg.seq }).catch(() => {}); }
     $('qTitle').textContent = 'Qualifications'; $('qTrack').textContent = (NET && NET.ranked ? L('Partie classée', 'Ranked game') : L('Course en ligne', 'Online race')) + ' · ' + T.def.name;
     tq.length = 0; toastT = 0; el.toast.className = '';
     show('quali'); renderOnlineQuali();
@@ -2518,7 +2518,7 @@ const isPlayerPeer = p => p.kind === 'viewer' && (p.presence.role === 'host' || 
 // A game is a star: the host owns the PeerJS id of the game's name and relays everyone's presence to every guest.
 // It mimics the parts of the room capability the game uses (peers, presence, join, leave).
 const P2P_PREFIX = 'monoplace-gp-v1-'; // the names every version so far has used: old and new pages still find each other
-const VERSION = 51; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
+const VERSION = 52; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
 // Relay for players whose networks refuse direct connections: turn.js, next to the page, holds the owner's own TURN account.
 const RELAY = window.TURN_CONFIG && TURN_CONFIG.username && TURN_CONFIG.credential ? TURN_CONFIG : null;
 const PEER_OPTS = RELAY ? { debug: 0, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, RELAY] } } : { debug: 0 };
@@ -2737,7 +2737,7 @@ function lobbyTick() {
     if (net.qAt) { // qualifying under way: once every driver has a time (or after 2 minutes) the grid is shown for a few seconds, then the race starts
       renderOnlineQuali();
       if (net.gridAt) { if (Date.now() >= net.gridAt) return hostStart(); return; }
-      if ((Date.now() - net.qAt > 10000 && humans.every(p => Number.isFinite(p.presence.q))) || Date.now() - net.qAt > 120000) hostGrid(); // 10 s: last round's times may still be there
+      if ((Date.now() - net.qAt > 10000 && humans.every(p => isFinite(qTime(p)))) || Date.now() - net.qAt > 120000) hostGrid(); // 10 s: last round's times may still be there
       return;
     }
     if (humans.length >= 6 && net.ranked) return hostQuali(); // ranked: only a full grid of six humans starts
@@ -2777,7 +2777,7 @@ function startOnlineQuali(g) {
   const T = trackFromPayload(g.track);
   if (!T) return lobbyFail('Ce circuit ne peut pas être chargé.');
   NET.qStarted = true; NET.gridSeen = 0;
-  NET.room.presence({ q: null }).catch(() => {});
+  NET.room.presence({ q: null, qs: null, car: null, cs: null }).catch(() => {});
   if (!lobbyTimer) startLobbyTick(); // after a championship round the tick was stopped: it watches for the start
   startSession({ mode: 'tt', T, rain: g.rain === true, team: ui.team, quali: { online: true } });
   cgRoom();
@@ -2785,7 +2785,7 @@ function startOnlineQuali(g) {
   $('pauseTrack').textContent = 'Qualifications · ' + T.def.name;
   $('restartBtn').hidden = true;
 }
-const qTime = p => Number.isFinite(p.presence.q) && p.presence.q > 5 ? p.presence.q : Infinity;
+const qTime = p => Number.isFinite(p.presence.q) && p.presence.q > 5 && NET && NET.cfg && p.presence.qs === NET.cfg.seq ? p.presence.q : Infinity; // qs: the round it was driven in
 function renderOnlineQuali() {
   if (!NET || !NET.room || el.quali.hidden) return;
   const peers = NET.room.peers().filter(isPlayerPeer);
@@ -2905,7 +2905,7 @@ function netPublish() {
   const now = performance.now();
   if (!NET || !NET.room || now - G.online.lastPub < 66) return;
   G.online.lastPub = now;
-  const patch = { car: pack(G.player) };
+  const patch = { car: pack(G.player), cs: G.online.seq }; // cs: the round this belongs to, so a replay never reads the last round's finished cars
   if (G.online.host) patch.bots = G.cars.filter(c => c.bot).map(c => [c.slot, ...pack(c)]);
   NET.room.presence(patch).catch(() => {});
 }
@@ -2930,12 +2930,12 @@ function netSync(dt) {
     if (!Array.isArray(hg.players) || !hg.players.includes(selfPeer(NET.room))) return;
     return startOnlineQuali(hg); }
   if (hg && hg.state === 'lobby' && hg.seq !== G.online.seq) { NET.cfg = hg; return backToLobby(); } // the host brought everyone back to the waiting room
-  const hostBots = host && Array.isArray(host.presence.bots) ? host.presence.bots : null;
+  const hostBots = host && Array.isArray(host.presence.bots) && host.presence.cs === G.online.seq ? host.presence.bots : null;
   for (const c of G.cars) {
     if (!c.remote) continue;
     let arr = null;
     if (c.bot) { arr = hostBots && hostBots.find(b => Array.isArray(b) && b[0] === c.slot); c.goneT = host ? 0 : (c.goneT || 0) + dt; }
-    else { const p = byPeer.get(c.peer); arr = p && Array.isArray(p.presence.car) ? p.presence.car : null; c.goneT = p ? 0 : (c.goneT || 0) + dt; }
+    else { const p = byPeer.get(c.peer); arr = p && Array.isArray(p.presence.car) && p.presence.cs === G.online.seq ? p.presence.car : null; c.goneT = p ? 0 : (c.goneT || 0) + dt; }
     if (arr && arr !== c.lastNet) { c.lastNet = arr; applyNet(c, arr, c.bot ? 1 : 0); }
   }
   const gone = G.cars.filter(c => c.remote && c.goneT > 4);
