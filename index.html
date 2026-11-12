@@ -816,7 +816,7 @@ const DEFS = [
     theme: { out: '#c9a86a', run: '#dcc08a', stripe: '#d4b87f', wall: '#5b4a33', dash: '#e8392a', asph: '#4a4640', deco: 'rocks', d1: '#a88a52', d2: '#c4a46a' },
     verts: [[0,0,450],[3600,0,600],[3800,1800,400],[2800,1900,200],[2500,1300,200],[1700,1300,250],[1500,2300,350],[200,2400,500],[-400,1200,450]] },
   { id: 'neige', name: L('Col Blanc', 'Snow Pass'), blurb: 'Virages techniques dans la neige, avec des épingles qui s’enchaînent.',
-    theme: { out: '#dfe8f0', run: '#f4f8fb', stripe: '#e8eff5', wall: '#7b8794', dash: '#3a7bd5', asph: '#3b4450', deco: 'trees', d1: '#274638', d2: '#3a6a54' },
+    theme: { out: '#dfe8f0', run: '#f4f8fb', stripe: '#e8eff5', wall: '#7b8794', dash: '#3a7bd5', asph: '#3b4450', deco: 'none', d1: '#274638', d2: '#3a6a54' }, // no trees on the snow
     verts: [[0,0,350],[2800,0,300],[3300,700,250],[2500,1100,200],[3300,1500,220],[2700,2100,300],[1200,2100,250],[900,1500,170],[400,1800,170],[-100,1200,300],[-300,500,300]] },
 ];
 const OFFICIAL_IDS = new Set(DEFS.map(d => d.id));
@@ -1612,6 +1612,7 @@ function drawWorld(T, x0, y0, x1, y1) {
     ctx.fillStyle = th.water; ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, 0, 0, 7); ctx.fill();
   }
   for (const d of T.deco) {
+    if (th.deco === 'none') break;
     if (d.x < x0 - 60 || d.x > x1 + 60 || d.y < y0 - 60 || d.y > y1 + 60) continue;
     if (th.deco === 'trees') { ctx.fillStyle = th.d1; disc(ctx, d.x + 5, d.y + 6, d.r); ctx.fillStyle = th.d2; disc(ctx, d.x, d.y, d.r); }
     else if (th.deco === 'rocks') { ctx.fillStyle = th.d1; ctx.beginPath(); ctx.ellipse(d.x + 4, d.y + 4, d.r, d.r * .7, d.a, 0, 7); ctx.fill(); ctx.fillStyle = th.d2; ctx.beginPath(); ctx.ellipse(d.x, d.y, d.r, d.r * .7, d.a, 0, 7); ctx.fill(); }
@@ -2518,7 +2519,7 @@ const isPlayerPeer = p => p.kind === 'viewer' && (p.presence.role === 'host' || 
 // A game is a star: the host owns the PeerJS id of the game's name and relays everyone's presence to every guest.
 // It mimics the parts of the room capability the game uses (peers, presence, join, leave).
 const P2P_PREFIX = 'monoplace-gp-v1-'; // the names every version so far has used: old and new pages still find each other
-const VERSION = 52; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
+const VERSION = 53; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
 // Relay for players whose networks refuse direct connections: turn.js, next to the page, holds the owner's own TURN account.
 const RELAY = window.TURN_CONFIG && TURN_CONFIG.username && TURN_CONFIG.credential ? TURN_CONFIG : null;
 const PEER_OPTS = RELAY ? { debug: 0, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, RELAY] } } : { debug: 0 };
