@@ -591,7 +591,7 @@ label.btn{cursor:pointer;display:inline-block}
       <h2>Bien rouler</h2>
       <ul class="tlist">
         <li>Roulez juste derrière une voiture : l’aspiration vous fait gagner de la vitesse.</li>
-        <li>Restez sur la piste. Les murs abîment la voiture, et les pneus s’usent.</li>
+        <li>Restez sur la piste. Les murs abîment la voiture, et les pneus s’usent : plus ils sont usés, moins la voiture accroche et plus elle est lente.</li>
         <li>À partir de 5 tours, un arrêt au stand est obligatoire : entrez dans la voie des stands, à gauche de la ligne de départ, et arrêtez-vous dans votre garage.</li>
       </ul>
     </div>
@@ -1236,7 +1236,7 @@ function botDrive(c) {
     if (ai.err > 0) ai.err -= H;
     else if ((ai.errIn -= H) <= 0 && T.prof[(c.idx + 25) % N] < MAXV * 0.7) { ai.err = 1.1; ai.errIn = ai.errEvery * (0.5 + Math.random()); }
   }
-  let vt = T.prof[(c.idx + 2) % N] * ai.skill * ai.form * (ai.err > 0 ? 1.18 : 1) * (1 + 0.06 * c.tow) * (G.rain ? 0.86 : 1) * (0.88 + 0.12 * c.tyre) * (1 - 0.1 * c.dmg);
+  let vt = T.prof[(c.idx + 2) % N] * ai.skill * ai.form * (ai.err > 0 ? 1.18 : 1) * (1 + 0.06 * c.tow) * (G.rain ? 0.86 : 1) * (0.84 + 0.16 * c.tyre) * (1 - 0.1 * c.dmg);
   if (c.scCap) vt = Math.min(vt, c.scCap);
   if (pitting && ai.pit === 1) {
     const toEntry = (PA - rel) * DS, toBox = (myBox - rel) * DS;
@@ -1387,10 +1387,10 @@ function physics(c) {
     if ((c.service -= H) <= 0) { if (c.isPlayer) toast(c.dmg > 0.15 ? 'Pneus neufs · voiture réparée' : 'Pneus neufs', 'g'); c.tyre = 1; c.dmg = 0; c.pitted = true; c.ai.pit = c.ai.pit ? 2 : 0; }
     return;
   }
-  const T = G.T, fx = Math.cos(c.a), fy = Math.sin(c.a), grass = c.off > HW + 6 && !c.pitAsph, wet = G.rain, g = 0.72 + 0.28 * c.tyre;
+  const T = G.T, fx = Math.cos(c.a), fy = Math.sin(c.a), grass = c.off > HW + 6 && !c.pitAsph, wet = G.rain, g = 0.42 + 0.58 * c.tyre; // worn tyres: less grip in corners, longer braking, a lower top speed
   let vf = c.vx * fx + c.vy * fy, vl = -c.vx * fy + c.vy * fx;
   c.steer += clamp(clamp(c.inSteer + c.pull * c.dmg * 0.18, -1, 1) - c.steer, -H * 7, H * 7); // a broken wing pulls to its side
-  const top = grass ? MAXV * 0.42 : MAXV * (1 + 0.06 * c.tow) * (1 - 0.12 * c.dmg);
+  const top = grass ? MAXV * 0.42 : MAXV * (1 + 0.06 * c.tow) * (1 - 0.12 * c.dmg) * (0.96 + 0.04 * c.tyre);
   if (c.thr > 0) { if (vf < -2) vf = Math.min(0, vf + BRAKE * c.thr * H); else vf += ACC * c.thr * (grass ? .55 : 1) * (wet ? .85 : 1) * (1 + .25 * c.tow) * Math.max(0, 1 - (vf / top) ** 2) * H; }
   if (c.brk > 0) { if (vf > 2) vf = Math.max(0, vf - BRAKE * c.brk * (grass ? .5 : 1) * (wet ? .72 : 1) * g * H); else if (!c.thr) vf = Math.max(-150, vf - 280 * c.brk * H); }
   if (c.pz && vf > PIT_V) vf = Math.max(PIT_V, vf - BRAKE * 1.6 * H); // pit-lane speed limiter
@@ -1403,7 +1403,7 @@ function physics(c) {
   const sp = Math.abs(vf);
   c.a += c.steer * TURN * (0.8 + 0.2 * g) * (1 - 0.2 * c.dmg) * (wet ? 0.92 : 1) * Math.min(1, sp / 140) * (1 - 0.42 * Math.min(sp, MAXV) / MAXV) * Math.sign(vf) * H;
   c.x += c.vx * H; c.y += c.vy * H;
-  if (!G.attract && G.state === 'race') c.tyre = Math.max(0, c.tyre - (sp + 2 * slide) * H / (8 * T.len) * (wet ? 0.7 : 1));
+  if (!G.attract && G.state === 'race' && G.mode === 'race') c.tyre = Math.max(0, c.tyre - (sp + 2 * slide) * H / (7 * T.len) * (wet ? 0.7 : 1)); // races only: a qualifying or time-trial lap is always on fresh tyres
   // Effects: smoke, dirt, spray and skid marks from the rear wheels
   const rx = c.x - fx * 16, ry = c.y - fy * 16;
   if (!G.sim) {
@@ -2519,7 +2519,7 @@ const isPlayerPeer = p => p.kind === 'viewer' && (p.presence.role === 'host' || 
 // A game is a star: the host owns the PeerJS id of the game's name and relays everyone's presence to every guest.
 // It mimics the parts of the room capability the game uses (peers, presence, join, leave).
 const P2P_PREFIX = 'monoplace-gp-v1-'; // the names every version so far has used: old and new pages still find each other
-const VERSION = 53; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
+const VERSION = 54; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
 // Relay for players whose networks refuse direct connections: turn.js, next to the page, holds the owner's own TURN account.
 const RELAY = window.TURN_CONFIG && TURN_CONFIG.username && TURN_CONFIG.credential ? TURN_CONFIG : null;
 const PEER_OPTS = RELAY ? { debug: 0, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, RELAY] } } : { debug: 0 };
@@ -3681,7 +3681,7 @@ const EN = new Map([
 ["Cinq feux s’allument un par un. Attendez qu’ils s’éteignent avant d’accélérer !", "Five lights come on one by one. Wait for them to go out before you accelerate!"],
 ["Si vous accélérez trop tôt, c’est un faux départ : +5 secondes à votre temps.", "If you accelerate too early, it’s a false start: +5 seconds on your time."],
 ["Roulez juste derrière une voiture : l’aspiration vous fait gagner de la vitesse.", "Drive right behind a car: the slipstream makes you faster."],
-["Restez sur la piste. Les murs abîment la voiture, et les pneus s’usent.", "Stay on the track. Walls damage the car, and the tyres wear out."],
+["Restez sur la piste. Les murs abîment la voiture, et les pneus s’usent : plus ils sont usés, moins la voiture accroche et plus elle est lente.", "Stay on the track. Walls damage the car, and the tyres wear out: the more worn they are, the less the car grips and the slower it gets."],
 ["À partir de 5 tours, un arrêt au stand est obligatoire : entrez dans la voie des stands, à gauche de la ligne de départ, et arrêtez-vous dans votre garage.", "From 5 laps on, a pit stop is mandatory: enter the pit lane, to the left of the start line, and stop in your garage."],
 ["Chaque course rapporte de l’XP. Montez de niveau pour débloquer des couleurs, des motifs et des effets de vitesse pour votre voiture.", "Every race gives XP. Level up to unlock colours, liveries and speed effects for your car."],
 ["« C’est parti ! » lance une course rapide : un tour contre des bots faciles. Ensuite, jouez contre les bots, en ligne, en partie classée ou entre amis. Vous pouvez revoir ce tutoriel à tout moment dans les réglages.", "“Let’s race!” starts a quick race: one lap against easy bots. After that, play against bots, online, ranked or with friends. You can watch this tutorial again at any time in the settings."],
