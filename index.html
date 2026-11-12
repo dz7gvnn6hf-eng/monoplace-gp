@@ -1867,7 +1867,7 @@ const TRAILS = (() => {
       g.globalAlpha = 1; g.fillStyle = gr; g.fillRect(x0 - 14, y0 - 14, 28, 28); }],
     ['ghost', L('Fantôme', 'Ghost'), (g, pts, d, k) => { // a see-through copy is left behind every few frames: it stays where it was, the car drives off, and it fades away
       const drv = { ...d, trail: 'none', motif: d.motif === 'phantom' ? 'classic' : d.motif }, a0 = g.globalAlpha;
-      for (let i = pts.length - 1; i >= 3; i--) { const q = pts[i]; if (q[3] % 8) continue; g.globalAlpha = a0 * k * .5 * Math.min(1, (i - 2) / 4) * (1 - i / (pts.length + 4)); drawCar({ x: q[0], y: q[1], a: q[2], steer: 0, drv }, g); }
+      for (let i = pts.length - 1; i >= 3; i--) { const q = pts[i]; if (q[3] % 6) continue; const t = i / 40; g.globalAlpha = a0 * k * .5 * Math.min(1, (i - 2) / 6) * (1 - t) * (1 - t); drawCar({ x: q[0], y: q[1], a: q[2], steer: 0, drv }, g); }
       g.globalAlpha = a0; }],
     ['light', L('Ruban de lumière', 'Ribbon of light'), (g, pts, d, k) => { g.lineCap = 'round';
       for (const [w, white] of [[8, 0], [2.4, 1]]) for (let i = 0; i < pts.length - 1; i++) { const t = i / (pts.length - 1), a = off(pts[i], 19, 0), b = off(pts[i + 1], 19, 0);
@@ -1880,9 +1880,9 @@ const cleanTrail = t => TRAIL_IDS.includes(t) ? t : 'none';
 function drawTrail(c, g = ctx) { // the chosen effect shows above about 200 km/h, fading in with speed
   const id = c.drv.trail; if (!id || id === 'none' || c.wreck > 0 || c.out) { c.hist = null; return; }
   const sp = Math.hypot(c.vx, c.vy), h = c.hist || (c.hist = []);
-  if (G.state !== 'paused') { h.unshift([c.x, c.y, c.a, c.hid = (c.hid | 0) + 1]); if (h.length > 24) h.length = 24; }
+  if (G.state !== 'paused') { h.unshift([c.x, c.y, c.a, c.hid = (c.hid | 0) + 1]); if (h.length > 40) h.length = 40; }
   const k = clamp((sp / MAXV - .5) / .25, 0, 1);
-  if (k > 0 && h.length > 3) TRAILS.find(t => t[0] === id)[2](g, h, c.drv, k);
+  if (k > 0 && h.length > 3) TRAILS.find(t => t[0] === id)[2](g, id === 'ghost' ? h : h.slice(0, 24), c.drv, k); // only the ghost uses the longer history
 }
 // ---------- Driver level: every finished race gives XP, levels never end, motifs unlock on the way ----------
 const XP_KEY = 'monoplace-gp.xp';
@@ -2617,7 +2617,7 @@ const isPlayerPeer = p => p.kind === 'viewer' && (p.presence.role === 'host' || 
 // A game is a star: the host owns the PeerJS id of the game's name and relays everyone's presence to every guest.
 // It mimics the parts of the room capability the game uses (peers, presence, join, leave).
 const P2P_PREFIX = 'monoplace-gp-v1-'; // the names every version so far has used: old and new pages still find each other
-const VERSION = 63; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
+const VERSION = 64; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
 // Relay for players whose networks refuse direct connections: turn.js, next to the page, holds the owner's own TURN account.
 const RELAY = window.TURN_CONFIG && TURN_CONFIG.username && TURN_CONFIG.credential ? TURN_CONFIG : null;
 const PEER_OPTS = RELAY ? { debug: 0, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, RELAY] } } : { debug: 0 };
