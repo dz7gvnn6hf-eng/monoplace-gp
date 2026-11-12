@@ -307,6 +307,18 @@ label.btn{cursor:pointer;display:inline-block}
   .seg button{font-size:15px}
   .home-top .online{margin:0;flex-basis:100%;order:3;font-size:13px}
 }
+.tuto{gap:14px}
+.tuto h2{margin:0}
+.tuto p{margin:0}
+.tuto p + p{margin-top:8px}
+.tstep{display:grid;gap:12px;align-content:start;min-height:210px}
+.tstep[hidden]{display:none}
+.tlist{margin:0;padding-left:20px;display:grid;gap:10px}
+.tlights{display:flex;gap:10px;justify-content:center;padding:12px;background:var(--housing,#14171d);border-radius:6px;width:max-content;max-width:100%;margin-inline:auto}
+.tlights i{width:30px;height:30px;border-radius:50%;background:var(--light-on,#ff2b1d);box-shadow:0 0 14px var(--light-on,#ff2b1d)}
+.dots{display:flex;gap:8px}
+.dots i{width:9px;height:9px;border-radius:50%;background:var(--panel-hi)}
+.dots i.on{background:var(--fg)}
 /* Phones: a compact dashboard. The panels are see-through and small, so they no longer hide the road ahead (portrait) or the touch buttons (sideways). */
 @media (max-height:520px), (max-width:520px){
   .tower{width:116px}
@@ -556,6 +568,47 @@ label.btn{cursor:pointer;display:inline-block}
   </div>
 </section>
 
+<section id="tuto" class="layer modal" hidden>
+  <div class="card tuto">
+    <p class="lbl" id="tutoStep">1 / 4</p>
+    <div class="tstep" data-s="0">
+      <h2>Le but du jeu</h2>
+      <p>Faites le tour du circuit et terminez devant les autres voitures. Chaque course commence par un tour de qualification chronométré : plus il est rapide, meilleure est votre place sur la grille.</p>
+      <dl class="keys">
+        <dt><kbd>↑</kbd><kbd>W</kbd></dt><dd>Accélérer</dd>
+        <dt><kbd>↓</kbd><kbd>S</kbd></dt><dd>Freiner, puis marche arrière</dd>
+        <dt><kbd>←</kbd><kbd>→</kbd><kbd>A</kbd><kbd>D</kbd></dt><dd>Diriger</dd>
+      </dl>
+      <p class="note">Sur téléphone : touchez les boutons ◀ ▶ pour diriger, et GAZ ou FREIN.</p>
+    </div>
+    <div class="tstep" data-s="1" hidden>
+      <h2>Le départ</h2>
+      <p>Cinq feux s’allument un par un. Attendez qu’ils s’éteignent avant d’accélérer !</p>
+      <div class="tlights" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+      <p>Si vous accélérez trop tôt, c’est un faux départ : +5 secondes à votre temps.</p>
+    </div>
+    <div class="tstep" data-s="2" hidden>
+      <h2>Bien rouler</h2>
+      <ul class="tlist">
+        <li>Roulez juste derrière une voiture : l’aspiration vous fait gagner de la vitesse.</li>
+        <li>Restez sur la piste. Les murs abîment la voiture, et les pneus s’usent.</li>
+        <li>À partir de 5 tours, un arrêt au stand est obligatoire : entrez dans la voie des stands, à gauche de la ligne de départ, et arrêtez-vous dans votre garage.</li>
+      </ul>
+    </div>
+    <div class="tstep" data-s="3" hidden>
+      <h2>Progresser</h2>
+      <p>Chaque course rapporte de l’XP. Montez de niveau pour débloquer des couleurs, des motifs et des effets de vitesse pour votre voiture.</p>
+      <p>Jouez contre les bots, en ligne, en partie classée ou entre amis. Vous pouvez revoir ce tutoriel à tout moment dans les réglages.</p>
+    </div>
+    <div class="dots" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+    <div class="actions">
+      <button id="tutoNext" class="go" type="button"><span id="tutoNextTxt">Suivant</span><span aria-hidden="true">→</span></button>
+      <button id="tutoBack" class="btn" type="button" hidden>Retour</button>
+      <button id="tutoSkip" class="btn" type="button">Passer</button>
+    </div>
+  </div>
+</section>
+
 <section id="settings" class="layer modal" hidden>
   <div class="card">
     <h2>Réglages</h2>
@@ -566,6 +619,7 @@ label.btn{cursor:pointer;display:inline-block}
       <div class="actions"><button id="fsSet" class="btn" type="button" hidden>Plein écran</button></div>
       <p class="note" id="fsHint" hidden>Sur iPhone et iPad, le navigateur ne permet pas le plein écran : touchez Partager, puis « Sur l’écran d’accueil ». Le jeu s’ouvre alors comme une appli, en plein écran.</p></div>
     <div class="grp"><p class="lbl">Vitesse</p><div class="seg"><button type="button" data-set="unit" data-v="kmh">km/h</button><button type="button" data-set="unit" data-v="mph">mph</button></div></div>
+    <div class="grp"><p class="lbl">Aide</p><div class="actions"><button id="tutoBtn" class="btn" type="button">Revoir le tutoriel</button></div></div>
     <div class="grp"><p class="lbl">Compte</p>
       <p class="note">Supprime de cet appareil votre profil, vos records, vos fantômes, vos circuits, vos points et vos favoris. Les temps et les points déjà transmis aux autres joueurs restent chez eux.</p>
       <div class="actions"><button id="delAcc" class="btn danger" type="button">Supprimer mon compte</button></div></div>
@@ -1934,11 +1988,11 @@ function drawOutline(g, O, w, h, lw) {
 
 // ---------- HUD ----------
 const $ = id => document.getElementById(id);
-const el = { profile: $('profile'), settings: $('settings'), hud: $('hud'), home: $('home'), menu: $('menu'), pause: $('pause'), results: $('results'), quali: $('quali'), ranking: $('ranking'), editor: $('editor'), lobby: $('lobby'), join: $('join'), gp: $('gp'),
+const el = { profile: $('profile'), settings: $('settings'), hud: $('hud'), home: $('home'), menu: $('menu'), pause: $('pause'), results: $('results'), quali: $('quali'), ranking: $('ranking'), editor: $('editor'), lobby: $('lobby'), join: $('join'), gp: $('gp'), tuto: $('tuto'),
   tower: $('tower'), lapNo: $('lapNo'), lapLbl: $('lapLbl'), cur: $('cur'), last: $('lastLap'), best: $('bestLap'), rec: $('recLap'),
   tyre: $('tyreTxt'), wing: $('wingTxt'), pitDt: $('pitDt'), pit: $('pitTxt'), tag: $('tag'), spd: $('spd'), gear: $('gear'), lights: $('lights'), toast: $('toast'), mini: $('mini') };
 const secEls = [$('s0'), $('s1'), $('s2')], lightEls = [...el.lights.children], mctx = el.mini.getContext('2d');
-const SCREENS = ['home', 'gp', 'menu', 'pause', 'results', 'quali', 'editor', 'lobby', 'join', 'ranking', 'profile', 'settings'];
+const SCREENS = ['home', 'tuto', 'gp', 'menu', 'pause', 'results', 'quali', 'editor', 'lobby', 'join', 'ranking', 'profile', 'settings'];
 
 function show(id) {
   for (const s of SCREENS) el[s].hidden = s !== id;
@@ -2464,7 +2518,7 @@ const isPlayerPeer = p => p.kind === 'viewer' && (p.presence.role === 'host' || 
 // A game is a star: the host owns the PeerJS id of the game's name and relays everyone's presence to every guest.
 // It mimics the parts of the room capability the game uses (peers, presence, join, leave).
 const P2P_PREFIX = 'monoplace-gp-v1-'; // the names every version so far has used: old and new pages still find each other
-const VERSION = 49; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
+const VERSION = 50; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
 // Relay for players whose networks refuse direct connections: turn.js, next to the page, holds the owner's own TURN account.
 const RELAY = window.TURN_CONFIG && TURN_CONFIG.username && TURN_CONFIG.credential ? TURN_CONFIG : null;
 const PEER_OPTS = RELAY ? { debug: 0, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, RELAY] } } : { debug: 0 };
@@ -3620,6 +3674,17 @@ if (matchMedia('(pointer: coarse)').matches) document.body.classList.add('touch'
 // ---------- Language: English unless the player picked French ----------
 // Texts are written in French; this dictionary turns every text the page shows into English as it appears.
 const EN = new Map([
+["Le but du jeu", "The goal"], ["Le départ", "The start"], ["Bien rouler", "Driving well"], ["Progresser", "Moving up"], ["Suivant", "Next"], ["Retour", "Back"], ["Passer", "Skip"], ["C’est parti !", "Let’s race!"],
+["Faites le tour du circuit et terminez devant les autres voitures. Chaque course commence par un tour de qualification chronométré : plus il est rapide, meilleure est votre place sur la grille.", "Drive around the circuit and finish ahead of the other cars. Every race starts with a timed qualifying lap: the faster it is, the better your place on the grid."],
+["Sur téléphone : touchez les boutons ◀ ▶ pour diriger, et GAZ ou FREIN.", "On a phone: tap ◀ ▶ to steer, and GAS or BRAKE."],
+["Cinq feux s’allument un par un. Attendez qu’ils s’éteignent avant d’accélérer !", "Five lights come on one by one. Wait for them to go out before you accelerate!"],
+["Si vous accélérez trop tôt, c’est un faux départ : +5 secondes à votre temps.", "If you accelerate too early, it’s a false start: +5 seconds on your time."],
+["Roulez juste derrière une voiture : l’aspiration vous fait gagner de la vitesse.", "Drive right behind a car: the slipstream makes you faster."],
+["Restez sur la piste. Les murs abîment la voiture, et les pneus s’usent.", "Stay on the track. Walls damage the car, and the tyres wear out."],
+["À partir de 5 tours, un arrêt au stand est obligatoire : entrez dans la voie des stands, à gauche de la ligne de départ, et arrêtez-vous dans votre garage.", "From 5 laps on, a pit stop is mandatory: enter the pit lane, to the left of the start line, and stop in your garage."],
+["Chaque course rapporte de l’XP. Montez de niveau pour débloquer des couleurs, des motifs et des effets de vitesse pour votre voiture.", "Every race gives XP. Level up to unlock colours, liveries and speed effects for your car."],
+["Jouez contre les bots, en ligne, en partie classée ou entre amis. Vous pouvez revoir ce tutoriel à tout moment dans les réglages.", "Play against bots, online, ranked or with friends. You can watch this tutorial again at any time in the settings."],
+["Aide", "Help"], ["Revoir le tutoriel", "Watch the tutorial again"],
 ["Grandes lignes droites dans le désert, avec un détour serré qui casse la vitesse.", "Big straights through the desert, with a tight detour that kills your speed."],
 ["Virages techniques dans la neige, avec des épingles qui s’enchaînent.", "Technical corners in the snow, with hairpins that follow each other."],
 ["Compte CrazyGames", "CrazyGames account"], ["Se connecter", "Sign in"],
@@ -3943,6 +4008,24 @@ if (LANG === 'en') {
 // ---------- Loop ----------
 startAttract();
 show('home');
+// First launch: a short tutorial (skippable). It is not shown to a friend arriving through an invite link, or when asked not to (?notuto).
+const TUTO_KEY = 'monoplace-gp.tuto', TUTO_N = 4;
+let tutoI = 0, tutoFrom = 'home';
+function tutoShow(i) {
+  tutoI = i;
+  document.querySelectorAll('#tuto .tstep').forEach(t => { t.hidden = +t.dataset.s !== i; });
+  document.querySelectorAll('#tuto .dots i').forEach((d, k) => d.classList.toggle('on', k === i));
+  $('tutoStep').textContent = (i + 1) + ' / ' + TUTO_N;
+  $('tutoBack').hidden = i === 0; $('tutoSkip').hidden = i === TUTO_N - 1;
+  $('tutoNextTxt').textContent = i === TUTO_N - 1 ? 'C’est parti !' : 'Suivant';
+}
+function openTuto(from) { tutoFrom = from; tutoShow(0); show('tuto'); $('tutoNext').focus(); }
+function closeTuto() { store.set(TUTO_KEY, 1); show(tutoFrom); }
+$('tutoNext').addEventListener('click', () => tutoI < TUTO_N - 1 ? tutoShow(tutoI + 1) : closeTuto());
+$('tutoBack').addEventListener('click', () => tutoShow(Math.max(0, tutoI - 1)));
+$('tutoSkip').addEventListener('click', closeTuto);
+$('tutoBtn').addEventListener('click', () => openTuto('settings'));
+if (!store.get(TUTO_KEY) && !window.__NO_TUTO && !/notuto/.test(location.search) && !/^#partie-/.test(location.hash)) openTuto('home');
 if (document.fonts) document.fonts.ready.then(() => { if (!el.home.hidden) drawModeArts(); });
 initCloud(); cgInit();
 let last = performance.now();
