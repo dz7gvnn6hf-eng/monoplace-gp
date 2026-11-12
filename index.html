@@ -1147,7 +1147,7 @@ const TEAMS = [
   { name: L('Bordeaux', 'Burgundy'), color: '#8e1b3a', alt: '#f1c22e', helmet: '#f4f5f7' },
   { name: L('Bleu ciel', 'Sky blue'), color: '#45c4f5', alt: '#16181c', helmet: '#f1c22e' },
   { name: L('Vert lime', 'Lime'), color: '#9be22d', alt: '#16181c', helmet: '#2f62f5' },
-  { name: L('Or', 'Gold'), color: '#d9a520', alt: '#16181c', helmet: '#f4f5f7' },
+  { name: L('Or', 'Gold'), color: '#d9a520', alt: '#16181c', helmet: '#f4f5f7', fin: 'gold' },
   { name: L('Bronze', 'Bronze'), color: '#b8733a', alt: '#16181c', helmet: '#f1c22e' },
   { name: L('Émeraude', 'Emerald'), color: '#0f9d6b', alt: '#f1c22e', helmet: '#f4f5f7' },
   { name: L('Corail', 'Coral'), color: '#ff6f61', alt: '#0b2f2b', helmet: '#f4f5f7' },
@@ -1177,6 +1177,7 @@ const TEAMS = [
   { name: L('Diamant', 'Diamond'), color: '#e8f4ff', alt: '#6fa8dc', helmet: '#ffffff', fin: 'diamond' },
 ].map((t, i) => ({ ...t, i }));
 const FINISH = { pearl: [[0, '#ffffff'], [.35, '#f7e4ee'], [.65, '#e3ecfa'], [1, '#fbf6e6']], holo: [[0, '#ff5fd0'], [.25, '#7a6bff'], [.5, '#33e0ff'], [.75, '#7dff9b'], [1, '#ffd84a']],
+  gold: [[0, '#fff6c0'], [.18, '#f6cf3e'], [.4, '#b07a0a'], [.55, '#ffe88a'], [.75, '#d9a520'], [1, '#fff0a8']],
   copper: [[0, '#e8a06a'], [.5, '#a85a2e'], [1, '#e8a06a']], nebula: [[0, '#2b1a7a'], [.5, '#9b4dff'], [1, '#ff6ad5']], lava: [[0, '#ffc21a'], [.4, '#ff4a1a'], [.8, '#7a0d0d'], [1, '#1a0505']],
   ocean: [[0, '#7dffe1'], [.5, '#1a8fd8'], [1, '#0b2f6a']], aurora: [[0, '#4bff9a'], [.35, '#33e0ff'], [.7, '#8b5cf6'], [1, '#ff5fd0']],
   obsidian: [[0, '#2a2140'], [.3, '#07050c'], [.55, '#3a2c66'], [1, '#07050c']], diamond: [[0, '#ffffff'], [.2, '#bfe6ff'], [.4, '#f6e0ff'], [.6, '#d4fff0'], [.8, '#bfe6ff'], [1, '#ffffff']] };
@@ -2616,7 +2617,7 @@ const isPlayerPeer = p => p.kind === 'viewer' && (p.presence.role === 'host' || 
 // A game is a star: the host owns the PeerJS id of the game's name and relays everyone's presence to every guest.
 // It mimics the parts of the room capability the game uses (peers, presence, join, leave).
 const P2P_PREFIX = 'monoplace-gp-v1-'; // the names every version so far has used: old and new pages still find each other
-const VERSION = 61; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
+const VERSION = 62; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
 // Relay for players whose networks refuse direct connections: turn.js, next to the page, holds the owner's own TURN account.
 const RELAY = window.TURN_CONFIG && TURN_CONFIG.username && TURN_CONFIG.credential ? TURN_CONFIG : null;
 const PEER_OPTS = RELAY ? { debug: 0, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, RELAY] } } : { debug: 0 };
