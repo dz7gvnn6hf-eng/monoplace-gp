@@ -1165,8 +1165,21 @@ const TEAMS = [
   { name: L('Rose poudré', 'Powder pink'), color: '#f4a6b8', alt: '#3b1f6b', helmet: '#16181c' },
   { name: L('Perle', 'Pearl'), color: '#f2ecef', alt: '#7a5cc9', helmet: '#16181c', fin: 'pearl' }, // special finishes: the body is painted with a gradient
   { name: L('Holographique', 'Holographic'), color: '#7fb2ff', alt: '#16181c', helmet: '#f4f5f7', fin: 'holo' },
+  { name: L('Crème', 'Cream'), color: '#f3e6c4', alt: '#3b2f22', helmet: '#ec3a2a' },
+  { name: L('Bleu nuit', 'Midnight blue'), color: '#101a3a', alt: '#f4f5f7', helmet: '#f1c22e' },
+  { name: L('Pistache', 'Pistachio'), color: '#b6e28a', alt: '#16181c', helmet: '#f4f5f7' },
+  { name: L('Cuivre', 'Copper'), color: '#b8693a', alt: '#2a1810', helmet: '#f4f5f7', fin: 'copper' },
+  { name: L('Nébuleuse', 'Nebula'), color: '#9b4dff', alt: '#f4f5f7', helmet: '#7cf0ff', fin: 'nebula' },
+  { name: L('Lave', 'Lava'), color: '#ff4a1a', alt: '#16181c', helmet: '#ffd84a', fin: 'lava' },
+  { name: L('Océan', 'Ocean'), color: '#1a8fd8', alt: '#f4f5f7', helmet: '#f4f5f7', fin: 'ocean' },
+  { name: L('Aurore boréale', 'Aurora'), color: '#3ee0a0', alt: '#0b1a2a', helmet: '#f4f5f7', fin: 'aurora' },
+  { name: L('Obsidienne', 'Obsidian'), color: '#14101c', alt: '#b45cff', helmet: '#ffb81c', fin: 'obsidian' },
+  { name: L('Diamant', 'Diamond'), color: '#e8f4ff', alt: '#6fa8dc', helmet: '#ffffff', fin: 'diamond' },
 ].map((t, i) => ({ ...t, i }));
-const FINISH = { pearl: [[0, '#ffffff'], [.35, '#f7e4ee'], [.65, '#e3ecfa'], [1, '#fbf6e6']], holo: [[0, '#ff5fd0'], [.25, '#7a6bff'], [.5, '#33e0ff'], [.75, '#7dff9b'], [1, '#ffd84a']] };
+const FINISH = { pearl: [[0, '#ffffff'], [.35, '#f7e4ee'], [.65, '#e3ecfa'], [1, '#fbf6e6']], holo: [[0, '#ff5fd0'], [.25, '#7a6bff'], [.5, '#33e0ff'], [.75, '#7dff9b'], [1, '#ffd84a']],
+  copper: [[0, '#e8a06a'], [.5, '#a85a2e'], [1, '#e8a06a']], nebula: [[0, '#2b1a7a'], [.5, '#9b4dff'], [1, '#ff6ad5']], lava: [[0, '#ffc21a'], [.4, '#ff4a1a'], [.8, '#7a0d0d'], [1, '#1a0505']],
+  ocean: [[0, '#7dffe1'], [.5, '#1a8fd8'], [1, '#0b2f6a']], aurora: [[0, '#4bff9a'], [.35, '#33e0ff'], [.7, '#8b5cf6'], [1, '#ff5fd0']],
+  obsidian: [[0, '#2a2140'], [.3, '#07050c'], [.55, '#3a2c66'], [1, '#07050c']], diamond: [[0, '#ffffff'], [.2, '#bfe6ff'], [.4, '#f6e0ff'], [.6, '#d4fff0'], [.8, '#bfe6ff'], [1, '#ffffff']] };
 const SWATCH_BG = t => t.fin ? 'linear-gradient(135deg,' + FINISH[t.fin].map(([o, c]) => c + ' ' + o * 100 + '%').join(',') + ')' : t.color;
 const bodyFill = (g, d) => { if (!d.fin) return d.color; const gr = g.createLinearGradient(-20, -8, 22, 8); FINISH[d.fin].forEach(([o, c]) => gr.addColorStop(o, c)); return gr; };
 // Six garages for six cars: a car uses the garage of its grid slot, painted in its own colour.
@@ -1855,6 +1868,10 @@ const TRAILS = (() => {
       const drv = { ...d, trail: 'none', motif: d.motif === 'phantom' ? 'classic' : d.motif }, a0 = g.globalAlpha;
       for (const [i, a] of [[8, .32], [16, .14]]) { const q = pts[i]; if (!q) continue; g.globalAlpha = a0 * k * a; drawCar({ x: q[0], y: q[1], a: q[2], steer: 0, drv }, g); }
       g.globalAlpha = a0; }],
+    ['light', L('Ruban de lumière', 'Ribbon of light'), (g, pts, d, k) => { g.lineCap = 'round';
+      for (const [w, white] of [[8, 0], [2.4, 1]]) for (let i = 0; i < pts.length - 1; i++) { const t = i / (pts.length - 1), a = off(pts[i], 19, 0), b = off(pts[i + 1], 19, 0);
+        g.globalAlpha = k * (1 - t) ** 1.6; g.strokeStyle = white ? '#ffffff' : 'hsl(' + (300 - t * 220) + ',95%,62%)'; g.lineWidth = w * (1 - t * .8); g.beginPath(); g.moveTo(...a); g.lineTo(...b); g.stroke(); }
+      g.globalAlpha = 1; }],
   ];
 })();
 const TRAIL_IDS = TRAILS.map(t => t[0]);
@@ -1878,11 +1895,11 @@ const LEG_TRAIL = { none: 1, trail: 4, fire: 12, volt: 23, glow: 30, rainbow: 36
 // Item keys: c<TEAMS index> colour, m:<id> livery, t:<id> speed effect. Free: colours 0-5, classic, none.
 const RARS = [['Commun', 'Common', '#b7bec9'], ['Rare', 'Rare', '#3ed16a'], ['Super rare', 'Super rare', '#4aa3ff'], ['Épique', 'Epic', '#b45cff'], ['Légendaire', 'Legendary', '#ffb81c']];
 const RAR_ITEMS = [
-  ['c6', 'c10', 'c9', 'c7', 'c8', 'c12', 'c13', 'm:stripe', 'm:twin', 'm:split', 'm:sash', 't:trail', 't:smoke', 't:bubbles', 't:pixels'],
-  ['c11', 'c17', 'c19', 'c21', 'c22', 'c23', 'm:fade', 'm:bolt', 'm:hex', 't:fire', 't:snow', 't:hearts'],
-  ['c18', 'c24', 'c25', 'c27', 'c28', 'c29', 'm:tiger', 'm:carbon', 'm:camo', 't:volt', 't:glow', 't:notes', 't:laser'],
-  ['c16', 'c20', 'c26', 'c15', 'm:flames', 'm:neon', 'm:tribal', 't:rainbow', 't:comet', 't:sparks'],
-  ['c14', 'c30', 'c31', 'm:phantom', 't:ghost']];
+  ['c6', 'c10', 'c9', 'c7', 'c8', 'c12', 'c13', 'c32', 'c33', 'm:stripe', 'm:twin', 'm:split', 'm:sash', 't:trail', 't:smoke', 't:bubbles', 't:pixels'],
+  ['c11', 'c17', 'c19', 'c21', 'c22', 'c23', 'c34', 'm:fade', 'm:bolt', 'm:hex', 't:fire', 't:snow', 't:hearts'],
+  ['c18', 'c24', 'c25', 'c27', 'c28', 'c29', 'c35', 'c36', 'm:tiger', 'm:carbon', 'm:camo', 't:volt', 't:glow', 't:notes', 't:laser'],
+  ['c16', 'c20', 'c26', 'c15', 'c37', 'c38', 'c39', 't:light', 'm:flames', 'm:neon', 'm:tribal', 't:rainbow', 't:comet', 't:sparks'],
+  ['c14', 'c30', 'c31', 'c41', 'c40', 'm:phantom', 't:ghost']];
 const RAR_OF = {}; RAR_ITEMS.forEach((l, r) => l.forEach(k => RAR_OF[k] = r));
 const ALL_KEYS = Object.keys(RAR_OF);
 const COIN_ODDS = [55, 28, 12, 4, 1], LVL_ODDS = [30, 35, 22, 10, 3], CHEST_COST = 100; // % by rarity; a level chest is better than a coin chest
@@ -2601,7 +2618,7 @@ const isPlayerPeer = p => p.kind === 'viewer' && (p.presence.role === 'host' || 
 // A game is a star: the host owns the PeerJS id of the game's name and relays everyone's presence to every guest.
 // It mimics the parts of the room capability the game uses (peers, presence, join, leave).
 const P2P_PREFIX = 'monoplace-gp-v1-'; // the names every version so far has used: old and new pages still find each other
-const VERSION = 58; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
+const VERSION = 59; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
 // Relay for players whose networks refuse direct connections: turn.js, next to the page, holds the owner's own TURN account.
 const RELAY = window.TURN_CONFIG && TURN_CONFIG.username && TURN_CONFIG.credential ? TURN_CONFIG : null;
 const PEER_OPTS = RELAY ? { debug: 0, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, RELAY] } } : { debug: 0 };
