@@ -565,7 +565,7 @@ label.btn{cursor:pointer;display:inline-block}
     </div>
     <div class="lvl"><b id="pfLvl"></b><div class="bar"><i id="pfBar"></i></div><span id="pfXp"></span></div>
     <div class="grp"><p class="lbl">Coffres</p><p class="note" id="pfInv"></p><div class="actions"><button id="pfChest" class="btn" type="button">🎁 Ouvrir des coffres</button></div></div>
-    <div class="grp"><p class="lbl">Couleur de votre voiture</p><div class="swatches" id="teams"></div><p class="note">Les éléments grisés se trouvent dans les coffres : la couleur du cadre indique leur rareté.</p></div>
+    <div class="grp"><p class="lbl">Couleur de votre voiture</p><div class="motifs" id="teams"></div><p class="note">Les éléments grisés se trouvent dans les coffres : la couleur du cadre indique leur rareté.</p></div>
     <div class="grp"><p class="lbl">Motif</p><div class="motifs" id="motifs"></div></div>
     <div class="grp"><p class="lbl">Effet de vitesse</p><div class="motifs" id="trails"></div></div>
     <label class="grp"><span class="lbl">Pseudo</span><input id="nick" class="input" maxlength="20" autocomplete="off" spellcheck="false"></label>
@@ -2228,14 +2228,15 @@ function drawMotifs() {
     const pts = Array.from({ length: 24 }, (_, i) => [-i * 3.6, 0, 0, i + 1]), drv = { ...TEAMS[ui.team], motif: ui.motif, trail: id };
     TRAILS.find(t => t[0] === id)[2](g, pts, drv, 1); drawCar({ x: 0, y: 0, a: 0, steer: 0, drv }, g);
     b.disabled = !open; b.lastChild.textContent = open ? '' : '🔒 ' + rarName('t:' + id); b.style.setProperty('--rc', rarCol('t:' + id)); }); // previews in the chosen colour; locked items show their rarity
-  document.querySelectorAll('#teams button').forEach(b => { const i = +b.dataset.v, open = colorOpen(i); b.disabled = !open; b.textContent = open ? '' : '🔒'; b.style.setProperty('--rc', rarCol('c' + i));
-    b.title = TEAMS[i].name + (open ? '' : ' · ' + rarName('c' + i)); });
+  document.querySelectorAll('#teams button').forEach(b => { const cv = b.firstChild, g = cv.getContext('2d'), i = +b.dataset.v, open = colorOpen(i); g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, cv.width, cv.height);
+    b.disabled = !open; b.lastChild.textContent = open ? '' : '🔒 ' + rarName('c' + i); b.style.setProperty('--rc', rarCol('c' + i));
+    g.setTransform(1.75, 0, 0, 1.75, 46, 28); drawCar({ x: 0, y: 0, a: 0, steer: 0, drv: { ...TEAMS[i], motif: ui.motif } }, g); });
   document.querySelectorAll('#motifs button').forEach(b => { const cv = b.firstChild, g = cv.getContext('2d'), open = motifOpen(b.dataset.v); g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, cv.width, cv.height);
     b.disabled = !open; b.lastChild.textContent = open ? '' : '🔒 ' + rarName('m:' + b.dataset.v); b.style.setProperty('--rc', rarCol('m:' + b.dataset.v));
     b.title = open ? '' : L('À trouver dans les coffres', 'Found in chests');
     g.setTransform(1.75, 0, 0, 1.75, 46, 28); drawCar({ x: 0, y: 0, a: 0, steer: 0, drv: { ...TEAMS[ui.team], motif: b.dataset.v } }, g); });
 }
-$('teams').innerHTML = TEAMS.map((t, i) => [t, i]).sort((a, b) => rarOf('c' + a[1]) - rarOf('c' + b[1])).map(([t, i]) => '<button type="button" data-k="team" data-v="' + i + '" aria-label="Écurie ' + t.name + '" title="' + t.name + '" style="background:' + SWATCH_BG(t) + '"></button>').join('');
+$('teams').innerHTML = TEAMS.map((t, i) => [t, i]).sort((a, b) => rarOf('c' + a[1]) - rarOf('c' + b[1])).map(([t, i]) => '<button type="button" data-k="team" data-v="' + i + '"><canvas width="96" height="56" aria-hidden="true"></canvas><span>' + t.name + '</span><small></small></button>').join('');
 $('rounds').innerHTML = CHAMP.map((d, i) => '<li><span class="n">' + (i + 1) + '</span><span>' + esc(d.name) + '</span></li>').join('');
 
 // Illustrations on the three mode cards
@@ -2615,7 +2616,7 @@ const isPlayerPeer = p => p.kind === 'viewer' && (p.presence.role === 'host' || 
 // A game is a star: the host owns the PeerJS id of the game's name and relays everyone's presence to every guest.
 // It mimics the parts of the room capability the game uses (peers, presence, join, leave).
 const P2P_PREFIX = 'monoplace-gp-v1-'; // the names every version so far has used: old and new pages still find each other
-const VERSION = 60; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
+const VERSION = 61; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
 // Relay for players whose networks refuse direct connections: turn.js, next to the page, holds the owner's own TURN account.
 const RELAY = window.TURN_CONFIG && TURN_CONFIG.username && TURN_CONFIG.credential ? TURN_CONFIG : null;
 const PEER_OPTS = RELAY ? { debug: 0, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, RELAY] } } : { debug: 0 };
