@@ -205,6 +205,7 @@ h1 span{color:var(--red)}
 .motifs button{display:grid;justify-items:center;gap:2px;padding:4px 2px 6px;font:600 13px/1.1 var(--f-body);color:var(--muted);text-align:center}
 .motifs canvas{width:96px;height:56px;max-width:100%}
 .motifs button:disabled{opacity:.5;cursor:default}
+.swatches button:disabled,.motifs button:disabled{box-shadow:inset 0 0 0 2px var(--rc,transparent)}
 .swatches button:disabled{opacity:.55;cursor:default;font:800 14px/30px var(--f-display);text-align:center;color:#fff;text-shadow:0 0 3px #000,0 0 2px #000}
 .motifs small{font-size:12px;color:var(--yellow)}
 .lvl{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:10px}
@@ -215,6 +216,11 @@ h1 span{color:var(--red)}
 .wl{display:flex;align-items:center;gap:8px;min-width:0}
 .wl > span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 .wl .lvlb{margin-left:0;flex:none}
+.chbox{display:grid;justify-items:center;gap:6px;min-height:190px;align-content:center;text-align:center;padding:12px;background:var(--panel-hi);box-shadow:inset 0 0 0 2px var(--rc,transparent),0 0 24px var(--rc,transparent)}
+.chbox .gift{font-size:76px;line-height:1}
+.chbox .gift.shake{animation:chshake .18s linear infinite}
+@keyframes chshake{0%{transform:rotate(-8deg)}50%{transform:rotate(8deg)}100%{transform:rotate(-8deg)}}
+.chbox .rar{font:800 20px/1 var(--f-display);text-transform:uppercase}
 .lvlb{margin-left:8px;padding:2px 6px;background:var(--yellow);color:var(--ink);font:800 13px/1 var(--f-display)}
 .xpline{margin:0;color:var(--muted)}
 .xpline b{color:var(--yellow);font-weight:700}
@@ -558,13 +564,29 @@ label.btn{cursor:pointer;display:inline-block}
       </div>
     </div>
     <div class="lvl"><b id="pfLvl"></b><div class="bar"><i id="pfBar"></i></div><span id="pfXp"></span></div>
-    <div class="grp"><p class="lbl">Couleur de votre voiture</p><div class="swatches" id="teams"></div><p class="note">Le chiffre sur une couleur grisée est le niveau qui la débloque.</p></div>
+    <div class="grp"><p class="lbl">Coffres</p><p class="note" id="pfInv"></p><div class="actions"><button id="pfChest" class="btn" type="button">🎁 Ouvrir des coffres</button></div></div>
+    <div class="grp"><p class="lbl">Couleur de votre voiture</p><div class="swatches" id="teams"></div><p class="note">Les éléments grisés se trouvent dans les coffres : la couleur du cadre indique leur rareté.</p></div>
     <div class="grp"><p class="lbl">Motif</p><div class="motifs" id="motifs"></div></div>
     <div class="grp"><p class="lbl">Effet de vitesse</p><div class="motifs" id="trails"></div></div>
     <label class="grp"><span class="lbl">Pseudo</span><input id="nick" class="input" maxlength="20" autocomplete="off" spellcheck="false"></label>
     <p class="note">Votre pseudo s’affiche pour les autres joueurs en ligne. Votre photo reste sur cet appareil : les autres ne la voient pas.</p>
     <div class="grp" id="cgAcc" hidden><p class="lbl">Compte CrazyGames</p><p class="note" id="cgAccTxt"></p><div class="actions"><button id="cgLogin" class="btn" type="button" hidden>Se connecter</button></div></div>
     <div class="actions"><button id="pfClose" class="btn" type="button">Fermer</button></div>
+  </div>
+</section>
+
+<section id="chest" class="layer modal" hidden>
+  <div class="card">
+    <h2>Coffres</h2>
+    <p class="note" id="chInfo"></p>
+    <div class="chbox" id="chBox" aria-live="polite"></div>
+    <div class="actions">
+      <button id="chLvl" class="go" type="button"></button>
+      <button id="chCoin" class="btn" type="button"></button>
+      <button id="chEquip" class="btn" type="button" hidden>Équiper</button>
+      <button id="chClose" class="btn" type="button">Fermer</button>
+    </div>
+    <p class="note" id="chOdds"></p>
   </div>
 </section>
 
@@ -597,7 +619,7 @@ label.btn{cursor:pointer;display:inline-block}
     </div>
     <div class="tstep" data-s="3" hidden>
       <h2>Progresser</h2>
-      <p>Chaque course rapporte de l’XP. Montez de niveau pour débloquer des couleurs, des motifs et des effets de vitesse pour votre voiture.</p>
+      <p>Chaque course rapporte de l’XP et des pièces. Chaque niveau gagné donne un coffre, et 100 pièces en ouvrent un : ils cachent des couleurs, des motifs et des effets de vitesse de plus en plus rares.</p>
       <p>« C’est parti ! » lance une course rapide : un tour contre des bots faciles. Ensuite, jouez contre les bots, en ligne, en partie classée ou entre amis. Vous pouvez revoir ce tutoriel à tout moment dans les réglages.</p>
     </div>
     <div class="dots" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
@@ -736,6 +758,7 @@ label.btn{cursor:pointer;display:inline-block}
       <button id="againBtn" class="go" type="button"><span id="againTxt">Rejouer</span><span aria-hidden="true">→</span></button>
       <button id="menuBtn" class="btn" type="button">Menu</button>
       <button id="resRankBtn" class="btn" type="button" hidden>Voir le classement</button>
+      <button id="resChestBtn" class="btn" type="button" hidden>🎁 Ouvrir un coffre</button>
     </div>
   </div>
 </section>
@@ -1848,13 +1871,46 @@ const XP_KEY = 'monoplace-gp.xp';
 let XP = Math.max(0, Math.floor(+store.get(XP_KEY) || 0));
 const xpNeed = n => 20 + 10 * (n - 1); // XP to go from level n to n + 1: 20, 30, 40...
 function levelOf(xp) { let n = 1; while (xp >= xpNeed(n)) { xp -= xpNeed(n); n++; } return [n, xp, xpNeed(n)]; }
-// One unlock track: the 8 extra colours and the 10 motifs take turns, further and further apart.
-const MOTIF_LEVEL = { classic: 1, stripe: 3, twin: 7, split: 10, sash: 15, fade: 19, bolt: 24, tiger: 29, camo: 34, flames: 42, neon: 39, tribal: 46, phantom: 55, carbon: 32, hex: 16 };
-const COLOR_LEVEL = [1, 1, 1, 1, 1, 1, 2, 47, 13, 18, 5, 31, 41, 25, 53, 52, 45, 22, 37, 9, 49, 35, 14, 28, 11, 21, 38, 26, 6, 44, 50, 54]; // by TEAMS index: the first six are free
-const TRAIL_LEVEL = { none: 1, trail: 4, fire: 12, volt: 23, glow: 30, rainbow: 36, sparks: 51, ghost: 56, smoke: 8, bubbles: 17, pixels: 20, snow: 27, hearts: 33, notes: 40, laser: 43, comet: 48 };
-const colorOpen = i => levelOf(XP)[0] >= (COLOR_LEVEL[i] || 1);
-const motifOpen = id => levelOf(XP)[0] >= (MOTIF_LEVEL[id] || 1);
-const trailOpen = id => levelOf(XP)[0] >= (TRAIL_LEVEL[id] || 1);
+// Skins come from chests. The old level tables only remain to migrate saves made before chests existed.
+const LEG_MOTIF = { classic: 1, stripe: 3, twin: 7, split: 10, sash: 15, fade: 19, bolt: 24, tiger: 29, camo: 34, flames: 42, neon: 39, tribal: 46, phantom: 55, carbon: 32, hex: 16 };
+const LEG_COLOR = [1, 1, 1, 1, 1, 1, 2, 47, 13, 18, 5, 31, 41, 25, 53, 52, 45, 22, 37, 9, 49, 35, 14, 28, 11, 21, 38, 26, 6, 44, 50, 54];
+const LEG_TRAIL = { none: 1, trail: 4, fire: 12, volt: 23, glow: 30, rainbow: 36, sparks: 51, ghost: 56, smoke: 8, bubbles: 17, pixels: 20, snow: 27, hearts: 33, notes: 40, laser: 43, comet: 48 };
+// Item keys: c<TEAMS index> colour, m:<id> livery, t:<id> speed effect. Free: colours 0-5, classic, none.
+const RARS = [['Commun', 'Common', '#b7bec9'], ['Rare', 'Rare', '#4aa3ff'], ['Super rare', 'Super rare', '#3ed16a'], ['Épique', 'Epic', '#b45cff'], ['Légendaire', 'Legendary', '#ffb81c']];
+const RAR_ITEMS = [
+  ['c6', 'c10', 'c9', 'c7', 'c8', 'c12', 'c13', 'm:stripe', 'm:twin', 'm:split', 'm:sash', 't:trail', 't:smoke', 't:bubbles', 't:pixels'],
+  ['c11', 'c17', 'c19', 'c21', 'c22', 'c23', 'm:fade', 'm:bolt', 'm:hex', 't:fire', 't:snow', 't:hearts'],
+  ['c18', 'c24', 'c25', 'c27', 'c28', 'c29', 'm:tiger', 'm:carbon', 'm:camo', 't:volt', 't:glow', 't:notes', 't:laser'],
+  ['c16', 'c20', 'c26', 'c15', 'm:flames', 'm:neon', 'm:tribal', 't:rainbow', 't:comet', 't:sparks'],
+  ['c14', 'c30', 'c31', 'm:phantom', 't:ghost']];
+const RAR_OF = {}; RAR_ITEMS.forEach((l, r) => l.forEach(k => RAR_OF[k] = r));
+const ALL_KEYS = Object.keys(RAR_OF);
+const COIN_ODDS = [55, 28, 12, 4, 1], LVL_ODDS = [30, 35, 22, 10, 3], CHEST_COST = 100; // % by rarity; a level chest is better than a coin chest
+const INV_KEY = 'monoplace-gp.inv';
+const legLevel = k => k[0] === 'c' ? LEG_COLOR[+k.slice(1)] : (k[0] === 'm' ? LEG_MOTIF : LEG_TRAIL)[k.slice(2)];
+let INV = (s => s && Array.isArray(s.own) ? { own: s.own.filter(k => k in RAR_OF), coins: Math.max(0, s.coins | 0), chests: Math.max(0, s.chests | 0) }
+  : { own: ALL_KEYS.filter(k => levelOf(XP)[0] >= legLevel(k)), coins: 0, chests: 0 })(store.get(INV_KEY));
+const saveInv = () => store.set(INV_KEY, INV);
+saveInv();
+const owned = k => !(k in RAR_OF) || INV.own.includes(k);
+const colorOpen = i => owned('c' + i), motifOpen = id => owned('m:' + id), trailOpen = id => owned('t:' + id);
+const rarOf = k => RAR_OF[k] == null ? -1 : RAR_OF[k];
+// Draws one rarity then one unowned item of it (rarities with nothing left are skipped). null when the collection is complete.
+function rollChest(odds) {
+  const left = RAR_ITEMS.map(l => l.filter(k => !INV.own.includes(k))), w = odds.map((p, r) => left[r].length ? p : 0), tot = w.reduce((a, b) => a + b, 0);
+  if (!tot) return null;
+  let x = Math.random() * tot, r = 0; while (x >= w[r]) { x -= w[r]; r++; }
+  const k = left[r][Math.floor(Math.random() * left[r].length)]; INV.own.push(k); return k;
+}
+// kind 'lvl' spends a level chest, 'coin' spends 100 coins. Returns the item key, or null when nothing can be opened.
+function openChest(kind) {
+  if (INV.own.length >= ALL_KEYS.length || (kind === 'lvl' ? INV.chests < 1 : INV.coins < CHEST_COST)) return null;
+  const k = rollChest(kind === 'lvl' ? LVL_ODDS : COIN_ODDS);
+  if (kind === 'lvl') INV.chests--; else INV.coins -= CHEST_COST;
+  saveInv(); return k;
+}
+function itemName(k) { return k[0] === 'c' ? TEAMS[+k.slice(1)].name : (k[0] === 'm' ? MOTIFS : TRAILS).find(m => m[0] === k.slice(2))[1]; }
+const itemKind = k => k[0] === 'c' ? L('Couleur', 'Colour') : k[0] === 'm' ? L('Motif', 'Livery') : L('Effet de vitesse', 'Speed effect');
 const POS_XP = [1, .8, .65, .5, .4, .3]; // share of the race's XP by finishing place
 // One race: bots < online < ranked; harder bots and longer races give more; a championship round gives a quarter more.
 function raceBase() {
@@ -1873,11 +1929,11 @@ function giveXp(pos) {
   }
   add = Math.round(add + bonus);
   const before = levelOf(XP)[0]; XP += add; store.set(XP_KEY, XP);
-  const after = levelOf(XP)[0], fresh = l => l > before && l <= after;
-  const opened = [...MOTIFS.filter(m => fresh(MOTIF_LEVEL[m[0]])).map(m => L('motif ', 'livery ') + m[1]), ...TEAMS.filter((t, i) => fresh(COLOR_LEVEL[i])).map(t => L('couleur ', 'colour ') + t.name.toLowerCase()), ...TRAILS.filter(t => fresh(TRAIL_LEVEL[t[0]])).map(t => L('effet ', 'effect ') + t[1])];
-  G.xp = { add, bonus: Math.round(bonus), before, after, opened };
+  const after = levelOf(XP)[0], coins = Math.round(add * .5), chests = after - before; // coins follow the XP; each new level gives a chest
+  INV.coins += coins; INV.chests += chests; saveInv();
+  G.xp = { add, bonus: Math.round(bonus), before, after, coins, chests };
   if (hub) hub.share();
-  if (after > before) { toast(L('Niveau ', 'Level ') + after + ' !', 'p'); sfxChime([659, 784, 1047]); }
+  if (after > before) { toast(L('Niveau ', 'Level ') + after + L(' ! Coffre gagné', ' ! Chest won'), 'p'); sfxChime([659, 784, 1047]); }
   refreshProfile();
 }
 const cleanMotif = m => MOTIF_IDS.includes(m) ? m : 'classic';
@@ -2013,11 +2069,11 @@ function drawOutline(g, O, w, h, lw) {
 
 // ---------- HUD ----------
 const $ = id => document.getElementById(id);
-const el = { profile: $('profile'), settings: $('settings'), hud: $('hud'), home: $('home'), menu: $('menu'), pause: $('pause'), results: $('results'), quali: $('quali'), ranking: $('ranking'), editor: $('editor'), lobby: $('lobby'), join: $('join'), gp: $('gp'), tuto: $('tuto'),
+const el = { chest: $('chest'), profile: $('profile'), settings: $('settings'), hud: $('hud'), home: $('home'), menu: $('menu'), pause: $('pause'), results: $('results'), quali: $('quali'), ranking: $('ranking'), editor: $('editor'), lobby: $('lobby'), join: $('join'), gp: $('gp'), tuto: $('tuto'),
   tower: $('tower'), lapNo: $('lapNo'), lapLbl: $('lapLbl'), cur: $('cur'), last: $('lastLap'), best: $('bestLap'), rec: $('recLap'),
   tyre: $('tyreTxt'), wing: $('wingTxt'), pitDt: $('pitDt'), pit: $('pitTxt'), tag: $('tag'), spd: $('spd'), gear: $('gear'), lights: $('lights'), toast: $('toast'), mini: $('mini') };
 const secEls = [$('s0'), $('s1'), $('s2')], lightEls = [...el.lights.children], mctx = el.mini.getContext('2d');
-const SCREENS = ['home', 'tuto', 'gp', 'menu', 'pause', 'results', 'quali', 'editor', 'lobby', 'join', 'ranking', 'profile', 'settings'];
+const SCREENS = ['home', 'tuto', 'gp', 'menu', 'pause', 'results', 'quali', 'editor', 'lobby', 'join', 'ranking', 'profile', 'settings', 'chest'];
 
 function show(id) {
   for (const s of SCREENS) el[s].hidden = s !== id;
@@ -2069,7 +2125,8 @@ function renderResults() {
   else if (G.xp) { const x = G.xp, [n, have, need] = levelOf(XP);
     $('resXp').innerHTML = '<b>+' + x.add + ' XP</b>' + (x.bonus ? ' <span>' + txt('dont ', 'incl. ') + x.bonus + txt(' de bonus championnat', ' championship bonus') + '</span>' : '') +
       ' · ' + (x.after > x.before ? '<b class="up">' + txt('Niveau ', 'Level ') + n + ' !</b>' : txt('Niveau ', 'Level ') + n + ' · ' + have + ' / ' + need + ' XP') +
-      (x.opened.length ? '<br>' + txt('Débloqué : ', 'Unlocked: ') + esc(x.opened.join(', ')) : ''); }
+      (x.coins ? ' · <b>+' + x.coins + ' ' + txt('pièces', 'coins') + '</b>' : '') + (x.chests ? '<br>🎁 ' + txt('Coffre de niveau gagné !', 'Level chest won!') : ''); }
+  $('resChestBtn').hidden = INV.chests < 1 && INV.coins < CHEST_COST;
   $('resChat').hidden = !G.online;
   if (G.online) collectSays();
   if (nc) {
@@ -2148,22 +2205,23 @@ const ui = { mode: 'race', tid: 'lac', laps: 3, diff: 'normal', weather: 'dry', 
 const MODE_NAMES = { race: 'Grand Prix', champ: L('Championnat', 'Championship'), tt: L('Chrono', 'Time Trial') };
 const recTxt = id => { const r = records[id]; return r ? 'Record <b>' + fmt(r.lap) + '</b>' : 'Pas encore de record'; };
 
-$('motifs').innerHTML = [...MOTIFS].sort((a, b) => MOTIF_LEVEL[a[0]] - MOTIF_LEVEL[b[0]]).map(([id, name]) => '<button type="button" data-k="motif" data-v="' + id + '"><canvas width="96" height="56" aria-hidden="true"></canvas><span>' + name + '</span><small></small></button>').join('');
-$('trails').innerHTML = [...TRAILS].sort((a, b) => TRAIL_LEVEL[a[0]] - TRAIL_LEVEL[b[0]]).map(([id, name]) => '<button type="button" data-k="trail" data-v="' + id + '"><canvas width="120" height="56" aria-hidden="true"></canvas><span>' + name + '</span><small></small></button>').join('');
+$('motifs').innerHTML = [...MOTIFS].sort((a, b) => rarOf('m:' + a[0]) - rarOf('m:' + b[0])).map(([id, name]) => '<button type="button" data-k="motif" data-v="' + id + '"><canvas width="96" height="56" aria-hidden="true"></canvas><span>' + name + '</span><small></small></button>').join('');
+$('trails').innerHTML = [...TRAILS].sort((a, b) => rarOf('t:' + a[0]) - rarOf('t:' + b[0])).map(([id, name]) => '<button type="button" data-k="trail" data-v="' + id + '"><canvas width="120" height="56" aria-hidden="true"></canvas><span>' + name + '</span><small></small></button>').join('');
+const rarName = k => L(RARS[rarOf(k)][0], RARS[rarOf(k)][1]), rarCol = k => RARS[Math.max(0, rarOf(k))][2];
 function drawMotifs() {
   document.querySelectorAll('#trails button').forEach(b => { const cv = b.firstChild, g = cv.getContext('2d'), id = b.dataset.v, open = trailOpen(id);
     g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, cv.width, cv.height); g.setTransform(1.3, 0, 0, 1.3, 92, 28);
     const pts = Array.from({ length: 24 }, (_, i) => [-i * 3.6, 0, 0, i + 1]), drv = { ...TEAMS[ui.team], motif: ui.motif, trail: id };
     TRAILS.find(t => t[0] === id)[2](g, pts, drv, 1); drawCar({ x: 0, y: 0, a: 0, steer: 0, drv }, g);
-    b.disabled = !open; b.lastChild.textContent = open ? '' : '🔒 ' + L('Niveau ', 'Level ') + TRAIL_LEVEL[id]; }); // previews in the chosen colour; locked colours and motifs show the level they open at
-  document.querySelectorAll('#teams button').forEach(b => { const i = +b.dataset.v, open = colorOpen(i); b.disabled = !open; b.textContent = open ? '' : COLOR_LEVEL[i];
-    b.title = TEAMS[i].name + (open ? '' : ' · ' + L('niveau ', 'level ') + COLOR_LEVEL[i]); });
+    b.disabled = !open; b.lastChild.textContent = open ? '' : '🔒 ' + rarName('t:' + id); b.style.setProperty('--rc', rarCol('t:' + id)); }); // previews in the chosen colour; locked items show their rarity
+  document.querySelectorAll('#teams button').forEach(b => { const i = +b.dataset.v, open = colorOpen(i); b.disabled = !open; b.textContent = open ? '' : '🔒'; b.style.setProperty('--rc', rarCol('c' + i));
+    b.title = TEAMS[i].name + (open ? '' : ' · ' + rarName('c' + i)); });
   document.querySelectorAll('#motifs button').forEach(b => { const cv = b.firstChild, g = cv.getContext('2d'), open = motifOpen(b.dataset.v); g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, cv.width, cv.height);
-    b.disabled = !open; b.lastChild.textContent = open ? '' : '🔒 ' + L('Niveau ', 'Level ') + MOTIF_LEVEL[b.dataset.v];
-    b.title = open ? '' : L('Se débloque au niveau ', 'Unlocks at level ') + MOTIF_LEVEL[b.dataset.v];
+    b.disabled = !open; b.lastChild.textContent = open ? '' : '🔒 ' + rarName('m:' + b.dataset.v); b.style.setProperty('--rc', rarCol('m:' + b.dataset.v));
+    b.title = open ? '' : L('À trouver dans les coffres', 'Found in chests');
     g.setTransform(1.75, 0, 0, 1.75, 46, 28); drawCar({ x: 0, y: 0, a: 0, steer: 0, drv: { ...TEAMS[ui.team], motif: b.dataset.v } }, g); });
 }
-$('teams').innerHTML = TEAMS.map((t, i) => [t, i]).sort((a, b) => COLOR_LEVEL[a[1]] - COLOR_LEVEL[b[1]]).map(([t, i]) => '<button type="button" data-k="team" data-v="' + i + '" aria-label="Écurie ' + t.name + '" title="' + t.name + '" style="background:' + SWATCH_BG(t) + '"></button>').join('');
+$('teams').innerHTML = TEAMS.map((t, i) => [t, i]).sort((a, b) => rarOf('c' + a[1]) - rarOf('c' + b[1])).map(([t, i]) => '<button type="button" data-k="team" data-v="' + i + '" aria-label="Écurie ' + t.name + '" title="' + t.name + '" style="background:' + SWATCH_BG(t) + '"></button>').join('');
 $('rounds').innerHTML = CHAMP.map((d, i) => '<li><span class="n">' + (i + 1) + '</span><span>' + esc(d.name) + '</span></li>').join('');
 
 // Illustrations on the three mode cards
@@ -2543,7 +2601,7 @@ const isPlayerPeer = p => p.kind === 'viewer' && (p.presence.role === 'host' || 
 // A game is a star: the host owns the PeerJS id of the game's name and relays everyone's presence to every guest.
 // It mimics the parts of the room capability the game uses (peers, presence, join, leave).
 const P2P_PREFIX = 'monoplace-gp-v1-'; // the names every version so far has used: old and new pages still find each other
-const VERSION = 57; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
+const VERSION = 58; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
 // Relay for players whose networks refuse direct connections: turn.js, next to the page, holds the owner's own TURN account.
 const RELAY = window.TURN_CONFIG && TURN_CONFIG.username && TURN_CONFIG.credential ? TURN_CONFIG : null;
 const PEER_OPTS = RELAY ? { debug: 0, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, RELAY] } } : { debug: 0 };
@@ -3528,8 +3586,9 @@ function refreshProfile() {
   $('pfInit').hidden = !!ph; $('pfInit').textContent = nm.slice(0, 1).toUpperCase();
   $('pfRemove').hidden = !ph; $('profName').textContent = nm;
   const [n, have, need] = levelOf(XP);
-  $('profLvl').textContent = L('Niv. ', 'Lv ') + n; $('pfLvl').textContent = L('Niveau ', 'Level ') + n;
+  $('profLvl').textContent = L('Niv. ', 'Lv ') + n + (INV.chests > 0 || INV.coins >= CHEST_COST ? ' 🎁' : ''); $('pfLvl').textContent = L('Niveau ', 'Level ') + n;
   $('pfXp').textContent = have + ' / ' + need + ' XP'; $('pfBar').style.width = (have / need * 100).toFixed(1) + '%';
+  $('pfInv').textContent = '🪙 ' + INV.coins + ' ' + L('pièces', 'coins') + ' · 🎁 ' + INV.chests + ' ' + L('coffre(s) de niveau', 'level chest(s)') + ' · ' + L('Collection ', 'Collection ') + INV.own.length + '/' + ALL_KEYS.length;
   drawMotifs();
 }
 $('nick').addEventListener('change', () => { $('nick').value = myNick(); store.set('monoplace-gp.nick', myNick()); refreshProfile(); if (hub) hub.share(); });
@@ -3549,6 +3608,43 @@ $('pfFile').addEventListener('change', () => {
 $('pfRemove').addEventListener('click', () => { store.del(PHOTO_KEY); refreshProfile(); });
 $('profileBtn').addEventListener('click', () => { refreshProfile(); show('profile'); });
 $('pfClose').addEventListener('click', () => show('home'));
+// ---------- Chest screen ----------
+let chestBack = 'home', chestItem = null, chestBusy = false;
+function chestUi() {
+  const full = INV.own.length >= ALL_KEYS.length, pct = o => o.join(' / ') + ' %';
+  $('chInfo').textContent = '🪙 ' + INV.coins + ' ' + L('pièces', 'coins') + ' · 🎁 ' + INV.chests + ' ' + L('coffre(s) de niveau', 'level chest(s)') + ' · ' + L('Collection ', 'Collection ') + INV.own.length + '/' + ALL_KEYS.length;
+  $('chLvl').textContent = '🎁 ' + L('Coffre de niveau', 'Level chest') + ' (' + INV.chests + ')'; $('chLvl').disabled = full || INV.chests < 1 || chestBusy;
+  $('chCoin').textContent = '🪙 ' + L('Coffre à ', 'Chest for ') + CHEST_COST + ' ' + L('pièces', 'coins'); $('chCoin').disabled = full || INV.coins < CHEST_COST || chestBusy;
+  $('chOdds').textContent = RARS.map(r => L(r[0], r[1])).join(' / ') + ' — ' + L('coffre de niveau : ', 'level chest: ') + pct(LVL_ODDS) + ' · ' + L('coffre de pièces : ', 'coin chest: ') + pct(COIN_ODDS) + (full ? ' — ' + L('Collection complète !', 'Collection complete!') : '');
+}
+function previewItem(cv, k) {
+  const g = cv.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, cv.width, cv.height);
+  const drv = { ...TEAMS[k[0] === 'c' ? +k.slice(1) : ui.team], motif: k[0] === 'm' ? k.slice(2) : 'classic', trail: k[0] === 't' ? k.slice(2) : 'none' };
+  if (k[0] === 't') { g.setTransform(2.4, 0, 0, 2.4, cv.width * .72, cv.height / 2); TRAILS.find(t => t[0] === drv.trail)[2](g, Array.from({ length: 24 }, (_, i) => [-i * 3.6, 0, 0, i + 1]), drv, 1); }
+  else g.setTransform(3.2, 0, 0, 3.2, cv.width / 2, cv.height / 2);
+  drawCar({ x: 0, y: 0, a: 0, steer: 0, drv }, g);
+}
+function doOpen(kind) {
+  if (chestBusy) return;
+  const k = openChest(kind); if (!k) return;
+  chestBusy = true; chestItem = null; $('chEquip').hidden = true; chestUi();
+  const box = $('chBox'); box.style.setProperty('--rc', 'transparent'); box.innerHTML = '<div class="gift shake">🎁</div>';
+  sfxChime([392, 330]);
+  setTimeout(() => {
+    chestBusy = false; chestItem = k; const r = RARS[rarOf(k)];
+    box.style.setProperty('--rc', r[2]);
+    box.innerHTML = '<canvas width="240" height="110" aria-hidden="true"></canvas><div class="rar" style="color:' + r[2] + '">' + esc(L(r[0], r[1])) + '</div><b>' + esc(itemName(k)) + '</b><span class="note">' + esc(itemKind(k)) + ' · ' + L('Nouveau !', 'New!') + '</span>';
+    previewItem(box.firstChild, k); sfxChime(rarOf(k) >= 3 ? [659, 784, 1047, 1319] : [659, 784]);
+    $('chEquip').hidden = false; chestUi(); refreshProfile();
+  }, 900);
+}
+function openChestScreen(back) { chestBack = back; chestItem = null; $('chEquip').hidden = true; $('chBox').style.setProperty('--rc', 'transparent'); $('chBox').innerHTML = '<div class="gift">🎁</div>'; chestUi(); show('chest'); }
+$('pfChest').addEventListener('click', () => openChestScreen('profile'));
+$('resChestBtn').addEventListener('click', () => openChestScreen('results'));
+$('chLvl').addEventListener('click', () => doOpen('lvl'));
+$('chCoin').addEventListener('click', () => doOpen('coin'));
+$('chEquip').addEventListener('click', () => { if (!chestItem) return; const k = chestItem, d = k[0] === 'c' ? ['team', k.slice(1)] : [k[0] === 'm' ? 'motif' : 'trail', k.slice(2)]; document.querySelector('[data-k="' + d[0] + '"][data-v="' + d[1] + '"]').click(); $('chEquip').hidden = true; toast(L('Équipé !', 'Equipped!'), 'p'); });
+$('chClose').addEventListener('click', () => { if (chestBusy) return; refreshProfile(); show(chestBack); if (chestBack === 'results') $('resChestBtn').hidden = INV.chests < 1 && INV.coins < CHEST_COST; });
 function refreshSettings() {
   document.querySelectorAll('[data-set]').forEach(b => b.setAttribute('aria-pressed', b.dataset.set === 'lang' ? b.dataset.v === LANG : b.dataset.set === 'sound' ? (b.dataset.v === 'on') === SND.on : b.dataset.v === UNIT));
   $('volume').value = SND.vol;
@@ -3711,7 +3807,7 @@ const EN = new Map([
 ["Roulez juste derrière une voiture : l’aspiration vous fait gagner de la vitesse.", "Drive right behind a car: the slipstream makes you faster."],
 ["Restez sur la piste. Les murs abîment la voiture, et les pneus s’usent : plus ils sont usés, moins la voiture accroche et plus elle est lente.", "Stay on the track. Walls damage the car, and the tyres wear out: the more worn they are, the less the car grips and the slower it gets."],
 ["À partir de 5 tours, un arrêt au stand est obligatoire : entrez dans la voie des stands, à gauche de la ligne de départ, et arrêtez-vous dans votre garage.", "From 5 laps on, a pit stop is mandatory: enter the pit lane, to the left of the start line, and stop in your garage."],
-["Chaque course rapporte de l’XP. Montez de niveau pour débloquer des couleurs, des motifs et des effets de vitesse pour votre voiture.", "Every race gives XP. Level up to unlock colours, liveries and speed effects for your car."],
+["Chaque course rapporte de l’XP et des pièces. Chaque niveau gagné donne un coffre, et 100 pièces en ouvrent un : ils cachent des couleurs, des motifs et des effets de vitesse de plus en plus rares.", "Every race gives XP and coins. Each level gives a chest, and 100 coins open one: they hide ever rarer colours, liveries and speed effects."],
 ["« C’est parti ! » lance une course rapide : un tour contre des bots faciles. Ensuite, jouez contre les bots, en ligne, en partie classée ou entre amis. Vous pouvez revoir ce tutoriel à tout moment dans les réglages.", "“Let’s race!” starts a quick race: one lap against easy bots. After that, play against bots, online, ranked or with friends. You can watch this tutorial again at any time in the settings."],
 ["Aide", "Help"], ["Revoir le tutoriel", "Watch the tutorial again"],
 ["Grandes lignes droites dans le désert, avec un détour serré qui casse la vitesse.", "Big straights through the desert, with a tight detour that kills your speed."],
@@ -3841,7 +3937,7 @@ const EN = new Map([
 ["Réessayer", "Try again"],
 ["Quitter", "Leave"],
 ["Parties classées", "Ranked games"],
-["Meilleurs tours", "Best laps"], ["Niveaux", "Levels"], ["Niveau", "Level"], ["Niv.", "Lv"], ["Le chiffre sur une couleur grisée est le niveau qui la débloque.", "The number on a greyed-out colour is the level that unlocks it."], ["L’XP vient des courses sur les circuits officiels. Les niveaux se transmettent entre les joueurs qui se retrouvent en ligne.", "XP comes from races on the official circuits. Levels are passed between players who meet online."],
+["Coffres", "Chests"], ["🎁 Ouvrir des coffres", "🎁 Open chests"], ["🎁 Ouvrir un coffre", "🎁 Open a chest"], ["Équiper", "Equip"], ["Les éléments grisés se trouvent dans les coffres : la couleur du cadre indique leur rareté.", "Greyed-out items are found in chests: the colour of the frame shows their rarity."], ["Meilleurs tours", "Best laps"], ["Niveaux", "Levels"], ["Niveau", "Level"], ["Niv.", "Lv"], ["Le chiffre sur une couleur grisée est le niveau qui la débloque.", "The number on a greyed-out colour is the level that unlocks it."], ["L’XP vient des courses sur les circuits officiels. Les niveaux se transmettent entre les joueurs qui se retrouvent en ligne.", "XP comes from races on the official circuits. Levels are passed between players who meet online."],
 ["6 vrais pilotes, qualifs puis 5 tours, sans bots", "6 real drivers, qualifying then 5 laps, no bots"],
 ["Pilote", "Driver"],
 ["Courses", "Races"],
