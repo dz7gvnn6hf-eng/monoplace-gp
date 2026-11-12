@@ -598,7 +598,7 @@ label.btn{cursor:pointer;display:inline-block}
     <div class="tstep" data-s="3" hidden>
       <h2>Progresser</h2>
       <p>Chaque course rapporte de l’XP. Montez de niveau pour débloquer des couleurs, des motifs et des effets de vitesse pour votre voiture.</p>
-      <p>Jouez contre les bots, en ligne, en partie classée ou entre amis. Vous pouvez revoir ce tutoriel à tout moment dans les réglages.</p>
+      <p>« C’est parti ! » lance une course rapide : un tour contre des bots faciles. Ensuite, jouez contre les bots, en ligne, en partie classée ou entre amis. Vous pouvez revoir ce tutoriel à tout moment dans les réglages.</p>
     </div>
     <div class="dots" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
     <div class="actions">
@@ -2518,7 +2518,7 @@ const isPlayerPeer = p => p.kind === 'viewer' && (p.presence.role === 'host' || 
 // A game is a star: the host owns the PeerJS id of the game's name and relays everyone's presence to every guest.
 // It mimics the parts of the room capability the game uses (peers, presence, join, leave).
 const P2P_PREFIX = 'monoplace-gp-v1-'; // the names every version so far has used: old and new pages still find each other
-const VERSION = 50; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
+const VERSION = 51; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
 // Relay for players whose networks refuse direct connections: turn.js, next to the page, holds the owner's own TURN account.
 const RELAY = window.TURN_CONFIG && TURN_CONFIG.username && TURN_CONFIG.credential ? TURN_CONFIG : null;
 const PEER_OPTS = RELAY ? { debug: 0, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, RELAY] } } : { debug: 0 };
@@ -3683,7 +3683,7 @@ const EN = new Map([
 ["Restez sur la piste. Les murs abîment la voiture, et les pneus s’usent.", "Stay on the track. Walls damage the car, and the tyres wear out."],
 ["À partir de 5 tours, un arrêt au stand est obligatoire : entrez dans la voie des stands, à gauche de la ligne de départ, et arrêtez-vous dans votre garage.", "From 5 laps on, a pit stop is mandatory: enter the pit lane, to the left of the start line, and stop in your garage."],
 ["Chaque course rapporte de l’XP. Montez de niveau pour débloquer des couleurs, des motifs et des effets de vitesse pour votre voiture.", "Every race gives XP. Level up to unlock colours, liveries and speed effects for your car."],
-["Jouez contre les bots, en ligne, en partie classée ou entre amis. Vous pouvez revoir ce tutoriel à tout moment dans les réglages.", "Play against bots, online, ranked or with friends. You can watch this tutorial again at any time in the settings."],
+["« C’est parti ! » lance une course rapide : un tour contre des bots faciles. Ensuite, jouez contre les bots, en ligne, en partie classée ou entre amis. Vous pouvez revoir ce tutoriel à tout moment dans les réglages.", "“Let’s race!” starts a quick race: one lap against easy bots. After that, play against bots, online, ranked or with friends. You can watch this tutorial again at any time in the settings."],
 ["Aide", "Help"], ["Revoir le tutoriel", "Watch the tutorial again"],
 ["Grandes lignes droites dans le désert, avec un détour serré qui casse la vitesse.", "Big straights through the desert, with a tight detour that kills your speed."],
 ["Virages techniques dans la neige, avec des épingles qui s’enchaînent.", "Technical corners in the snow, with hairpins that follow each other."],
@@ -4021,7 +4021,9 @@ function tutoShow(i) {
 }
 function openTuto(from) { tutoFrom = from; tutoShow(0); show('tuto'); $('tutoNext').focus(); }
 function closeTuto() { store.set(TUTO_KEY, 1); show(tutoFrom); }
-$('tutoNext').addEventListener('click', () => tutoI < TUTO_N - 1 ? tutoShow(tutoI + 1) : closeTuto());
+// The last button ("Let's race!") starts a quick race: one lap against easy bots on the first circuit, in the dry.
+function tutoRace() { store.set(TUTO_KEY, 1); launch({ mode: 'race', tid: 'lac', laps: 1, diff: 'facile', rain: false, team: ui.team }); }
+$('tutoNext').addEventListener('click', () => tutoI < TUTO_N - 1 ? tutoShow(tutoI + 1) : tutoRace());
 $('tutoBack').addEventListener('click', () => tutoShow(Math.max(0, tutoI - 1)));
 $('tutoSkip').addEventListener('click', closeTuto);
 $('tutoBtn').addEventListener('click', () => openTuto('settings'));
