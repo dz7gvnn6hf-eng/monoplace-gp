@@ -1374,9 +1374,12 @@ function scStep() {
 function netStep(c) {
   if (!c.netOk) return;
   c.netAge = (c.netAge || 0) + H;
-  const ext = clamp(1 - (c.netAge - 0.15) / 0.35, 0, 1);
+  const ext = clamp(1 - (c.netAge - 0.35) / 0.9, 0, 1); // keeps going at its last speed for a moment, then eases to a stop after over a second without news
   c.tx += c.vx * H * ext; c.ty += c.vy * H * ext;
-  c.x += c.vx * H * ext + (c.tx - c.x) * 0.06; c.y += c.vy * H * ext + (c.ty - c.y) * 0.06;
+  const dx = c.tx - c.x, dy = c.ty - c.y, dist = Math.hypot(dx, dy) || 1;
+  // catching up with where it really is: faster when far behind, but never faster than about 1.2 times its own speed, so it glides there instead of jumping
+  const corr = Math.min(dist * (0.06 + Math.min(1, dist / 500) * 0.25), (Math.hypot(c.vx, c.vy) * 1.2 + 120) * H);
+  c.x += c.vx * H * ext + dx / dist * corr; c.y += c.vy * H * ext + dy / dist * corr;
   if (c.ta != null) c.a += wrapA(c.ta - c.a) * 0.18;
 }
 
@@ -2519,7 +2522,7 @@ const isPlayerPeer = p => p.kind === 'viewer' && (p.presence.role === 'host' || 
 // A game is a star: the host owns the PeerJS id of the game's name and relays everyone's presence to every guest.
 // It mimics the parts of the room capability the game uses (peers, presence, join, leave).
 const P2P_PREFIX = 'monoplace-gp-v1-'; // the names every version so far has used: old and new pages still find each other
-const VERSION = 55; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
+const VERSION = 56; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
 // Relay for players whose networks refuse direct connections: turn.js, next to the page, holds the owner's own TURN account.
 const RELAY = window.TURN_CONFIG && TURN_CONFIG.username && TURN_CONFIG.credential ? TURN_CONFIG : null;
 const PEER_OPTS = RELAY ? { debug: 0, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, RELAY] } } : { debug: 0 };
@@ -2788,7 +2791,7 @@ function startOnlineQuali(g) {
   $('pauseTrack').textContent = 'Qualifications · ' + T.def.name;
   $('restartBtn').hidden = true;
 }
-const qTime = p => Number.isFinite(p.presence.q) && p.presence.q > 5 && NET && NET.cfg && p.presence.qs === NET.cfg.seq ? p.presence.q : Infinity; // qs: the round it was driven in
+const qTime = p => Number.isFinite(p.presence.q) && p.presence.q > 5 && NET && NET.cfg && (p.presence.qs == null || p.presence.qs === NET.cfg.seq) ? p.presence.q : Infinity; // qs: the round it was driven in
 function renderOnlineQuali() {
   if (!NET || !NET.room || el.quali.hidden) return;
   const peers = NET.room.peers().filter(isPlayerPeer);
@@ -2920,7 +2923,7 @@ function applyNet(c, a, o) {
   if (v(8) && !c.fin) { c.fin = true; c.finT = v(9); c.finLap = c.lap; G.leaderDone = true; }
   if (a.length >= o + 16) { const w = v(15) > 0; c.dmg = clamp(v(13), 0, 1); c.pull = v(14) > 0 ? 1 : -1; if (w && !(c.wreck > 0)) boom(c); c.wreck = w ? 1 : 0; }
   if (a.length >= o + 17 && v(16) > 0) c.out = true; // pages from before damage was shared send 13
-  if (!c.netOk || Math.hypot(c.tx - c.x, c.ty - c.y) > 300) { c.x = c.tx; c.y = c.ty; c.a = c.ta; c.netOk = true; } // only a real jump (reset after a crash) is shown as one
+  if (!c.netOk || Math.hypot(c.tx - c.x, c.ty - c.y) > 1200) { c.x = c.tx; c.y = c.ty; c.a = c.ta; c.netOk = true; } // only a real jump (reset after a crash) is shown as one
 }
 function netSync(dt) {
   if (!NET || !NET.room) return;
@@ -2933,12 +2936,12 @@ function netSync(dt) {
     if (!Array.isArray(hg.players) || !hg.players.includes(selfPeer(NET.room))) return;
     return startOnlineQuali(hg); }
   if (hg && hg.state === 'lobby' && hg.seq !== G.online.seq) { NET.cfg = hg; return backToLobby(); } // the host brought everyone back to the waiting room
-  const hostBots = host && Array.isArray(host.presence.bots) && host.presence.cs === G.online.seq ? host.presence.bots : null;
+  const hostBots = host && Array.isArray(host.presence.bots) && (host.presence.cs == null || host.presence.cs === G.online.seq) ? host.presence.bots : null;
   for (const c of G.cars) {
     if (!c.remote) continue;
     let arr = null;
     if (c.bot) { arr = hostBots && hostBots.find(b => Array.isArray(b) && b[0] === c.slot); c.goneT = host ? 0 : (c.goneT || 0) + dt; }
-    else { const p = byPeer.get(c.peer); arr = p && Array.isArray(p.presence.car) && p.presence.cs === G.online.seq ? p.presence.car : null; c.goneT = p ? 0 : (c.goneT || 0) + dt; }
+    else { const p = byPeer.get(c.peer); arr = p && Array.isArray(p.presence.car) && (p.presence.cs == null || p.presence.cs === G.online.seq) ? p.presence.car : null; c.goneT = p ? 0 : (c.goneT || 0) + dt; }
     if (arr && arr !== c.lastNet) { c.lastNet = arr; applyNet(c, arr, c.bot ? 1 : 0); }
   }
   const gone = G.cars.filter(c => c.remote && c.goneT > 4);
