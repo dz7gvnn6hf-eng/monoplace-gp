@@ -737,7 +737,10 @@ const store = {
     if (d) { try { d.removeItem(k); return; } catch (e) { /* local storage below */ } }
     try { localStorage.removeItem(k); } catch (e) { /* ignore */ }
   } };
-const LANG = store.get('monoplace-gp.lang') === 'fr' ? 'fr' : 'en', L = (fr, en) => LANG === 'en' ? en : fr;
+// English unless the player chose French. On CrazyGames the first visit follows the language the platform reports for the player.
+const cgLocale = (() => { try { return window.MGP_PORTAL === 'crazygames' ? String(window.CrazyGames.SDK.user.systemInfo.locale || '') : ''; } catch (e) { return ''; } })();
+const savedLang = store.get('monoplace-gp.lang');
+const LANG = savedLang === 'fr' || savedLang === 'en' ? savedLang : /^fr/i.test(cgLocale) ? 'fr' : 'en', L = (fr, en) => LANG === 'en' ? en : fr;
 const txt = L; // same, for places where L is the race leader
 
 // Each circuit: corners [x, y, radius] in driving order; straights join the tangent arcs.
@@ -2461,7 +2464,7 @@ const isPlayerPeer = p => p.kind === 'viewer' && (p.presence.role === 'host' || 
 // A game is a star: the host owns the PeerJS id of the game's name and relays everyone's presence to every guest.
 // It mimics the parts of the room capability the game uses (peers, presence, join, leave).
 const P2P_PREFIX = 'monoplace-gp-v1-'; // the names every version so far has used: old and new pages still find each other
-const VERSION = 48; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
+const VERSION = 49; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
 // Relay for players whose networks refuse direct connections: turn.js, next to the page, holds the owner's own TURN account.
 const RELAY = window.TURN_CONFIG && TURN_CONFIG.username && TURN_CONFIG.credential ? TURN_CONFIG : null;
 const PEER_OPTS = RELAY ? { debug: 0, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, RELAY] } } : { debug: 0 };
@@ -3488,7 +3491,8 @@ $('delAcc').addEventListener('click', async () => {
 $('settingsBtn').addEventListener('click', () => { delArm(false); refreshSettings(); show('settings'); });
 // Full screen where the browser allows it. iPhone Safari doesn't: there, the game added to the home screen opens without the browser's bars.
 const fsEl = () => document.fullscreenElement || document.webkitFullscreenElement, root = document.documentElement;
-const fsOk = !!((root.requestFullscreen || root.webkitRequestFullscreen) && (document.fullscreenEnabled || document.webkitFullscreenEnabled));
+const onPortal = !!window.MGP_PORTAL; // a games portal gives its own full screen button, and its rules forbid ours
+const fsOk = !onPortal && !!((root.requestFullscreen || root.webkitRequestFullscreen) && (document.fullscreenEnabled || document.webkitFullscreenEnabled));
 const standalone = matchMedia('(display-mode: standalone), (display-mode: fullscreen)').matches || navigator.standalone === true;
 function toggleFull() {
   if (!fsOk) return;
@@ -3497,7 +3501,8 @@ function toggleFull() {
 }
 const fsLabel = () => { for (const id of ['fsPause', 'fsSet']) $(id).textContent = fsEl() ? 'Quitter le plein écran' : 'Plein écran'; };
 for (const id of ['fsBtn', 'fsPause', 'fsSet']) { $(id).hidden = !fsOk || standalone; $(id).addEventListener('click', toggleFull); }
-$('fsHint').hidden = fsOk || standalone;
+$('fsHint').hidden = fsOk || standalone || onPortal;
+if (onPortal) $('fsSet').closest('.grp').hidden = true;
 document.addEventListener('fullscreenchange', fsLabel); document.addEventListener('webkitfullscreenchange', fsLabel);
 $('setClose').addEventListener('click', () => show('home'));
 refreshProfile();
