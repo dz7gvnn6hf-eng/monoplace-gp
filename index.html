@@ -1865,9 +1865,9 @@ const TRAILS = (() => {
       each(pts, 1, (q, t, id) => { if (hash(id, 2) > .8) return; const [x, y] = off(q, 20, (hash(id, 0) - .5) * (4 + t * 18)); g.globalAlpha = k * (1 - t) ** 1.2 * .95; g.fillStyle = id % 3 ? '#ffffff' : '#bfe6ff'; disc(g, x, y, (1 - t) * 1.1 + .25); });
       const [x0, y0] = off(pts[0], 21, 0), gr = g.createRadialGradient(x0, y0, 0, x0, y0, 14); gr.addColorStop(0, 'rgba(255,255,255,' + (k * .95).toFixed(3) + ')'); gr.addColorStop(.4, 'rgba(150,210,255,' + (k * .5).toFixed(3) + ')'); gr.addColorStop(1, 'rgba(150,210,255,0)');
       g.globalAlpha = 1; g.fillStyle = gr; g.fillRect(x0 - 14, y0 - 14, 28, 28); }],
-    ['ghost', L('Fantôme', 'Ghost'), (g, pts, d, k) => { // see-through copies of the car along its path
+    ['ghost', L('Fantôme', 'Ghost'), (g, pts, d, k) => { // a see-through copy is left behind every few frames: it stays where it was, the car drives off, and it fades away
       const drv = { ...d, trail: 'none', motif: d.motif === 'phantom' ? 'classic' : d.motif }, a0 = g.globalAlpha;
-      for (const [i, a] of [[8, .32], [16, .14]]) { const q = pts[i]; if (!q) continue; g.globalAlpha = a0 * k * a; drawCar({ x: q[0], y: q[1], a: q[2], steer: 0, drv }, g); }
+      for (let i = pts.length - 1; i >= 3; i--) { const q = pts[i]; if (q[3] % 8) continue; g.globalAlpha = a0 * k * .5 * Math.min(1, (i - 2) / 4) * (1 - i / (pts.length + 4)); drawCar({ x: q[0], y: q[1], a: q[2], steer: 0, drv }, g); }
       g.globalAlpha = a0; }],
     ['light', L('Ruban de lumière', 'Ribbon of light'), (g, pts, d, k) => { g.lineCap = 'round';
       for (const [w, white] of [[8, 0], [2.4, 1]]) for (let i = 0; i < pts.length - 1; i++) { const t = i / (pts.length - 1), a = off(pts[i], 19, 0), b = off(pts[i + 1], 19, 0);
@@ -2617,7 +2617,7 @@ const isPlayerPeer = p => p.kind === 'viewer' && (p.presence.role === 'host' || 
 // A game is a star: the host owns the PeerJS id of the game's name and relays everyone's presence to every guest.
 // It mimics the parts of the room capability the game uses (peers, presence, join, leave).
 const P2P_PREFIX = 'monoplace-gp-v1-'; // the names every version so far has used: old and new pages still find each other
-const VERSION = 62; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
+const VERSION = 63; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
 // Relay for players whose networks refuse direct connections: turn.js, next to the page, holds the owner's own TURN account.
 const RELAY = window.TURN_CONFIG && TURN_CONFIG.username && TURN_CONFIG.credential ? TURN_CONFIG : null;
 const PEER_OPTS = RELAY ? { debug: 0, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, RELAY] } } : { debug: 0 };
