@@ -111,13 +111,7 @@ h1 span{color:var(--red)}
 .gp-wrap{margin:auto;width:min(860px,100%);display:grid;gap:18px;padding-block:8px}
 .gp-sub{margin:0;color:var(--muted);font-size:17px}
 .picks{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
-.pick{--c:var(--red);width:100%;display:grid;gap:8px;align-content:end;min-height:150px;text-align:left;padding:18px 20px 18px 24px;background:linear-gradient(180deg,#161b25,#0b0e13);background:radial-gradient(80% 90% at 100% 0%,color-mix(in srgb,var(--c) 16%,transparent),transparent 70%),linear-gradient(180deg,#161b25,#0b0e13);box-shadow:inset 5px 0 0 var(--c)}
-.pick b{font:800 clamp(26px,3.4vw,40px)/.95 var(--f-display);text-transform:uppercase;transform:skewX(-8deg);transform-origin:left bottom}
-.pick small{font-size:15px;line-height:1.35;color:var(--muted);max-width:38ch}
-.pk-quick{--c:var(--green)} .pk-ranked{--c:var(--yellow)} .pk-friends{--c:#4aa3ff}
-.pick:hover,.pick:focus-visible{filter:brightness(1.2)}
-.pick:disabled{opacity:.45;filter:none;cursor:default}
-@media (max-width:700px){.picks{grid-template-columns:1fr}.pick{min-height:0;padding:14px 16px 14px 20px}.pick b{font-size:26px}.pick small{font-size:14px}}
+@media (max-width:700px){.picks{grid-template-columns:1fr}}
 /* The three cards nest like broadcast graphics: parallel slanted edges, one accent per mode (race red, title gold, record purple). */
 .modes{--s:34px;--gap:12px;display:flex;min-height:0}
 .mode{--accent:var(--red-text);--glow:rgba(236,58,42,.24);
@@ -136,6 +130,19 @@ h1 span{color:var(--red)}
 .mode[data-mode="profile"]{--accent:#4aa3ff;--glow:rgba(74,163,255,.22)}
 .mode[data-mode="settings"]{--accent:#c2cad6;--glow:rgba(194,202,214,.14)}
 .modes[hidden]{display:none}
+.mode > ol{position:relative}
+.mode:not(:first-child) .minilb{padding-left:20px}
+.minilb{list-style:none;margin:0 0 auto;padding:0;display:grid;gap:5px;align-content:start;font-size:15px}
+.minilb li{display:grid;grid-template-columns:24px minmax(0,1fr) auto;gap:8px;align-items:center;padding:7px 9px;background:rgba(255,255,255,.06);box-shadow:inset 3px 0 0 var(--lc,#3a4150)}
+.minilb li.me{background:rgba(30,196,107,.22)}
+.mode[data-mode="tt"] .minilb li.me{background:rgba(165,76,255,.25)}
+.minilb .p{font:800 16px/1 var(--f-display)}
+.minilb .n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700}
+.minilb .t{font-variant-numeric:tabular-nums;color:var(--muted)}
+.minilb li.hd,.minilb li.empty{display:block;background:none;box-shadow:none;padding:0 0 4px}
+.minilb li.hd{font:700 12px/1.2 var(--f-body);letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
+.minilb li.empty{color:var(--muted);font-size:14px;line-height:1.35;padding-top:6px}
+@media (max-height:520px) and (min-width:701px){.minilb li:nth-child(n+5){display:none}}
 @media (max-height:520px) and (min-width:701px){.mode .ms,.mode .mk{display:none}.mode{padding-top:14px;padding-bottom:14px}}
 .pager{display:flex;justify-content:center;align-items:center;gap:10px}
 .pager .btn{padding:6px 16px;font-size:22px;line-height:1}
@@ -164,6 +171,7 @@ h1 span{color:var(--red)}
   .mode{padding:14px calc(6px + var(--s)) 16px 6px;align-items:center}
   .mode:last-child{padding-right:6px}
   .mode .mk,.mode .mf{display:none}
+  .minilb{font-size:12px;margin-top:6px;width:100%}.minilb li{grid-template-columns:16px minmax(0,1fr);padding:5px 6px;gap:5px}.minilb .t,.minilb li.hd{display:none}.minilb li.empty{font-size:11px}
   .mode .go-hint{font-size:0}
   .mode .go-hint i{font-size:24px}
   .mode .mt{writing-mode:vertical-rl;transform:rotate(180deg);transform-origin:center;font-size:clamp(30px,10vw,46px)}
@@ -359,7 +367,7 @@ label.btn{cursor:pointer;display:inline-block}
   .tb{width:64px;height:64px}
   #lights{top:44px;gap:7px;padding:8px 10px}#lights i{width:22px;height:22px}
   .picks{grid-template-columns:1fr 1fr;gap:8px}
-  .pick{min-height:0;padding:10px 14px 10px 18px;gap:4px}.pick b{font-size:24px}.pick small{font-size:13px}
+
   .setup-title{font-size:34px}.gp-sub{font-size:15px}.gp-wrap{gap:10px}
 }
 @media (prefers-reduced-motion:reduce){#toast{transition:none}}
@@ -405,7 +413,6 @@ label.btn{cursor:pointer;display:inline-block}
   <header class="home-top">
     <h1>Monoplace <span>GP</span></h1>
     <p class="online" id="onlineCount"></p>
-    <button id="rankBtn" class="btn" type="button">Classement</button>
     <button id="fsBtn" class="btn" type="button" aria-label="Plein écran" title="Plein écran" aria-keyshortcuts="F" hidden>⛶</button>
   </header>
   <div class="modes" id="modesA">
@@ -414,10 +421,10 @@ label.btn{cursor:pointer;display:inline-block}
       <span class="ms">Contre les bots, en ligne ou entre amis.</span>
       <span class="mf" id="mfRace"><b>6</b> voitures · 3 à 10 tours</span>
       <span class="go-hint" aria-hidden="true">Choisir comment jouer <i>→</i></span></button>
-    <button class="mode" data-mode="ranked" type="button"><canvas aria-hidden="true"></canvas>
+    <button class="mode" data-mode="ranked" type="button"><ol class="minilb" id="lbRank" aria-label="Classement"></ol>
       <span class="mk">Compétition</span><span class="mt">Classé</span>
       <span class="ms">6 vrais joueurs, une qualification puis 5 tours. Gagnez des points au classement.</span>
-      <span class="mf" id="mfRank">Pas encore classé</span>
+      <span class="mf" id="mfRank"></span>
       <span class="go-hint" aria-hidden="true">Entrer en piste <i>→</i></span></button>
     <button class="mode" data-mode="champ" type="button"><canvas aria-hidden="true"></canvas>
       <span class="mk">Saison</span><span class="mt">Championnat</span>
@@ -426,7 +433,7 @@ label.btn{cursor:pointer;display:inline-block}
       <span class="go-hint" aria-hidden="true">Préparer la saison <i>→</i></span></button>
   </div>
   <div class="modes" id="modesB" hidden>
-    <button class="mode" data-mode="tt" type="button"><canvas aria-hidden="true"></canvas>
+    <button class="mode" data-mode="tt" type="button"><ol class="minilb" id="lbTt" aria-label="Meilleurs tours"></ol>
       <span class="mk">Contre-la-montre</span><span class="mt">Chrono</span>
       <span class="ms">Seul en piste, face à votre fantôme et à celui du meilleur joueur.</span>
       <span class="mf" id="mfTt">Pas encore de record</span>
@@ -450,23 +457,6 @@ label.btn{cursor:pointer;display:inline-block}
   </nav>
 </section>
 
-<section id="gp" class="layer" hidden>
-  <div class="gp-wrap">
-    <div class="setup-head">
-      <button id="gpBack" class="back" type="button">← Modes</button>
-      <h2 class="setup-title">Grand Prix</h2>
-      <p class="gp-sub">Comment voulez-vous jouer ?</p>
-    </div>
-    <div class="picks">
-      <button class="pick" data-pick="bots" type="button"><b>Contre les bots</b><small>Choisissez le circuit, les tours et le niveau des bots.</small></button>
-      <button class="pick pk-quick" data-pick="quick" type="button"><b>Course en ligne</b><small>Avec les joueurs qui cherchent une partie. Les places libres sont prises par des bots.</small></button>
-      <button class="pick pk-friends" data-pick="friends" type="button"><b>Entre amis</b><small>Créez une partie et donnez le code à vos amis.</small></button>
-    </div>
-    <div class="actions"><button id="codeBtn" class="btn" type="button" hidden>Rejoindre avec un code</button></div>
-    <p class="note" id="gpNote"></p>
-    <div class="grp" id="openGrp" hidden><p class="lbl">Parties ouvertes</p><ul class="opengames" id="openGames"></ul></div>
-  </div>
-</section>
 
 <section id="menu" class="layer" hidden>
   <div class="panel">
@@ -474,6 +464,7 @@ label.btn{cursor:pointer;display:inline-block}
       <button id="backBtn" class="back" type="button">← Modes</button>
       <h2 id="setupTitle" class="setup-title">Grand Prix</h2>
     </div>
+    <div class="seg" id="subSeg" role="group" aria-label="Façon de jouer"></div>
     <div class="grp" id="trackGrp">
       <p class="lbl">Circuit</p>
       <input id="trackSearch" class="input" type="search" placeholder="Rechercher un circuit par son nom" aria-label="Rechercher un circuit" autocomplete="off">
@@ -487,7 +478,7 @@ label.btn{cursor:pointer;display:inline-block}
       </div>
     </div>
     <div class="grp" id="champGrp" hidden>
-      <p class="lbl">Manches, dans l’ordre</p>
+      <p class="lbl">Manches, dans l’ordre : choisissez les circuits</p>
       <ol class="rounds" id="rounds"></ol>
       <p class="note">Points de la 1re à la 6e place : 25, 18, 15, 12, 10, 8.</p>
     </div>
@@ -507,8 +498,11 @@ label.btn{cursor:pointer;display:inline-block}
     <div class="grp gobar">
       <button id="go" class="go" type="button"><span id="goTxt">Course contre les bots</span><span aria-hidden="true">→</span></button>
     </div>
+    <div class="grp" id="onlineExtra" hidden>
+      <div class="actions"><button id="codeBtn" class="btn" type="button" hidden>Rejoindre avec un code</button></div>
+      <div id="openGrp" hidden><p class="lbl">Parties ouvertes</p><ul class="opengames" id="openGames"></ul></div>
+    </div>
     <div class="grp">
-      <div class="actions" id="netActions"><button id="inviteBtn" class="btn" type="button">Inviter des amis</button></div>
       <p class="note" id="netNote"></p>
       <p class="note" id="ghostNote" hidden></p>
       <p class="note" id="pitNote">À partir de 5 tours, un arrêt au stand est obligatoire (sinon +15 s).</p>
@@ -683,7 +677,7 @@ label.btn{cursor:pointer;display:inline-block}
 <section id="ranking" class="layer modal" hidden>
   <div class="card">
     <h2>Classement</h2>
-    <div class="seg" role="group" aria-label="Classement"><button type="button" data-rk="ranked">Parties classées</button><button type="button" data-rk="laps">Meilleurs tours</button><button type="button" data-rk="levels">Niveaux</button></div>
+    <div class="seg" role="group" aria-label="Classement"><button type="button" data-rk="ranked">Parties classées</button><button type="button" data-rk="laps">Meilleurs tours</button></div>
     <div class="grp" id="rkRanked">
       <p class="lbl">6 vrais pilotes, qualifs puis 5 tours, sans bots</p>
       <div class="tblwrap">
@@ -701,14 +695,6 @@ label.btn{cursor:pointer;display:inline-block}
       <ol class="board" id="lapBoard" aria-label="Meilleurs tours"></ol>
       <p class="note" id="lapNote"></p>
     </div>
-    <div class="grp" id="rkLevels" hidden>
-      <div class="tblwrap">
-        <table class="res">
-          <thead><tr><th>Pos</th><th>Pilote</th><th class="r">XP</th></tr></thead>
-          <tbody id="lvBody"></tbody>
-        </table>
-      </div>
-      <p class="note" id="lvNote"></p>
     </div>
     <div class="actions"><button id="rkClose" class="btn" type="button">Fermer</button></div>
   </div>
@@ -874,7 +860,7 @@ const DEFS = [
     verts: [[0,0,350],[2800,0,300],[3300,700,250],[2500,1100,200],[3300,1500,220],[2700,2100,300],[1200,2100,250],[900,1500,170],[400,1800,170],[-100,1200,300],[-300,500,300]] },
 ];
 const OFFICIAL_IDS = new Set(DEFS.map(d => d.id));
-const CHAMP = DEFS.slice(0, 4); // the championship stays at the four original circuits
+const CHAMP = DEFS.slice(0, 4); // four rounds; the player can swap each circuit in the setup
 
 // Fillet each corner with a tangent arc, then sample the loop every ~DS px.
 function sampleTrack(verts) {
@@ -2115,11 +2101,11 @@ function drawOutline(g, O, w, h, lw) {
 
 // ---------- HUD ----------
 const $ = id => document.getElementById(id);
-const el = { chest: $('chest'), profile: $('profile'), settings: $('settings'), hud: $('hud'), home: $('home'), menu: $('menu'), pause: $('pause'), results: $('results'), quali: $('quali'), ranking: $('ranking'), editor: $('editor'), lobby: $('lobby'), join: $('join'), gp: $('gp'), tuto: $('tuto'),
+const el = { chest: $('chest'), profile: $('profile'), settings: $('settings'), hud: $('hud'), home: $('home'), menu: $('menu'), pause: $('pause'), results: $('results'), quali: $('quali'), ranking: $('ranking'), editor: $('editor'), lobby: $('lobby'), join: $('join'), tuto: $('tuto'),
   tower: $('tower'), lapNo: $('lapNo'), lapLbl: $('lapLbl'), cur: $('cur'), last: $('lastLap'), best: $('bestLap'), rec: $('recLap'),
   tyre: $('tyreTxt'), wing: $('wingTxt'), pitDt: $('pitDt'), pit: $('pitTxt'), tag: $('tag'), spd: $('spd'), gear: $('gear'), lights: $('lights'), toast: $('toast'), mini: $('mini') };
 const secEls = [$('s0'), $('s1'), $('s2')], lightEls = [...el.lights.children], mctx = el.mini.getContext('2d');
-const SCREENS = ['home', 'tuto', 'gp', 'menu', 'pause', 'results', 'quali', 'editor', 'lobby', 'join', 'ranking', 'profile', 'settings', 'chest'];
+const SCREENS = ['home', 'tuto', 'menu', 'pause', 'results', 'quali', 'editor', 'lobby', 'join', 'ranking', 'profile', 'settings', 'chest'];
 
 function show(id) {
   for (const s of SCREENS) el[s].hidden = s !== id;
@@ -2247,7 +2233,7 @@ function hud(dt) {
 }
 
 // ---------- Home, setup and track list ----------
-const ui = { mode: 'race', tid: 'lac', laps: 3, diff: 'normal', weather: 'dry', team: (t => colorOpen(t) ? t : 0)(Math.min(TEAMS.length - 1, Math.max(0, store.get('monoplace-gp.team') | 0))), champ: null, sort: 'pop', friends: false, motif: myMotif(store.get('monoplace-gp.motif')), trail: myTrail(store.get('monoplace-gp.trail')) };
+const ui = { sub: 'bots', mode: 'race', tid: 'lac', laps: 3, diff: 'normal', weather: 'dry', team: (t => colorOpen(t) ? t : 0)(Math.min(TEAMS.length - 1, Math.max(0, store.get('monoplace-gp.team') | 0))), champ: null, sort: 'pop', friends: false, motif: myMotif(store.get('monoplace-gp.motif')), trail: myTrail(store.get('monoplace-gp.trail')) };
 const MODE_NAMES = { race: 'Grand Prix', champ: L('Championnat', 'Championship'), tt: L('Chrono', 'Time Trial') };
 const recTxt = id => { const r = records[id]; return r ? 'Record <b>' + fmt(r.lap) + '</b>' : 'Pas encore de record'; };
 
@@ -2269,7 +2255,10 @@ function drawMotifs() {
     g.setTransform(1.75, 0, 0, 1.75, 46, 28); drawCar({ x: 0, y: 0, a: 0, steer: 0, drv: { ...TEAMS[ui.team], motif: b.dataset.v } }, g); });
 }
 $('teams').innerHTML = TEAMS.map((t, i) => [t, i]).sort((a, b) => rarOf('c' + a[1]) - rarOf('c' + b[1])).map(([t, i]) => '<button type="button" data-k="team" data-v="' + i + '"><canvas width="96" height="56" aria-hidden="true"></canvas><span>' + t.name + '</span><small></small></button>').join('');
-$('rounds').innerHTML = CHAMP.map((d, i) => '<li><span class="n">' + (i + 1) + '</span><span>' + esc(d.name) + '</span></li>').join('');
+// Championship circuits: four rounds, each one picked among the official circuits (kept on this device; the host's choice is what guests play).
+(store.get('monoplace-gp.champ') || []).slice(0, 4).forEach((id, i) => { const d = DEFS.find(x => x.id === id); if (d) CHAMP[i] = d; });
+$('rounds').innerHTML = CHAMP.map((d, i) => '<li><span class="n">' + (i + 1) + '</span><select class="input" data-r="' + i + '" aria-label="Manche ' + (i + 1) + '">' + DEFS.map(x => '<option value="' + x.id + '">' + esc(x.name) + '</option>').join('') + '</select></li>').join('');
+$('rounds').addEventListener('change', e => { const d = DEFS.find(x => x.id === e.target.value); if (!d) return; CHAMP[+e.target.dataset.r] = d; store.set('monoplace-gp.champ', CHAMP.map(x => x.id)); refreshSetup(); });
 
 // Illustrations on the three mode cards
 // Your best record on an official circuit (the selected one first), for the Chrono card.
@@ -2308,39 +2297,8 @@ const ART = {
     }
     g.restore();
   },
-  tt(g, w, h) {
-    const s = Math.min(w / 220, h / 250), R = 78, rec = bestRecord(); g.save(); g.translate(w / 2, 14 + 104 * s); g.scale(s, s);
-    g.fillStyle = '#2a2e35'; g.fillRect(-10, -R - 24, 20, 12); g.fillRect(-4, -R - 14, 8, 8);
-    g.lineWidth = 10; g.strokeStyle = '#1f2430'; g.beginPath(); g.arc(0, 0, R, 0, 7); g.stroke();
-    g.strokeStyle = '#a54cff'; g.shadowColor = '#a54cff'; g.shadowBlur = 14 * s;
-    g.beginPath(); g.arc(0, 0, R, -Math.PI / 2, Math.PI * 1.05); g.stroke(); g.shadowBlur = 0;
-    g.strokeStyle = 'rgba(238,241,246,.35)'; g.lineWidth = 2;
-    for (let k = 0; k < 12; k++) { const a = k / 12 * 2 * Math.PI; g.beginPath(); g.moveTo(Math.cos(a) * (R - 20), Math.sin(a) * (R - 20)); g.lineTo(Math.cos(a) * (R - 13), Math.sin(a) * (R - 13)); g.stroke(); }
-    g.fillStyle = '#eef1f6'; g.font = '800 30px "Saira Condensed", sans-serif'; g.textAlign = 'center'; g.fillText(rec ? fmt(rec.t) : '0:00.000', 0, 10);
-    ['#a54cff', '#1ec46b', '#f1c22e'].forEach((c, i) => { g.fillStyle = c; g.fillRect(-81 + i * 55, R + 26, 52, 10); });
-    g.restore();
-  },
 };
 const rankSorted = () => rankRows().filter(r => r.r > 0).sort((a, b) => b.p - a.p || b.w - a.w || a.r - b.r);
-ART.ranked = (g, w, h) => {
-  const s = Math.min(w / 230, h / 300); g.save(); g.translate(w / 2, 10 * s); g.scale(s, s); g.textAlign = 'center';
-  const gr = g.createLinearGradient(-30, 0, 30, 0); gr.addColorStop(0, '#b8860b'); gr.addColorStop(.4, '#fff0a0'); gr.addColorStop(1, '#c99a1c');
-  g.shadowColor = '#f1c22e'; g.shadowBlur = 18 * s; g.fillStyle = gr; g.beginPath(); g.moveTo(-30, 0); g.lineTo(30, 0); g.quadraticCurveTo(28, 44, 0, 52); g.quadraticCurveTo(-28, 44, -30, 0); g.fill(); g.shadowBlur = 0;
-  g.strokeStyle = '#d9a520'; g.lineWidth = 6; g.beginPath(); g.arc(-32, 14, 13, Math.PI * .5, Math.PI * 1.5); g.stroke(); g.beginPath(); g.arc(32, 14, 13, -Math.PI * .5, Math.PI * .5); g.stroke();
-  g.fillStyle = gr; g.fillRect(-5, 52, 10, 16); g.fillRect(-24, 68, 48, 9);
-  const all = rankSorted(), top = all.slice(0, 3), mi = all.findIndex(r => r.me), rows = top.map((r, i) => [i + 1, r]);
-  if (mi > 2) rows.push([mi + 1, all[mi]]);
-  for (let i = 0; i < 4; i++) {
-    const y = 96 + i * 32, e = rows[i], me = e && e[1].me;
-    g.fillStyle = me ? 'rgba(30,196,107,.28)' : 'rgba(255,255,255,.06)'; g.fillRect(-100, y, 200, 26);
-    g.fillStyle = e ? ['#f1c22e', '#c2cad6', '#d9904a', '#7a8394'][Math.min(3, e[0] - 1)] : '#3a4150'; g.fillRect(-100, y, 4, 26);
-    g.font = '800 15px "Saira Condensed", sans-serif'; g.textAlign = 'left'; g.fillStyle = '#eef1f6';
-    g.fillText(e ? e[0] : i + 1, -88, y + 18);
-    g.font = '700 14px "Barlow Semi Condensed", sans-serif'; g.fillStyle = e ? '#eef1f6' : '#5a6272'; g.fillText(e ? (me ? L('Vous', 'You') : e[1].name || L('Pilote', 'Driver')).slice(0, 14) : '—', -66, y + 18);
-    g.textAlign = 'right'; g.fillStyle = '#c2cad6'; g.fillText(e ? e[1].p + ' pts' : '', 94, y + 18);
-  }
-  g.restore();
-};
 ART.profile = (g, w, h) => {
   const s = Math.min(w / 220, h / 280), [n, have, need] = levelOf(XP); g.save(); g.translate(w / 2, 14 * s + 70 * s); g.scale(s, s); g.textAlign = 'center';
   g.lineWidth = 9; g.strokeStyle = '#1f2430'; g.beginPath(); g.arc(0, 0, 58, 0, 7); g.stroke();
@@ -2359,12 +2317,40 @@ ART.settings = (g, w, h) => {
   [[.7, '#4aa3ff'], [.35, '#1ec46b'], [.55, '#f1c22e']].forEach(([v, c], i) => { const y = 100 + i * 26; g.fillStyle = '#1f2430'; g.fillRect(-80, y - 3, 160, 6); g.fillStyle = c; g.fillRect(-80, y - 3, 160 * v, 6); g.fillStyle = '#eef1f6'; disc(g, -80 + 160 * v, y, 9); });
   g.restore();
 };
+const MINI = 5; // rows shown inside the Classé and Chrono bands
+function miniRow(ol, pos, name, id, val, me, col) {
+  const li = document.createElement('li'), p = document.createElement('span'), n = document.createElement('span'), t = document.createElement('span');
+  li.className = me ? 'me' : ''; li.style.setProperty('--lc', col || '#3a4150'); p.className = 'p'; p.textContent = pos; t.className = 't'; t.textContent = val;
+  n.className = 'n'; nameWithLevel(n, name, id); li.append(p, n, t); ol.append(li);
+}
+let miniTok = 0;
+async function renderMiniBoards() {
+  if (el.home.hidden) return;
+  const tok = ++miniTok, ordinal = ['#f1c22e', '#c2cad6', '#d9904a'];
+  const rk = rankSorted(), tid = findDef(ui.tid) ? ui.tid : 'lac', def = findDef(tid);
+  let laps; // best laps on the selected circuit, same data as the ranking screen
+  if (DB) laps = Object.entries(board).map(([uid, d]) => { const e = d && d[lbKey(tid)]; return { id: uid, me: uid === ME, t: e && e.t }; });
+  else { lapMine(); laps = Object.entries(lapLocal).map(([pid, e]) => ({ id: pid, me: pid === PID, name: pid === PID ? myNick() : e.n, t: e.l && e.l[tid] })); }
+  laps = laps.filter(r => okLap(r.t)).sort((a, b) => a.t - b.t);
+  const pick = (all, me) => { const top = all.slice(0, MINI), mi = all.findIndex(r => me(r)); if (mi >= MINI) top[MINI - 1] = all[mi]; return top.map(r => [all.indexOf(r) + 1, r]); };
+  const rkRows = pick(rk, r => r.me), lapRows = pick(laps, r => r.me);
+  const ids = [...new Set([...rkRows, ...lapRows].map(([, r]) => r.id))], ps = DB && USER && ids.length ? await USER.profiles(ids) : {};
+  if (tok !== miniTok) return;
+  const nm = r => r.me ? L('Vous', 'You') : (DB ? ps[r.id] && ps[r.id].name : r.name) || L('Pilote', 'Driver');
+  const head = (ol, txt) => { const li = document.createElement('li'); li.className = 'hd'; li.textContent = txt; ol.append(li); };
+  const empty = (ol, txt) => { const li = document.createElement('li'); li.className = 'empty'; li.textContent = txt; ol.append(li); };
+  const a = $('lbRank'), b = $('lbTt'); a.replaceChildren(); b.replaceChildren();
+  head(a, L('Classement', 'Ranking')); rkRows.length ? rkRows.forEach(([i, r]) => miniRow(a, i, nm(r), r.id, r.p + ' pts', r.me, ordinal[i - 1])) : empty(a, L('Aucune partie classée pour l’instant : soyez le premier.', 'No ranked game yet: be the first.'));
+  head(b, L('Meilleurs tours · ', 'Best laps · ') + def.name); lapRows.length ? lapRows.forEach(([i, r]) => miniRow(b, i, nm(r), r.id, fmt(r.t), r.me, ordinal[i - 1])) : empty(b, L('Aucun temps sur ce circuit : à vous de l’établir.', 'No time on this circuit yet: set the first.'));
+}
+setInterval(renderMiniBoards, 2500);
 function drawModeArts() {
+  renderMiniBoards();
   const narrow = innerWidth <= 700, rec = bestRecord();
-  const rk = rankSorted(), mi = rk.findIndex(r => r.me); $('mfRank').innerHTML = mi >= 0 ? L('Votre place', 'Your rank') + ' <b>' + (mi + 1) + '</b> · <b>' + rk[mi].p + '</b> pts' : L('Pas encore classé : jouez une partie classée', 'Not ranked yet: play a ranked game');
+  const rk = rankSorted(), mi = rk.findIndex(r => r.me); $('mfRank').innerHTML = mi >= 0 ? L('Votre place', 'Your rank') + ' <b>' + (mi + 1) + '</b> · <b>' + rk[mi].p + '</b> pts' : L('6 pilotes · 5 tours', '6 drivers · 5 laps');
   $('mfTt').innerHTML = rec ? 'Votre record <b>' + fmt(rec.t) + '</b> · ' + esc(rec.name) : 'Pas encore de record : à vous de l’établir';
   document.querySelectorAll('.mode').forEach(b => {
-    const cnv = b.querySelector('canvas'), w = cnv.clientWidth, h = cnv.clientHeight, dpr = Math.min(2, devicePixelRatio || 1);
+    const cnv = b.querySelector('canvas'); if (!cnv) return; const w = cnv.clientWidth, h = cnv.clientHeight, dpr = Math.min(2, devicePixelRatio || 1);
     if (!w || !h) return;
     cnv.width = Math.round(w * dpr); cnv.height = Math.round(h * dpr);
     const g = cnv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -2439,13 +2425,19 @@ function refreshSetup() {
   $('ghostNote').hidden = true;
   $('editBtn').hidden = champ || !mine.some(c => c.id === ui.tid);
   refreshLike();
-  $('goTxt').textContent = ui.friends ? (champ ? 'Créer le championnat entre amis' : 'Créer la partie entre amis') : champ ? 'Lancer le championnat' : mode === 'race' ? 'Course contre les bots' : 'Lancer le chrono';
-  $('netActions').hidden = $('netNote').hidden = !champ || ui.friends;
-  document.querySelectorAll('.pick:not([data-pick="bots"])').forEach(b => { b.disabled = !ROOM; });
-  $('inviteBtn').textContent = champ ? 'Championnat entre amis' : 'Inviter des amis';
-  $('inviteBtn').disabled = !ROOM;
-  $('netNote').textContent = ROOM && champ ? 'Invitez vos amis avec un code : les ' + CHAMP.length + ' manches s’enchaînent et les points s’additionnent. Les places libres sont prises par des bots.' : ROOM ? '' : window.claude ? 'Le jeu en ligne demande d’être connecté à claude.ai et invité sur cette page.' : 'Le jeu en ligne n’a pas pu se charger : vérifiez votre connexion puis rechargez la page.';
-  $('gpNote').textContent = ROOM ? '' : $('netNote').textContent;
+  if (champ && ui.sub === 'online') ui.sub = 'bots'; // the championship is played alone or with friends
+  ui.friends = ui.sub === 'friends';
+  const subs = mode === 'tt' ? [] : [['bots', 'Contre les bots'], ...(champ ? [] : [['online', 'En ligne']]), ['friends', 'Entre amis']];
+  $('subSeg').hidden = !subs.length;
+  $('subSeg').replaceChildren(...subs.map(([v, t]) => { const b = document.createElement('button'); b.type = 'button'; b.dataset.sub = v; b.textContent = L(t, { 'Contre les bots': 'Against bots', 'En ligne': 'Online', 'Entre amis': 'With friends' }[t]); b.setAttribute('aria-pressed', ui.sub === v); return b; }));
+  document.querySelectorAll('#rounds select').forEach((sel, i) => { sel.value = CHAMP[i].id; });
+  const net = mode !== 'tt' && ui.sub !== 'bots';
+  $('goTxt').textContent = mode === 'tt' ? 'Lancer le chrono' : ui.sub === 'online' ? 'Chercher une partie en ligne' : ui.sub === 'friends' ? (champ ? 'Créer le championnat entre amis' : 'Créer la partie entre amis') : champ ? 'Lancer le championnat' : 'Course contre les bots';
+  $('go').disabled = net && !ROOM;
+  $('onlineExtra').hidden = !net; $('netNote').hidden = !net;
+  $('netNote').textContent = !ROOM ? (window.claude ? 'Le jeu en ligne demande d’être connecté à claude.ai et invité sur cette page.' : 'Le jeu en ligne n’a pas pu se charger : vérifiez votre connexion puis rechargez la page.')
+    : ui.sub === 'online' ? 'Si une partie ouverte existe, vous la rejoignez ; sinon la vôtre est créée avec ce circuit, ces tours et cette météo. Les places libres sont prises par des bots.'
+    : champ ? 'Invitez vos amis avec un code : les ' + CHAMP.length + ' manches s’enchaînent et les points s’additionnent. Les places libres sont prises par des bots.' : 'Créez la partie avec ce circuit, puis donnez le code à vos amis. Les places libres sont prises par des bots.';
   if (champ) {
     $('capName').textContent = 'Championnat';
     $('capMeta').textContent = CHAMP.length + ' manches · 25, 18, 15, 12, 10, 8 points';
@@ -2551,7 +2543,8 @@ async function cgInit() {
 
 function startAttract() { ED = null; startSession({ mode: 'race', tid: ui.tid, laps: Infinity, attract: true }); }
 function goHome() { leaveGame(); startAttract(); show('home'); }
-function openSetup(mode, friends = false) { ui.mode = mode; ui.friends = friends; refreshSetup(); show('menu'); }
+function openSetup(mode, sub) { ui.mode = mode; ui.sub = sub || ui.sub || 'bots'; refreshSetup(); show('menu'); renderOpenGames(); }
+$('subSeg').addEventListener('click', e => { const b = e.target.closest('[data-sub]'); if (b) { ui.sub = b.dataset.sub; refreshSetup(); renderOpenGames(); } });
 function startRace(o) { leaveGame(); startSession(o); show(null); $('pauseTrack').textContent = $('resTrack').textContent = G.T.def.name + (G.rain ? ' · pluie' : ''); $('restartBtn').hidden = false; }
 function startChampRound() { launch({ mode: 'race', champ: true, tid: CHAMP[ui.champ.round].id, laps: ui.laps, diff: ui.diff, rain: weatherPick(), team: ui.team }); }
 // A race with qualifying starts with one timed lap alone on track (weather already decided).
@@ -2605,7 +2598,7 @@ function pause() {
 }
 function resume() { if (G.state === 'paused') G.state = G.prev; show(null); }
 
-const MODE_GO = { race: () => openGp(), champ: () => openSetup('champ'), tt: () => openSetup('tt'), ranked: () => ROOM ? quickMatch(true) : openRanking() }; // without a connection the ranked band shows the ranking instead
+const MODE_GO = { race: () => openSetup('race', 'bots'), champ: () => openSetup('champ', 'bots'), tt: () => openSetup('tt'), ranked: () => ROOM ? quickMatch(true) : openRanking() }; // without a connection the ranked band shows the ranking instead
 document.querySelectorAll('.mode').forEach(b => b.addEventListener('click', () => MODE_GO[b.dataset.mode] && MODE_GO[b.dataset.mode]()));
 // Two pages of three bands: buttons, arrow keys and a swipe turn the page.
 let homePage = 0;
@@ -2616,12 +2609,9 @@ addEventListener('keydown', e => { if (!el.home.hidden && !/INPUT|TEXTAREA|SELEC
 let swipeX = null; $('home').addEventListener('touchstart', e => { swipeX = e.touches[0].clientX; }, { passive: true });
 $('home').addEventListener('touchend', e => { if (swipeX != null && Math.abs(e.changedTouches[0].clientX - swipeX) > 70) homeGo(homePage + (e.changedTouches[0].clientX < swipeX ? 1 : -1)); swipeX = null; }, { passive: true });
 homeGo(0);
-$('backBtn').addEventListener('click', () => ui.mode === 'race' ? openGp() : show('home'));
-function openGp() { ui.mode = 'race'; ui.friends = false; refreshSetup(); show('gp'); renderOpenGames(); }
-$('gpBack').addEventListener('click', () => show('home'));
-const PICKS = { bots: () => openSetup('race'), quick: () => quickMatch(false), friends: () => openSetup('race', true) };
-document.querySelectorAll('.pick').forEach(b => b.addEventListener('click', () => PICKS[b.dataset.pick]()));
+$('backBtn').addEventListener('click', () => show('home'));
 $('go').addEventListener('click', () => {
+  if (ui.mode !== 'tt' && ui.sub === 'online') { retryAction = () => quickMatch(false); return quickMatch(false); }
   if (ui.friends) { retryAction = () => hostGame(false); return hostGame(false); }
   if (ui.mode === 'champ') { ui.champ = { round: 0, pts: {} }; startChampRound(); }
   else if (ui.mode === 'race') launch({ mode: 'race', tid: ui.tid, laps: ui.laps, diff: ui.diff, rain: weatherPick(), team: ui.team });
@@ -2697,7 +2687,7 @@ const isPlayerPeer = p => p.kind === 'viewer' && (p.presence.role === 'host' || 
 // A game is a star: the host owns the PeerJS id of the game's name and relays everyone's presence to every guest.
 // It mimics the parts of the room capability the game uses (peers, presence, join, leave).
 const P2P_PREFIX = 'monoplace-gp-v1-'; // the names every version so far has used: old and new pages still find each other
-const VERSION = 65; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
+const VERSION = 66; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
 // Relay for players whose networks refuse direct connections: turn.js, next to the page, holds the owner's own TURN account.
 const RELAY = window.TURN_CONFIG && TURN_CONFIG.username && TURN_CONFIG.credential ? TURN_CONFIG : null;
 const PEER_OPTS = RELAY ? { debug: 0, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, RELAY] } } : { debug: 0 };
@@ -3130,7 +3120,7 @@ function netSync(dt) {
 let lobbyFrom = 'home';
 function showLobby(msg) {
   document.querySelectorAll('[data-chat] .feed').forEach(ul => ul.replaceChildren());
-  lobbyFrom = !el.menu.hidden ? 'menu' : !el.gp.hidden ? 'gp' : 'home';
+  lobbyFrom = !el.menu.hidden ? 'menu' : 'home';
   lobbyKind(NET.cfg);
   $('lbTitle').textContent = 'Salle d’attente';
   $('lbTrack').textContent = msg;
@@ -3258,7 +3248,7 @@ async function renderRanking() {
   }));
   $('rkNote').textContent = !rows.length ? 'Aucune partie classée terminée pour l’instant. Lancez « Partie classée » dans Grand Prix : la course part dès que 6 pilotes sont là.'
     : 'Points par place : 25, 18, 15, 12, 10, 8.' + (DB ? '' : ' Ce classement se transmet entre les joueurs qui se retrouvent en ligne.');
-  renderLaps(); renderLevels();
+  renderLaps();
 }
 // Driver levels of everyone met online: XP per player, newest wins, travels with the gossip like the ranking.
 const LV_KEY = 'monoplace-gp.levels';
@@ -3283,16 +3273,7 @@ function nameWithLevel(box, name, id) { // the name (cut with … if long) and t
   const t = document.createElement('span'); t.textContent = name; box.classList.add('wl'); box.replaceChildren(t);
   const b = lvBadge(id); if (b) box.append(b);
 }
-function renderLevels() {
-  lvMine();
-  const rows = Object.entries(lvLocal).map(([id, e]) => ({ id, me: id === PID, name: id === PID ? myNick() : e.n, x: e.x })).sort((a, b) => b.x - a.x).slice(0, 100);
-  $('lvBody').replaceChildren(...rows.map((r, i) => {
-    const tr = document.createElement('tr'); tr.className = r.me ? 'me' : '';
-    [i + 1, r.me ? 'Vous' : r.name || 'Pilote', r.x].forEach((v, k) => { const td = document.createElement('td'); td.className = k === 0 ? 'num' : k === 1 ? '' : 'r num'; if (k === 1) nameWithLevel(td, v, r.id); else td.textContent = v; tr.append(td); });
-    return tr;
-  }));
-  $('lvNote').textContent = 'L’XP vient des courses sur les circuits officiels. Les niveaux se transmettent entre les joueurs qui se retrouvent en ligne.';
-}
+
 // Best laps on the official circuits. claude.ai: the shared laps documents; elsewhere: each player's records travel with the hub's gossip.
 const LAP_KEY = 'monoplace-gp.laps';
 let lapLocal = store.get(LAP_KEY) || {}, lapTid = null, lapTok = 0;
@@ -3349,11 +3330,10 @@ async function renderLaps() {
 $('lapSearch').addEventListener('input', renderLaps);
 function rkTab(t) {
   document.querySelectorAll('[data-rk]').forEach(b => b.setAttribute('aria-pressed', b.dataset.rk === t));
-  $('rkRanked').hidden = t !== 'ranked'; $('rkLaps').hidden = t !== 'laps'; $('rkLevels').hidden = t !== 'levels';
+  $('rkRanked').hidden = t !== 'ranked'; $('rkLaps').hidden = t !== 'laps';
 }
 document.querySelectorAll('[data-rk]').forEach(b => b.addEventListener('click', () => rkTab(b.dataset.rk)));
 function openRanking() { rkFrom = !el.results.hidden ? 'results' : !el.menu.hidden ? 'menu' : 'home'; rkTab('ranked'); lapTid = null; $('lapSearch').value = ''; renderRanking(); show('ranking'); }
-$('rankBtn').addEventListener('click', openRanking);
 $('resRankBtn').addEventListener('click', openRanking);
 $('rkClose').addEventListener('click', () => show(rkFrom));
 
@@ -3402,8 +3382,8 @@ function openGames() {
     .map(p => ({ g: p.presence.g, nick: '', by: p.by, n: clamp(p.presence.n | 0, 1, 6) }));
 }
 function renderOpenGames() {
-  if (el.gp.hidden) return;
-  const list = !NET ? openGames().filter(x => x.n < 6) : [];
+  if (el.menu.hidden) return;
+  const list = !NET && ui.sub === 'online' && ui.mode === 'race' ? openGames().filter(x => x.n < 6) : [];
   $('openGrp').hidden = !list.length;
   $('openGames').replaceChildren(...list.slice(0, 8).map(x => {
     const li = document.createElement('li'), t = document.createElement('span'), b = document.createElement('button');
@@ -3518,10 +3498,9 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden) hubHide = setTimeout(() => hub.stop(), 15000);
   else if (hub.stopped) hubStart();
 });
-$('inviteBtn').addEventListener('click', () => { retryAction = () => hostGame(false); hostGame(false); });
 $('lbStart').addEventListener('click', () => { if (NET && NET.host && NET.room) hostQuali(); });
 $('lbRetry').addEventListener('click', () => { const f = retryAction; leaveGame(); if (f) f(); });
-$('lbLeave').addEventListener('click', () => { leaveGame(); if (lobbyFrom === 'menu') openSetup(ui.mode, ui.friends); else if (lobbyFrom === 'gp') openGp(); else show('home'); });
+$('lbLeave').addEventListener('click', () => { leaveGame(); if (lobbyFrom === 'menu') openSetup(ui.mode, ui.sub); else show('home'); });
 $('lbLink').addEventListener('click', () => {
   let link = location.origin + location.pathname + '#partie-' + $('lbCode').textContent.toLowerCase();
   if (CG && NET) { try { link = CG.game.inviteLink({ roomName: NET.name }); } catch (e) { /* keep the page's own link */ } }
@@ -3532,7 +3511,7 @@ $('lbCopy').addEventListener('click', () => {
   navigator.clipboard.writeText(code).then(() => { $('lbCopy').textContent = 'Copié'; }, () => { const r = document.createRange(); r.selectNodeContents($('lbCode')); getSelection().removeAllRanges(); getSelection().addRange(r); });
 });
 $('codeBtn').addEventListener('click', () => { $('joinCode').value = ''; $('joinErr').textContent = ''; show('join'); $('joinCode').focus(); });
-$('joinCancel').addEventListener('click', () => openGp());
+$('joinCancel').addEventListener('click', () => openSetup('race', 'online'));
 $('joinForm').addEventListener('submit', e => {
   e.preventDefault();
   const code = $('joinCode').value.trim().toLowerCase();
@@ -4033,7 +4012,7 @@ const EN = new Map([
 ["Réessayer", "Try again"],
 ["Quitter", "Leave"],
 ["Parties classées", "Ranked games"],
-["Coffres", "Chests"], ["🎁 Ouvrir des coffres", "🎁 Open chests"], ["🎁 Ouvrir un coffre", "🎁 Open a chest"], ["Équiper", "Equip"], ["Les éléments grisés se trouvent dans les coffres : la couleur du cadre indique leur rareté.", "Greyed-out items are found in chests: the colour of the frame shows their rarity."], ["Contre les bots, en ligne ou entre amis.", "Against bots, online or with friends."], ["Compétition", "Competition"], ["Classé", "Ranked"], ["6 vrais joueurs, une qualification puis 5 tours. Gagnez des points au classement.", "6 real players, a qualifying lap then 5 laps. Earn ranking points."], ["Entrer en piste", "Hit the track"], ["Quatre Grands Prix à la suite, en ligne entre amis ou contre des bots.", "Four Grands Prix in a row, online with friends or against bots."], ["Votre pilote", "Your driver"], ["Couleur, motif, effet de vitesse et coffres à ouvrir.", "Colour, livery, speed effect and chests to open."], ["Personnaliser", "Customise"], ["Options", "Options"], ["Son, unités, langue et tutoriel.", "Sound, units, language and tutorial."], ["Volume · unités · aide", "Volume · units · help"], ["Régler", "Adjust"], ["Courses", "Races"], ["Pilote et options", "Driver and options"], ["Page précédente", "Previous page"], ["Page suivante", "Next page"], ["Pages du menu", "Menu pages"], ["Meilleurs tours", "Best laps"], ["Niveaux", "Levels"], ["Niveau", "Level"], ["Niv.", "Lv"], ["Le chiffre sur une couleur grisée est le niveau qui la débloque.", "The number on a greyed-out colour is the level that unlocks it."], ["L’XP vient des courses sur les circuits officiels. Les niveaux se transmettent entre les joueurs qui se retrouvent en ligne.", "XP comes from races on the official circuits. Levels are passed between players who meet online."],
+["Coffres", "Chests"], ["🎁 Ouvrir des coffres", "🎁 Open chests"], ["🎁 Ouvrir un coffre", "🎁 Open a chest"], ["Équiper", "Equip"], ["Les éléments grisés se trouvent dans les coffres : la couleur du cadre indique leur rareté.", "Greyed-out items are found in chests: the colour of the frame shows their rarity."], ["Contre les bots, en ligne ou entre amis.", "Against bots, online or with friends."], ["Compétition", "Competition"], ["Classé", "Ranked"], ["6 vrais joueurs, une qualification puis 5 tours. Gagnez des points au classement.", "6 real players, a qualifying lap then 5 laps. Earn ranking points."], ["Entrer en piste", "Hit the track"], ["Quatre Grands Prix à la suite, en ligne entre amis ou contre des bots.", "Four Grands Prix in a row, online with friends or against bots."], ["Votre pilote", "Your driver"], ["Couleur, motif, effet de vitesse et coffres à ouvrir.", "Colour, livery, speed effect and chests to open."], ["Personnaliser", "Customise"], ["Options", "Options"], ["Son, unités, langue et tutoriel.", "Sound, units, language and tutorial."], ["Volume · unités · aide", "Volume · units · help"], ["Régler", "Adjust"], ["Courses", "Races"], ["Pilote et options", "Driver and options"], ["Page précédente", "Previous page"], ["Page suivante", "Next page"], ["Pages du menu", "Menu pages"], ["Façon de jouer", "How to play"], ["En ligne", "Online"], ["Chercher une partie en ligne", "Find an online game"], ["Si une partie ouverte existe, vous la rejoignez ; sinon la vôtre est créée avec ce circuit, ces tours et cette météo. Les places libres sont prises par des bots.", "If an open game exists you join it; otherwise yours is created with this circuit, these laps and this weather. Free places are filled by bots."], ["Créez la partie avec ce circuit, puis donnez le code à vos amis. Les places libres sont prises par des bots.", "Create the game with this circuit, then give the code to your friends. Free places are filled by bots."], ["Manches, dans l’ordre : choisissez les circuits", "Rounds, in order: choose the circuits"], ["Aucune partie classée pour l’instant : soyez le premier.", "No ranked game yet: be the first."], ["Aucun temps sur ce circuit : à vous de l’établir.", "No time on this circuit yet: set the first."], ["6 pilotes · 5 tours", "6 drivers · 5 laps"], ["Meilleurs tours", "Best laps"], ["Niveaux", "Levels"], ["Niveau", "Level"], ["Niv.", "Lv"], ["Le chiffre sur une couleur grisée est le niveau qui la débloque.", "The number on a greyed-out colour is the level that unlocks it."], ["L’XP vient des courses sur les circuits officiels. Les niveaux se transmettent entre les joueurs qui se retrouvent en ligne.", "XP comes from races on the official circuits. Levels are passed between players who meet online."],
 ["6 vrais pilotes, qualifs puis 5 tours, sans bots", "6 real drivers, qualifying then 5 laps, no bots"],
 ["Pilote", "Driver"],
 ["Courses", "Races"],
