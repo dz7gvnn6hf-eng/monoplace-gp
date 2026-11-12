@@ -1888,10 +1888,7 @@ const XP_KEY = 'monoplace-gp.xp';
 let XP = Math.max(0, Math.floor(+store.get(XP_KEY) || 0));
 const xpNeed = n => 20 + 10 * (n - 1); // XP to go from level n to n + 1: 20, 30, 40...
 function levelOf(xp) { let n = 1; while (xp >= xpNeed(n)) { xp -= xpNeed(n); n++; } return [n, xp, xpNeed(n)]; }
-// Skins come from chests. The old level tables only remain to migrate saves made before chests existed.
-const LEG_MOTIF = { classic: 1, stripe: 3, twin: 7, split: 10, sash: 15, fade: 19, bolt: 24, tiger: 29, camo: 34, flames: 42, neon: 39, tribal: 46, phantom: 55, carbon: 32, hex: 16 };
-const LEG_COLOR = [1, 1, 1, 1, 1, 1, 2, 47, 13, 18, 5, 31, 41, 25, 53, 52, 45, 22, 37, 9, 49, 35, 14, 28, 11, 21, 38, 26, 6, 44, 50, 54];
-const LEG_TRAIL = { none: 1, trail: 4, fire: 12, volt: 23, glow: 30, rainbow: 36, sparks: 51, ghost: 56, smoke: 8, bubbles: 17, pixels: 20, snow: 27, hearts: 33, notes: 40, laser: 43, comet: 48 };
+// Skins come from chests.
 // Item keys: c<TEAMS index> colour, m:<id> livery, t:<id> speed effect. Free: colours 0-5, classic, none.
 const RARS = [['Commun', 'Common', '#b7bec9'], ['Rare', 'Rare', '#3ed16a'], ['Super rare', 'Super rare', '#4aa3ff'], ['Épique', 'Epic', '#b45cff'], ['Légendaire', 'Legendary', '#ffb81c']];
 const RAR_ITEMS = [
@@ -1904,9 +1901,9 @@ const RAR_OF = {}; RAR_ITEMS.forEach((l, r) => l.forEach(k => RAR_OF[k] = r));
 const ALL_KEYS = Object.keys(RAR_OF);
 const COIN_ODDS = [55, 28, 12, 4, 1], LVL_ODDS = [30, 35, 22, 10, 3], CHEST_COST = 100; // % by rarity; a level chest is better than a coin chest
 const INV_KEY = 'monoplace-gp.inv';
-const legLevel = k => k[0] === 'c' ? LEG_COLOR[+k.slice(1)] : (k[0] === 'm' ? LEG_MOTIF : LEG_TRAIL)[k.slice(2)];
-let INV = (s => s && Array.isArray(s.own) ? { own: s.own.filter(k => k in RAR_OF), coins: Math.max(0, s.coins | 0), chests: Math.max(0, s.chests | 0) }
-  : { own: ALL_KEYS.filter(k => levelOf(XP)[0] >= legLevel(k)), coins: 0, chests: 0 })(store.get(INV_KEY));
+// v:2 = chests era. Any older save (or none) starts again with no skins and one chest per level gained; coins are kept.
+let INV = (s => s && s.v === 2 && Array.isArray(s.own) ? { v: 2, own: s.own.filter(k => k in RAR_OF), coins: Math.max(0, s.coins | 0), chests: Math.max(0, s.chests | 0) }
+  : { v: 2, own: [], coins: Math.max(0, s && s.coins | 0), chests: levelOf(XP)[0] - 1 })(store.get(INV_KEY));
 const saveInv = () => store.set(INV_KEY, INV);
 saveInv();
 const owned = k => !(k in RAR_OF) || INV.own.includes(k);
@@ -2618,7 +2615,7 @@ const isPlayerPeer = p => p.kind === 'viewer' && (p.presence.role === 'host' || 
 // A game is a star: the host owns the PeerJS id of the game's name and relays everyone's presence to every guest.
 // It mimics the parts of the room capability the game uses (peers, presence, join, leave).
 const P2P_PREFIX = 'monoplace-gp-v1-'; // the names every version so far has used: old and new pages still find each other
-const VERSION = 59; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
+const VERSION = 60; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
 // Relay for players whose networks refuse direct connections: turn.js, next to the page, holds the owner's own TURN account.
 const RELAY = window.TURN_CONFIG && TURN_CONFIG.username && TURN_CONFIG.credential ? TURN_CONFIG : null;
 const PEER_OPTS = RELAY ? { debug: 0, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, RELAY] } } : { debug: 0 };
