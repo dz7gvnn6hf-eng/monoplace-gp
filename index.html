@@ -1157,7 +1157,7 @@ const TEAMS = [
   { name: L('Rose poudré', 'Powder pink'), color: '#f4a6b8', alt: '#3b1f6b', helmet: '#16181c' },
   { name: L('Perle', 'Pearl'), color: '#f2ecef', alt: '#7a5cc9', helmet: '#16181c', fin: 'pearl' }, // special finishes: the body is painted with a gradient
   { name: L('Holographique', 'Holographic'), color: '#7fb2ff', alt: '#16181c', helmet: '#f4f5f7', fin: 'holo' },
-  { name: L('Crème', 'Cream'), color: '#f3e6c4', alt: '#3b2f22', helmet: '#ec3a2a' },
+  { name: L('Crème', 'Cream'), color: '#f3e6c4', alt: '#3b2f22', helmet: '#ec3a2a', hidden: true },
   { name: L('Bleu nuit', 'Midnight blue'), color: '#101a3a', alt: '#f4f5f7', helmet: '#f1c22e' },
   { name: L('Pistache', 'Pistachio'), color: '#b6e28a', alt: '#16181c', helmet: '#f4f5f7' },
   { name: L('Cuivre', 'Copper'), color: '#b8693a', alt: '#2a1810', helmet: '#f4f5f7', fin: 'copper' },
@@ -1170,11 +1170,11 @@ const TEAMS = [
   { name: L('Vagues japonaises', 'Japanese waves'), color: '#16407a', alt: '#f4f5f7', helmet: '#f1c22e', fin: 'wave' },
   { name: L('Azulejo', 'Azulejo'), color: '#1d4fb0', alt: '#f4f5f7', helmet: '#1d4fb0', paint: 'azulejo' },
   { name: L('Nuages', 'Clouds'), color: '#6fb0f0', alt: '#f4f5f7', helmet: '#1d4fb0', paint: 'nuages' },
-  { name: L('Flocons', 'Snowflakes'), color: '#4a76b8', alt: '#f4f5f7', helmet: '#2b4f8a', paint: 'flocons' },
-  { name: L('Planètes', 'Planets'), color: '#0b0e24', alt: '#c4601a', helmet: '#f4f5f7', paint: 'planetes' },
+  { name: L('Flocons', 'Snowflakes'), color: '#4a76b8', alt: '#f4f5f7', helmet: '#2b4f8a', paint: 'flocons', hidden: true },
+  { name: L('Planètes', 'Planets'), color: '#0b0e24', alt: '#c4601a', helmet: '#f4f5f7', paint: 'planetes', hidden: true },
   { name: L('Arc-en-ciel', 'Rainbow'), color: '#3ed16a', alt: '#f4f5f7', helmet: '#16181c', paint: 'arcenciel' },
-  { name: L('Donut', 'Donut'), color: '#ff8fc0', alt: '#ff6fa8', helmet: '#f4f5f7', paint: 'donut' },
-  { name: L('Échecs', 'Chess'), color: '#16181c', alt: '#16181c', helmet: '#f4f5f7', paint: 'echecs' },
+  { name: L('Donut', 'Donut'), color: '#ff8fc0', alt: '#ff6fa8', helmet: '#f4f5f7', paint: 'donut', hidden: true },
+  { name: L('Échecs', 'Chess'), color: '#16181c', alt: '#16181c', helmet: '#f4f5f7', paint: 'echecs', hidden: true },
   { name: L('Marguerites', 'Daisies'), color: '#2f9a45', alt: '#f4f5f7', helmet: '#ffd23a', paint: 'marguerites' },
   { name: L('Cœurs', 'Hearts'), color: '#ff4a7a', alt: '#ffb3cb', helmet: '#f4f5f7', paint: 'coeurs' },
 ].map((t, i) => ({ ...t, i }));
@@ -1253,7 +1253,7 @@ function startSession(o) {
       if (me) G.player = c; else { c.remote = true; c.auto = false; c.peer = s.p; c.by = s.by; }
       G.cars.push(c);
     }
-    const freeT = TEAMS.map((_, i) => i).filter(i => !usedT.has(i));
+    const freeT = TEAMS.map((_, i) => i).filter(i => !usedT.has(i) && !TEAMS[i].hidden);
     let k = 0;
     for (let s = 0; s < 6 && !o.online.ranked; s++) {
       if (usedS.has(s)) continue;
@@ -1266,7 +1266,7 @@ function startSession(o) {
     const team = o.team || 0, me = { ...TEAMS[team], code: 'VOUS', name: 'Vous' };
     if (o.mode === 'tt') G.cars.push(G.player = makeCar(T, 0, me, true, 0, 0));
     else {
-      const others = TEAMS.filter((_, i) => i !== team);
+      const others = TEAMS.filter((t, i) => i !== team && !t.hidden);
       const slot = code => o.grid ? o.grid[code] : null;
       for (let k = 0; k < 5; k++) G.cars.push(makeCar(T, slot(RIVALS[k].code) ?? k, { ...others[k], ...RIVALS[k] }, false, d.skill - k * 0.012, d.err));
       G.cars.push(G.player = makeCar(T, slot('VOUS') ?? 5, me, true, 0, 0));
@@ -1761,27 +1761,30 @@ const xpNeed = n => 20 + 10 * (n - 1); // XP to go from level n to n + 1: 20, 30
 function levelOf(xp) { let n = 1; while (xp >= xpNeed(n)) { xp -= xpNeed(n); n++; } return [n, xp, xpNeed(n)]; }
 // Skins come from chests.
 // Item keys: c<TEAMS index>. Free: colours 0-5.
-const RARS = [['Commun', 'Common', '#b7bec9'], ['Rare', 'Rare', '#3ed16a'], ['Super rare', 'Super rare', '#4aa3ff'], ['Épique', 'Epic', '#b45cff'], ['Légendaire', 'Legendary', '#ffb81c']];
+const RARS = [['Commun', 'Common', '#b7bec9'], ['Rare', 'Rare', '#3ed16a'], ['Super rare', 'Super rare', '#4aa3ff'], ['Légendaire', 'Legendary', '#ffb81c'], ['Unique', 'Unique', '#ff3b6b']];
 const RAR_ITEMS = [
-  ['c6', 'c10', 'c9', 'c7', 'c8', 'c12', 'c13', 'c32', 'c33', 'c44', 'c48', 'c49', 'c51'],
-  ['c11', 'c17', 'c19', 'c21', 'c22', 'c23', 'c34', 'c43', 'c45', 'c47', 'c50'],
-  ['c18', 'c24', 'c25', 'c27', 'c28', 'c29', 'c35', 'c36', 'c42'],
-  ['c16', 'c20', 'c26', 'c15', 'c37', 'c38', 'c39', 'c46'],
-  ['c14', 'c30', 'c31', 'c41', 'c40']];
+  [],
+  ['c6', 'c8', 'c9', 'c13', 'c11', 'c17', 'c19', 'c34', 'c18', 'c24', 'c25', 'c27', 'c28', 'c29'],
+  ['c7', 'c10', 'c12', 'c33', 'c21', 'c22', 'c23', 'c15', 'c16', 'c20', 'c26', 'c30'],
+  ['c35', 'c36', 'c37', 'c38', 'c39', 'c14', 'c31', 'c40', 'c41'],
+  ['c44', 'c51', 'c43', 'c47', 'c50', 'c42']];
 const RAR_OF = {}; RAR_ITEMS.forEach((l, r) => l.forEach(k => RAR_OF[k] = r));
 const ALL_KEYS = Object.keys(RAR_OF);
-const COIN_ODDS = [55, 28, 12, 4, 1], LVL_ODDS = [30, 35, 22, 10, 3], CHEST_COST = 100; // % by rarity; a level chest is better than a coin chest
+const COIN_ODDS = [0, 62, 27, 9, 2], LVL_ODDS = [0, 40, 36, 18, 6], CHEST_COST = 100; // % by rarity; a level chest is better than a coin chest
 const INV_KEY = 'monoplace-gp.inv';
 // v:4: skins are colours only. An older save keeps its colours; every motif, speed effect or removed colour it owned is paid back as one chest. No save: no skins and one chest per level gained.
 let INV = (s => {
   const coins = Math.max(0, s && s.coins | 0);
-  if (s && s.v === 4 && Array.isArray(s.own)) return { v: 4, own: s.own.filter(k => k in RAR_OF), coins, chests: Math.max(0, s.chests | 0) };
+  if (s && s.v === 5 && Array.isArray(s.own)) return { v: 5, own: s.own.filter(k => k in RAR_OF), coins, chests: Math.max(0, s.chests | 0) };
+  if (s && s.v === 4 && Array.isArray(s.own)) { // the colours dropped when tiers were reordered are paid back as chests
+    const gone = new Set(['c32', 'c45', 'c46', 'c48', 'c49']); return { v: 5, own: s.own.filter(k => k in RAR_OF), coins, chests: Math.max(0, s.chests | 0) + s.own.filter(k => gone.has(k)).length };
+  }
   if (s && Array.isArray(s.own)) {
     let chests = Math.max(0, s.chests | 0); const own = [];
     for (const k of s.own) { if (k in RAR_OF && !(k[0] === 'c' && +k.slice(1) >= 43)) own.push(k); else chests++; } // c43+ were colours made from old motifs, since removed
-    return { v: 4, own: [...new Set(own)], coins, chests };
+    return { v: 5, own: [...new Set(own)].filter(k => k in RAR_OF), coins, chests: chests + own.filter(k => ['c32', 'c45', 'c46', 'c48', 'c49'].includes(k)).length };
   }
-  return { v: 4, own: [], coins, chests: levelOf(XP)[0] - 1 };
+  return { v: 5, own: [], coins, chests: levelOf(XP)[0] - 1 };
 })(store.get(INV_KEY));
 const saveInv = () => store.set(INV_KEY, INV);
 saveInv();
@@ -2087,7 +2090,7 @@ function drawTeams() {
     b.disabled = !open; b.lastChild.textContent = open ? '' : '🔒 ' + rarName('c' + i); b.style.setProperty('--rc', rarCol('c' + i));
     g.setTransform(1.75, 0, 0, 1.75, 46, 28); drawCar({ x: 0, y: 0, a: 0, steer: 0, drv: TEAMS[i] }, g); });
 }
-$('teams').innerHTML = TEAMS.map((t, i) => [t, i]).sort((a, b) => rarOf('c' + a[1]) - rarOf('c' + b[1])).map(([t, i]) => '<button type="button" data-k="team" data-v="' + i + '"><canvas width="96" height="56" aria-hidden="true"></canvas><span>' + t.name + '</span><small></small></button>').join('');
+$('teams').innerHTML = TEAMS.map((t, i) => [t, i]).filter(([t]) => !t.hidden).sort((a, b) => rarOf('c' + a[1]) - rarOf('c' + b[1])).map(([t, i]) => '<button type="button" data-k="team" data-v="' + i + '"><canvas width="96" height="56" aria-hidden="true"></canvas><span>' + t.name + '</span><small></small></button>').join('');
 // Championship circuits: four rounds, each one picked among the official circuits (kept on this device; the host's choice is what guests play).
 (store.get('monoplace-gp.champ') || []).slice(0, 4).forEach((id, i) => { const d = DEFS.find(x => x.id === id); if (d) CHAMP[i] = d; });
 $('rounds').innerHTML = CHAMP.map((d, i) => '<li><span class="n">' + (i + 1) + '</span><select class="input" data-r="' + i + '" aria-label="Manche ' + (i + 1) + '">' + DEFS.map(x => '<option value="' + x.id + '">' + esc(x.name) + '</option>').join('') + '</select></li>').join('');
@@ -2371,7 +2374,7 @@ function showQuali() {
     return;
   }
   const rows = [{ code: 'VOUS', name: 'Vous', color: TEAMS[o.team || 0].color, t: G.qTime, me: true }];
-  const others = TEAMS.filter((_, i) => i !== (o.team || 0));
+  const others = TEAMS.filter((t, i) => i !== (o.team || 0) && !t.hidden);
   RIVALS.forEach((r, k) => rows.push({ code: r.code, name: r.name, color: others[k].color, t: refLap(T, o.rain, d.skill - k * 0.012) * (1 + (Math.random() - 0.5) * 0.008) }));
   rows.sort((a, b) => a.t - b.t);
   G.grid = {}; rows.forEach((r, i) => { G.grid[r.code] = i; });
@@ -2476,7 +2479,7 @@ const isPlayerPeer = p => p.kind === 'viewer' && (p.presence.role === 'host' || 
 // A game is a star: the host owns the PeerJS id of the game's name and relays everyone's presence to every guest.
 // It mimics the parts of the room capability the game uses (peers, presence, join, leave).
 const P2P_PREFIX = 'monoplace-gp-v1-'; // the names every version so far has used: old and new pages still find each other
-const VERSION = 76; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
+const VERSION = 77; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
 // Relay for players whose networks refuse direct connections: turn.js, next to the page, holds the owner's own TURN account.
 const RELAY = window.TURN_CONFIG && TURN_CONFIG.username && TURN_CONFIG.credential ? TURN_CONFIG : null;
 const PEER_OPTS = RELAY ? { debug: 0, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, RELAY] } } : { debug: 0 };
@@ -3495,7 +3498,7 @@ function chestUi() {
   $('chInfo').textContent = '🪙 ' + INV.coins + ' ' + L('pièces', 'coins') + ' · 🎁 ' + INV.chests + ' ' + L('coffre(s) de niveau', 'level chest(s)') + ' · ' + L('Collection ', 'Collection ') + INV.own.length + '/' + ALL_KEYS.length;
   $('chLvl').textContent = '🎁 ' + L('Coffre de niveau', 'Level chest') + ' (' + INV.chests + ')'; $('chLvl').disabled = full || INV.chests < 1 || chestBusy;
   $('chCoin').textContent = '🪙 ' + L('Coffre à ', 'Chest for ') + CHEST_COST + ' ' + L('pièces', 'coins'); $('chCoin').disabled = full || INV.coins < CHEST_COST || chestBusy;
-  $('chOdds').textContent = RARS.map(r => L(r[0], r[1])).join(' / ') + ' — ' + L('coffre de niveau : ', 'level chest: ') + pct(LVL_ODDS) + ' · ' + L('coffre de pièces : ', 'coin chest: ') + pct(COIN_ODDS) + (full ? ' — ' + L('Collection complète !', 'Collection complete!') : '');
+  const live = RARS.map((r, i) => i).filter(i => RAR_ITEMS[i].length); $('chOdds').textContent = live.map(i => L(RARS[i][0], RARS[i][1])).join(' / ') + ' — ' + L('coffre de niveau : ', 'level chest: ') + pct(LVL_ODDS.filter((_, i) => live.includes(i))) + ' · ' + L('coffre de pièces : ', 'coin chest: ') + pct(COIN_ODDS.filter((_, i) => live.includes(i))) + (full ? ' — ' + L('Collection complète !', 'Collection complete!') : '');
 }
 function previewItem(cv, k) {
   const g = cv.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, cv.width, cv.height); g.setTransform(3.2, 0, 0, 3.2, cv.width / 2, cv.height / 2);
