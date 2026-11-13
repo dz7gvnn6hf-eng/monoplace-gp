@@ -1168,15 +1168,7 @@ const TEAMS = [
   { name: L('Obsidienne', 'Obsidian'), color: '#14101c', alt: '#b45cff', helmet: '#ffb81c', fin: 'obsidian' },
   { name: L('Diamant', 'Diamond'), color: '#e8f4ff', alt: '#6fa8dc', helmet: '#ffffff', fin: 'diamond' },
   { name: L('Vagues japonaises', 'Japanese waves'), color: '#16407a', alt: '#f4f5f7', helmet: '#f1c22e', fin: 'wave' },
-  { name: L('Tigre', 'Tiger'), color: '#ff8a1e', alt: '#16181c', helmet: '#2f6bff', motif: 'tiger' },
-  { name: L('Camouflage', 'Camouflage'), color: '#1d5e34', alt: '#f4f5f7', helmet: '#f1c22e', motif: 'camo' },
-  { name: L('Fibre de carbone', 'Carbon fibre'), color: '#f5c518', alt: '#16181c', helmet: '#ec3a2a', motif: 'carbon' },
-  { name: L('Hexagones', 'Hexagons'), color: '#18b3a0', alt: '#0b2f2b', helmet: '#f4f5f7', motif: 'hex' },
-  { name: L('Dégradé violet', 'Purple fade'), color: '#8b5cf6', alt: '#f1c22e', helmet: '#f4f5f7', motif: 'fade' },
-  { name: L('Flammes', 'Flames'), color: '#24272d', alt: '#ec3a2a', helmet: '#f1c22e', motif: 'flames' },
-  { name: L('Néon', 'Neon'), color: '#3b1f6b', alt: '#45c4f5', helmet: '#f4f5f7', motif: 'neon' },
-  { name: L('Tribal', 'Tribal'), color: '#0b5563', alt: '#f1c22e', helmet: '#f4f5f7', motif: 'tribal' },
-].map((t, i) => ({ motif: 'classic', ...t, i }));
+].map((t, i) => ({ ...t, i }));
 const FINISH = { pearl: [[0, '#ffffff'], [.35, '#f7e4ee'], [.65, '#e3ecfa'], [1, '#fbf6e6']], holo: [[0, '#ff5fd0'], [.25, '#7a6bff'], [.5, '#33e0ff'], [.75, '#7dff9b'], [1, '#ffd84a']],
   gold: [[0, '#fff6c0'], [.18, '#f6cf3e'], [.4, '#b07a0a'], [.55, '#ffe88a'], [.75, '#d9a520'], [1, '#fff0a8']],
   copper: [[0, '#e8a06a'], [.5, '#a85a2e'], [1, '#e8a06a']], nebula: [[0, '#2b1a7a'], [.5, '#9b4dff'], [1, '#ff6ad5']], lava: [[0, '#ffc21a'], [.4, '#ff4a1a'], [.8, '#7a0d0d'], [1, '#1a0505']],
@@ -1735,75 +1727,7 @@ function drawPit(T) {
 // Body outline [x, y, how far a hit pushes it in]; the nose also crumples.
 const BODY = [[22, 0, 0], [15, -2.5, .3], [6, -3.5, .3], [2, -7, .35], [-4, -7, .55], [-11, -7, .3], [-17, -3.5, .2], [-19, -3.5, 0],
   [-19, 3.5, 0], [-17, 3.5, .2], [-11, 7, .3], [-4, 7, .55], [2, 7, .35], [6, 3.5, .3], [15, 2.5, .3]];
-// ---------- Liveries: a motif painted in the car's colours (body, second colour, helmet colour) ----------
-const MOTIFS = (() => {
-  const halfW = x => { const pts = BODY.slice(0, 8).map(([px, py]) => [px, -py]); // body half width at x, from the outline
-    for (let i = 0; i < pts.length - 1; i++) { const [x0, y0] = pts[i], [x1, y1] = pts[i + 1]; if (x <= x0 && x >= x1) return x0 === x1 ? Math.max(y0, y1) : y0 + (y1 - y0) * (x - x0) / (x1 - x0); }
-    return 0; };
-  const poly = (g, pts) => { g.beginPath(); pts.forEach(([x, y]) => g.lineTo(x, y)); g.closePath(); g.fill(); };
-  const rect = (g, c, x, y, w, h) => { g.fillStyle = c; g.fillRect(x, y, w, h); };
-  const mix = (h, t, k) => '#' + [1, 3, 5].map(i => Math.round(parseInt(h.slice(i, i + 2), 16) * (1 - k) + t * k).toString(16).padStart(2, '0')).join('');
-  return [
-    ['classic', L('Classique', 'Classic'), (g, d) => rect(g, d.alt, -16, -1.3, 13, 2.6)],
-    ['tiger', L('Tigre', 'Tiger'), (g, d) => { // tapered stripes coming in from both edges, long and short in turn
-      g.fillStyle = d.alt;
-      [20, 16.8, 13.6, 10.4, 7.2, 4, .5, -3, -6.5, -10, -13.5, -16.8].forEach((x, k) => {
-        for (const s of [-1, 1]) { const off = ((k * 7 + (s > 0 ? 3 : 0)) % 5 - 2) * .22, x0 = x + off, h = halfW(x0), len = h * ((k + (s > 0)) % 2 ? .45 : .72), w = Math.max(.45, h * .16);
-          g.beginPath(); g.moveTo(x0 + w, s * (h + 1)); g.quadraticCurveTo(x0 + .2, s * (h - len * .55), x0 - 1.4 - h * .12, s * (h - len));
-          g.quadraticCurveTo(x0 - w - .6, s * (h - len * .45), x0 - w, s * (h + 1)); g.closePath(); g.fill(); } }); }],
-    ['fade', L('Dégradé', 'Fade'), (g, d) => { const gr = g.createLinearGradient(22, 0, -19, 0); gr.addColorStop(0, d.color); gr.addColorStop(.35, d.color); gr.addColorStop(1, '#0b0c0f');
-      g.fillStyle = gr; g.fillRect(-20, -8, 44, 16); rect(g, d.alt, 8, -.7, 14, 1.4); }],
-    ['flames', L('Flammes', 'Flames'), g => { // hot-rod flames: solid at the nose, the back edge breaks into tongues
-      const flame = () => { g.beginPath(); g.moveTo(24, 0);
-        for (const s of [-1, 1]) {
-          const Y = y => s * y, seg = s < 0 ? [['b', 14, 3.6, 2, 8.6, -15, 6.4], ['q', -7, 5.6, -3, 4.2], ['q', -8, 4.2, -12, 2.8], ['q', -5, 2, 1, 1.6], ['q', -4, 1.6, -8, 0]]
-            : [['q', -4, 1.6, 1, 1.6], ['q', -5, 2, -12, 2.8], ['q', -8, 4.2, -3, 4.2], ['q', -7, 5.6, -15, 6.4], ['b', 2, 8.6, 14, 3.6, 24, 0]];
-          for (const [k, ...v] of seg) k === 'b' ? g.bezierCurveTo(v[0], Y(v[1]), v[2], Y(v[3]), v[4], Y(v[5])) : g.quadraticCurveTo(v[0], Y(v[1]), v[2], Y(v[3]));
-        }
-        g.closePath(); };
-      const gr = g.createLinearGradient(24, 0, -15, 0); gr.addColorStop(0, '#fff3b0'); gr.addColorStop(.3, '#ffc21e'); gr.addColorStop(.62, '#ff7a1a'); gr.addColorStop(1, '#d42a18');
-      flame(); g.fillStyle = gr; g.fill(); g.strokeStyle = '#f4f5f7'; g.lineWidth = .5; g.stroke();
-      g.save(); g.translate(10, 0); g.scale(.6, .62); flame(); g.fillStyle = 'rgba(255,240,160,.6)'; g.fill(); g.restore(); }],
-    ['camo', L('Camouflage', 'Camouflage'), (g, d) => { // layers of soft blobs in shades of the body colour, then a fine grain
-      let seed = 11; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-      const blob = (cx, cy, r, col) => { const n = 9, pts = [];
-        for (let k = 0; k < n; k++) { const a = k / n * Math.PI * 2, rr = r * (.55 + rnd() * .7); pts.push([cx + Math.cos(a) * rr * 1.6, cy + Math.sin(a) * rr]); }
-        const mid = k => [(pts[k][0] + pts[(k + 1) % n][0]) / 2, (pts[k][1] + pts[(k + 1) % n][1]) / 2];
-        g.fillStyle = col; g.beginPath(); g.moveTo(...mid(n - 1)); for (let k = 0; k < n; k++) g.quadraticCurveTo(...pts[k], ...mid(k)); g.fill(); };
-      for (const [count, r0, r1, col] of [[14, 2, 3.2, mix(d.color, 225, .4)], [18, 1.4, 2.4, mix(d.color, 0, .4)], [20, .9, 1.7, mix(d.color, 0, .72)], [26, .35, .8, mix(d.color, 120, .5)]])
-        for (let i = 0; i < count; i++) blob(-20 + rnd() * 44, -8 + rnd() * 16, r0 + rnd() * (r1 - r0), col);
-      for (let i = 0; i < 260; i++) { g.fillStyle = rnd() < .5 ? 'rgba(0,0,0,.22)' : 'rgba(255,255,255,.14)'; g.fillRect(-20 + rnd() * 44, -8 + rnd() * 16, .22, .22); } }],
-    ['neon', L('Néon', 'Neon'), (g, d) => { // dark body, glowing lines in the body colour (the second colour when the body is dark)
-      const glow = parseInt(d.color.slice(1, 3), 16) + parseInt(d.color.slice(3, 5), 16) + parseInt(d.color.slice(5, 7), 16) < 180 ? d.alt : d.color;
-      g.fillStyle = 'rgba(10,12,16,.93)'; g.fillRect(-20, -8, 45, 16);
-      const paths = () => { g.beginPath(); BODY.forEach(([x, y], k) => (k ? g.lineTo : g.moveTo).call(g, x * .93 - .2, y * .78)); g.closePath();
-        g.moveTo(21, 0); g.lineTo(6, 0); g.moveTo(-6, 0); g.lineTo(-18, 0);
-        for (const s of [-1, 1]) { g.moveTo(3, s * 5.6); g.lineTo(-9, s * 5.6); g.lineTo(-14, s * 2.4); } };
-      for (const [w, a, col] of [[2.4, .14, glow], [1.3, .3, glow], [.55, 1, glow], [.2, .9, '#ffffff']]) { g.globalAlpha = a; g.strokeStyle = col; g.lineWidth = w; g.lineJoin = 'round'; paths(); g.stroke(); }
-      g.globalAlpha = 1; }],
-    ['carbon', L('Fibre de carbone', 'Carbon fibre'), (g, d) => { // a dark weave over the whole body, with a stripe in the body colour (the second colour when the body is dark)
-      const dark = parseInt(d.color.slice(1, 3), 16) + parseInt(d.color.slice(3, 5), 16) + parseInt(d.color.slice(5, 7), 16) < 180;
-      g.fillStyle = '#1a1c20'; g.fillRect(-21, -9, 46, 18);
-      for (let x = -21; x < 25; x += 1.6) for (let y = -9; y < 9; y += 1.6) { g.fillStyle = ((x / 1.6 + y / 1.6) | 0) % 2 ? '#25282e' : '#121418'; g.fillRect(x, y, 1.6, 1.6); }
-      g.fillStyle = dark ? d.alt : d.color; g.fillRect(-21, -1.1, 46, 2.2); g.fillStyle = d.helmet; g.fillRect(-21, 1.1, 46, .5); }],
-    ['hex', L('Hexagones', 'Hexagons'), (g, d) => { // a honeycomb in the second colour that fades toward the nose
-      const R = 2.5, H = Math.sqrt(3) * R; g.lineWidth = .55; g.strokeStyle = d.alt;
-      for (let i = -9; i < 22; i++) for (let j = -5; j < 6; j++) { const cx = -21 + i * 1.5 * R, cy = j * H + (i % 2 ? H / 2 : 0), k = Math.max(0, Math.min(1, (24 - cx) / 40)); g.globalAlpha = .2 + .8 * k;
-        g.beginPath(); for (let n = 0; n < 6; n++) { const a = n * Math.PI / 3, x = cx + Math.cos(a) * R * .9, y = cy + Math.sin(a) * R * .9; n ? g.lineTo(x, y) : g.moveTo(x, y); } g.closePath(); g.stroke(); }
-      g.globalAlpha = 1; }],
-    ['tribal', L('Tribal', 'Tribal'), (g, d) => { // sharp tribal blades: a spear on the nose that splits into curved hooks over the sidepods
-      g.fillStyle = d.alt;
-      g.beginPath(); g.moveTo(23, 0); g.quadraticCurveTo(17, -1.7, 11, -1.4); g.lineTo(11, 1.4); g.quadraticCurveTo(17, 1.7, 23, 0); g.fill();
-      for (const s of [-1, 1]) {
-        g.beginPath(); g.moveTo(12, s * .6); g.quadraticCurveTo(5, s * 2.6, -10, s * 7.2);
-        g.quadraticCurveTo(-3, s * 4.2, 2.5, s * 3.4); g.quadraticCurveTo(-6, s * 3.6, -16.5, s * 3.4);
-        g.quadraticCurveTo(-8, s * 2, -4, s * 1.4); g.lineTo(-4, 0); g.lineTo(12, 0); g.closePath(); g.fill();
-        g.beginPath(); g.moveTo(8.5, s * 2.2); g.quadraticCurveTo(10.5, s * 3.6, 6.5, s * 4.6); g.quadraticCurveTo(8.2, s * 3.4, 6.6, s * 2.6); g.closePath(); g.fill();
-      }
-      g.beginPath(); g.moveTo(-4, 0); g.quadraticCurveTo(-11, -1.6, -19.5, 0); g.quadraticCurveTo(-11, 1.6, -4, 0); g.fill(); }],
-  ];
-})();
-// ---------- Driver level: every finished race gives XP, levels never end, motifs unlock on the way ----------
+// ---------- Driver level: every finished race gives XP, levels never end, skins come from chests ----------
 const XP_KEY = 'monoplace-gp.xp';
 let XP = Math.max(0, Math.floor(+store.get(XP_KEY) || 0));
 const xpNeed = n => 20 + 10 * (n - 1); // XP to go from level n to n + 1: 20, 30, 40...
@@ -1813,25 +1737,24 @@ function levelOf(xp) { let n = 1; while (xp >= xpNeed(n)) { xp -= xpNeed(n); n++
 const RARS = [['Commun', 'Common', '#b7bec9'], ['Rare', 'Rare', '#3ed16a'], ['Super rare', 'Super rare', '#4aa3ff'], ['Épique', 'Epic', '#b45cff'], ['Légendaire', 'Legendary', '#ffb81c']];
 const RAR_ITEMS = [
   ['c6', 'c10', 'c9', 'c7', 'c8', 'c12', 'c13', 'c32', 'c33'],
-  ['c11', 'c17', 'c19', 'c21', 'c22', 'c23', 'c34', 'c46', 'c47'],
-  ['c18', 'c24', 'c25', 'c27', 'c28', 'c29', 'c35', 'c36', 'c42', 'c43', 'c44', 'c45'],
-  ['c16', 'c20', 'c26', 'c15', 'c37', 'c38', 'c39', 'c48', 'c49', 'c50'],
+  ['c11', 'c17', 'c19', 'c21', 'c22', 'c23', 'c34'],
+  ['c18', 'c24', 'c25', 'c27', 'c28', 'c29', 'c35', 'c36', 'c42'],
+  ['c16', 'c20', 'c26', 'c15', 'c37', 'c38', 'c39'],
   ['c14', 'c30', 'c31', 'c41', 'c40']];
 const RAR_OF = {}; RAR_ITEMS.forEach((l, r) => l.forEach(k => RAR_OF[k] = r));
 const ALL_KEYS = Object.keys(RAR_OF);
 const COIN_ODDS = [55, 28, 12, 4, 1], LVL_ODDS = [30, 35, 22, 10, 3], CHEST_COST = 100; // % by rarity; a level chest is better than a coin chest
 const INV_KEY = 'monoplace-gp.inv';
-// v:3: skins are colours only. An older save keeps its colours; a motif that became a colour is converted, any other motif or speed effect is paid back as one chest. No save: no skins and one chest per level gained.
-const MOTIF_COLOUR = { tiger: 43, camo: 44, carbon: 45, hex: 46, fade: 47, flames: 48, neon: 49, tribal: 50 };
+// v:4: skins are colours only. An older save keeps its colours; every motif, speed effect or removed colour it owned is paid back as one chest. No save: no skins and one chest per level gained.
 let INV = (s => {
   const coins = Math.max(0, s && s.coins | 0);
-  if (s && s.v === 3 && Array.isArray(s.own)) return { v: 3, own: s.own.filter(k => k in RAR_OF), coins, chests: Math.max(0, s.chests | 0) };
-  if (s && s.v === 2 && Array.isArray(s.own)) {
+  if (s && s.v === 4 && Array.isArray(s.own)) return { v: 4, own: s.own.filter(k => k in RAR_OF), coins, chests: Math.max(0, s.chests | 0) };
+  if (s && Array.isArray(s.own)) {
     let chests = Math.max(0, s.chests | 0); const own = [];
-    for (const k of s.own) { if (k[0] === 'c') own.push(k); else if (k[0] === 'm' && MOTIF_COLOUR[k.slice(2)]) own.push('c' + MOTIF_COLOUR[k.slice(2)]); else chests++; }
-    return { v: 3, own: [...new Set(own)].filter(k => k in RAR_OF), coins, chests };
+    for (const k of s.own) { if (k in RAR_OF) own.push(k); else chests++; }
+    return { v: 4, own: [...new Set(own)], coins, chests };
   }
-  return { v: 3, own: [], coins, chests: levelOf(XP)[0] - 1 };
+  return { v: 4, own: [], coins, chests: levelOf(XP)[0] - 1 };
 })(store.get(INV_KEY));
 const saveInv = () => store.set(INV_KEY, INV);
 saveInv();
@@ -1878,20 +1801,8 @@ function giveXp(pos) {
   if (after > before) { toast(L('Niveau ', 'Level ') + after + L(' ! Coffre gagné', ' ! Chest won'), 'p'); sfxChime([659, 784, 1047]); }
   refreshProfile();
 }
-const LIVERY = new Map(); // motif + colours → painted canvas, so a car costs one drawImage per frame
-function livery(d) {
-  const mo = MOTIFS.find(m => m[0] === d.motif); if (!mo) return null; // an unknown livery from an older client or saved ghost is just not painted
-  const key = d.motif + d.color + d.alt + d.helmet;
-  let cv = LIVERY.get(key);
-  if (!cv) {
-    const S = 6; cv = document.createElement('canvas'); cv.width = 45 * S; cv.height = 18 * S;
-    const g = cv.getContext('2d'); g.scale(S, S); g.translate(20, 9); mo[2](g, d);
-    LIVERY.set(key, cv);
-  }
-  return cv;
-}
 
-const GHOST_ALPHA = 0.38; // time-trial ghosts and the Ghost livery
+const GHOST_ALPHA = 0.38; // time-trial ghosts
 function drawCar(c, g = ctx) {
   const a0 = g.globalAlpha;
   const d = c.drv, dm = c.dmg || 0, wreck = c.wreck > 0, s = c.pull > 0 ? 1 : -1, k = clamp((dm - 0.15) / 0.6, 0, 1); // s: the side that took the hits
@@ -1909,13 +1820,11 @@ function drawCar(c, g = ctx) {
   if (!wreck && dm <= 0.5) { if (dm > 0.3) g.fillRect(19, s > 0 ? -11 : 0, 4, 11); else g.fillRect(19, -11, 4, 22); } // front wing: half gone, then all of it
   const body = () => { g.beginPath(); for (const [px, py, w] of BODY) g.lineTo(px > 20 ? px - 3 * k : px, px > 20 ? s * 1.5 * k : py * s > 0 ? py * (1 - w * k) : py); g.closePath(); };
   g.fillStyle = wreck ? '#2a2a2d' : bodyFill(g, d); body(); g.fill();
-  const lv = !wreck && d.motif && d.motif !== 'classic' ? livery(d) : null;
-  if (lv) { g.save(); body(); g.clip(); g.drawImage(lv, -20, -9, 45, 18); g.restore(); }
   if (k > 0.25 || wreck) { // exposed carbon and scratches on the hit side
     g.fillStyle = 'rgba(12,12,15,.6)'; g.beginPath(); g.ellipse(-4, s * 3.6, 4 + 3 * k, 1.2 + 1.4 * k, 0, 0, 7); g.fill();
     g.strokeStyle = 'rgba(12,12,15,.55)'; g.lineWidth = 0.8; g.beginPath(); g.moveTo(10, s * 1); g.lineTo(5, s * 2.6); g.moveTo(-9, s * 1.5); g.lineTo(-14, s * 2.2); g.stroke();
   }
-  if (!wreck && !lv) { g.fillStyle = d.alt; g.fillRect(-16, -1.3, 13, 2.6); }
+  if (!wreck) { g.fillStyle = d.alt; g.fillRect(-16, -1.3, 13, 2.6); }
   g.fillStyle = '#0b0c0f'; g.beginPath(); g.ellipse(0, 0, 4.6, 3, 0, 0, 7); g.fill();
   if (!wreck) { g.fillStyle = d.helmet; disc(g, -0.6, 0, 2.3); }
   if (wreck || dm > 0.85) { // flames from the engine
@@ -2539,7 +2448,7 @@ const isPlayerPeer = p => p.kind === 'viewer' && (p.presence.role === 'host' || 
 // A game is a star: the host owns the PeerJS id of the game's name and relays everyone's presence to every guest.
 // It mimics the parts of the room capability the game uses (peers, presence, join, leave).
 const P2P_PREFIX = 'monoplace-gp-v1-'; // the names every version so far has used: old and new pages still find each other
-const VERSION = 73; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
+const VERSION = 74; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
 // Relay for players whose networks refuse direct connections: turn.js, next to the page, holds the owner's own TURN account.
 const RELAY = window.TURN_CONFIG && TURN_CONFIG.username && TURN_CONFIG.credential ? TURN_CONFIG : null;
 const PEER_OPTS = RELAY ? { debug: 0, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, RELAY] } } : { debug: 0 };
