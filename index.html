@@ -2286,19 +2286,16 @@ const ART = {
     ['#a54cff', '#1ec46b', '#f1c22e'].forEach((c, i) => { g.fillStyle = c; g.fillRect(-81 + i * 55, R + 26, 52, 10); });
     g.restore();
   },
-  ranked(g, w, h) { // a rank badge: shield, chevrons, star and laurels, with a car pulling away below
-    const s = Math.min(w / 220, h / 290); g.save(); g.translate(w / 2, 12 * s); g.scale(s, s);
-    g.strokeStyle = '#1ec46b'; g.fillStyle = '#1ec46b'; g.lineWidth = 3;
-    for (const d of [-1, 1]) for (let k = 0; k < 7; k++) { const a = .5 + k * .28, x = d * (62 + Math.sin(a) * 18), y = 30 + k * 17; g.save(); g.translate(x, y); g.rotate(d * (.9 - k * .12)); g.globalAlpha = .9 - k * .06; g.beginPath(); g.ellipse(0, 0, 11, 4.5, 0, 0, 7); g.fill(); g.restore(); }
-    g.globalAlpha = 1;
-    const gr = g.createLinearGradient(0, 0, 0, 130); gr.addColorStop(0, '#2ee586'); gr.addColorStop(1, '#0c5a35');
-    g.shadowColor = '#1ec46b'; g.shadowBlur = 20 * s; g.fillStyle = gr; g.strokeStyle = '#f1c22e'; g.lineWidth = 5;
-    g.beginPath(); g.moveTo(-48, 6); g.lineTo(48, 6); g.lineTo(48, 70); g.quadraticCurveTo(46, 112, 0, 134); g.quadraticCurveTo(-46, 112, -48, 70); g.closePath(); g.fill(); g.shadowBlur = 0; g.stroke();
-    g.strokeStyle = '#eef1f6'; g.lineWidth = 8; g.lineCap = 'round'; g.lineJoin = 'round';
-    for (let k = 0; k < 3; k++) { g.beginPath(); g.moveTo(-26, 52 + k * 20); g.lineTo(0, 38 + k * 20); g.lineTo(26, 52 + k * 20); g.stroke(); }
-    g.fillStyle = '#f1c22e'; g.beginPath(); for (let i = 0; i < 10; i++) { const a = i * Math.PI / 5 - Math.PI / 2, r = i % 2 ? 6 : 14; g.lineTo(Math.cos(a) * r, 24 + Math.sin(a) * r); } g.closePath(); g.fill();
-    for (let k = 0; k < 6; k++) { g.fillStyle = k % 2 ? '#15171b' : '#eef1f6'; g.fillRect(-48 + k * 16, 148, 16, 8); g.fillStyle = k % 2 ? '#eef1f6' : '#15171b'; g.fillRect(-48 + k * 16, 156, 16, 8); }
-    drawCar({ x: 0, y: 200, a: -Math.PI / 2, steer: 0, drv: { ...TEAMS[ui.team], motif: ui.motif, trail: 'none' } }, g);
+  ranked(g, w, h) { // the golden car in a burst of light, trailing a gold ribbon
+    const s = Math.min(w / 220, h / 290), cy = 120 * s; g.save(); g.translate(w / 2, 10 * s + cy);
+    const halo = g.createRadialGradient(0, 0, 4, 0, 0, 150 * s); halo.addColorStop(0, 'rgba(255,214,90,.55)'); halo.addColorStop(.5, 'rgba(241,194,46,.16)'); halo.addColorStop(1, 'rgba(241,194,46,0)');
+    g.fillStyle = halo; g.fillRect(-w, -h, w * 2, h * 2);
+    for (let i = 0; i < 16; i++) { const a0 = i / 16 * 2 * Math.PI, a1 = a0 + .09; g.fillStyle = 'rgba(255,224,120,' + (i % 2 ? .1 : .2) + ')'; g.beginPath(); g.moveTo(0, 0); g.lineTo(Math.cos(a0) * 170 * s, Math.sin(a0) * 170 * s); g.lineTo(Math.cos(a1) * 170 * s, Math.sin(a1) * 170 * s); g.fill(); }
+    const tr = g.createLinearGradient(0, 0, 0, 150 * s); tr.addColorStop(0, 'rgba(255,214,90,.8)'); tr.addColorStop(1, 'rgba(255,214,90,0)');
+    g.fillStyle = tr; g.beginPath(); g.moveTo(-9 * s, 18 * s); g.lineTo(9 * s, 18 * s); g.lineTo(26 * s, 150 * s); g.lineTo(-26 * s, 150 * s); g.closePath(); g.fill();
+    g.strokeStyle = 'rgba(255,240,180,.5)'; g.lineWidth = 2 * s; for (const x of [-34, -20, 20, 34]) { g.beginPath(); g.moveTo(x * s, 30 * s); g.lineTo(x * s * 1.1, (70 + Math.abs(x)) * s); g.stroke(); }
+    g.save(); g.scale(3.6 * s, 3.6 * s); g.shadowColor = '#ffd23a'; g.shadowBlur = 18; drawCar({ x: 0, y: 0, a: -Math.PI / 2, steer: 0, drv: { ...TEAMS[14], motif: 'classic', trail: 'none' } }, g); g.restore();
+    g.fillStyle = '#fff6c0'; for (const [x, y, r] of [[-62, -70, 7], [70, -46, 5], [-78, 20, 4], [78, 54, 6], [30, -100, 4], [-34, 90, 5]]) { g.beginPath(); g.moveTo(x * s, (y - r * 1.6) * s); g.lineTo((x + r * .4) * s, (y - r * .4) * s); g.lineTo((x + r * 1.6) * s, y * s); g.lineTo((x + r * .4) * s, (y + r * .4) * s); g.lineTo(x * s, (y + r * 1.6) * s); g.lineTo((x - r * .4) * s, (y + r * .4) * s); g.lineTo((x - r * 1.6) * s, y * s); g.lineTo((x - r * .4) * s, (y - r * .4) * s); g.closePath(); g.fill(); }
     g.restore();
   },
   race(g, w, h) {
@@ -2692,7 +2689,7 @@ const isPlayerPeer = p => p.kind === 'viewer' && (p.presence.role === 'host' || 
 // A game is a star: the host owns the PeerJS id of the game's name and relays everyone's presence to every guest.
 // It mimics the parts of the room capability the game uses (peers, presence, join, leave).
 const P2P_PREFIX = 'monoplace-gp-v1-'; // the names every version so far has used: old and new pages still find each other
-const VERSION = 67; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
+const VERSION = 68; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
 // Relay for players whose networks refuse direct connections: turn.js, next to the page, holds the owner's own TURN account.
 const RELAY = window.TURN_CONFIG && TURN_CONFIG.username && TURN_CONFIG.credential ? TURN_CONFIG : null;
 const PEER_OPTS = RELAY ? { debug: 0, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, RELAY] } } : { debug: 0 };
