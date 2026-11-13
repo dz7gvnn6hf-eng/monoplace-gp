@@ -842,9 +842,6 @@ const DEFS = [
   { id: 'neige2', name: L('Col Blanc', 'Snow Pass'), blurb: 'Une route de montagne tout en courbes : une grande descente rapide puis un virage serré en bas.',
     theme: { out: '#dfe8f0', run: '#f4f8fb', stripe: '#e8eff5', wall: '#7b8794', dash: '#3a7bd5', asph: '#3b4450', deco: 'none', d1: '#274638', d2: '#3a6a54' }, // no trees on the snow
     verts: [[351,-25,900],[2319,53,900],[2800,150,900],[3400,500,360],[3350,1000,336],[2800,1150,664],[2500,1600,288],[3000,2050,279],[2600,2500,417],[2206,2509,900],[1800,2400,724],[1300,1900,900],[900,1300,646],[300,1200,900],[-300,800,667],[-450,300,324],[0,0,611]] },
-  { id: 'erables', name: L('Vallée des Érables', 'Maple Valley'), blurb: 'Une vallée en automne : de longues courbes rapides, puis une descente sinueuse et une épingle au fond.',
-    theme: { out: '#5a3b1c', run: '#8f6c32', stripe: '#876630', wall: '#2a1c10', dash: '#f1c22e', asph: '#3a3d42', deco: 'trees', d1: '#7a2a10', d2: '#d0601c' },
-    verts: [[373,-25,900],[2263,24,900],[2659,65,900],[3000,150,900],[3431,391,900],[3700,700,413],[3600,1400,394],[3281,1612,900],[2900,1700,501],[2300,1400,364],[1900,1900,403],[2300,2500,167],[2025,2706,730],[1600,2800,900],[1162,2712,900],[800,2500,401],[700,1800,681],[1100,1300,295],[600,900,652],[-200,800,380],[-500,300,268],[0,0,711]] },
 ];
 const OFFICIAL_IDS = new Set(DEFS.map(d => d.id));
 const CHAMP = DEFS.slice(0, 4); // four rounds; the player can swap each circuit in the setup
@@ -1189,6 +1186,7 @@ const TEAMS = [
   { name: L('Échecs', 'Chess'), color: '#16181c', alt: '#16181c', helmet: '#f4f5f7', paint: 'echecs', hidden: true },
   { name: L('Marguerites', 'Daisies'), color: '#2f9a45', alt: '#f4f5f7', helmet: '#ffd23a', paint: 'marguerites' },
   { name: L('Cœurs', 'Hearts'), color: '#ff4a7a', alt: '#ffb3cb', helmet: '#f4f5f7', paint: 'coeurs' },
+  { name: L('Vache', 'Cow'), color: '#f6f3ea', alt: '#16181c', helmet: '#16181c', paint: 'vache' },
 ].map((t, i) => ({ ...t, i }));
 const FINISH = { pearl: [[0, '#ffffff'], [.35, '#f7e4ee'], [.65, '#e3ecfa'], [1, '#fbf6e6']], holo: [[0, '#ff5fd0'], [.25, '#7a6bff'], [.5, '#33e0ff'], [.75, '#7dff9b'], [1, '#ffd84a']],
   gold: [[0, '#fff6c0'], [.18, '#f6cf3e'], [.4, '#b07a0a'], [.55, '#ffe88a'], [.75, '#d9a520'], [1, '#fff0a8']],
@@ -1206,6 +1204,7 @@ const PAINTS = {
   arcenciel: (g,d)=>{const C=['#ff3b3b','#ff9a1e','#ffe14a','#3ed16a','#36a9ff','#5b5cff','#b34cff'];C.forEach((c,i)=>{g.fillStyle=c;g.beginPath();g.moveTo(-21+i*0,-9+i*2.6);g.lineTo(25,-9+i*2.6);g.lineTo(25,-9+i*2.6+2.7);g.lineTo(-21,-9+i*2.6+2.7);g.closePath();g.fill();});},
   donut: (g,d)=>{g.fillStyle='#ff8fc0';g.fillRect(-21,-9,46,18);g.fillStyle='#ff6fa8';for(let x=-21;x<26;x+=2.2){g.beginPath();g.arc(x,-9,2.2+Math.abs(x%3),0,Math.PI);g.fill();g.beginPath();g.arc(x+1,9,2.2+Math.abs(x%2),Math.PI,0);g.fill();}seed=6;const C=['#fff','#ffe14a','#4aa3ff','#4aff7a','#b45cff'];for(let i=0;i<34;i++){g.save();g.translate(-20+rnd()*44,-8+rnd()*16);g.rotate(rnd()*3);g.fillStyle=C[i%5];g.fillRect(-.9,-.3,1.8,.6);g.restore();}},
   echecs: (g,d)=>{for(let x=-21,i=0;x<25;x+=4.6,i++)for(let y=-9,j=0;y<9;y+=4.5,j++){g.fillStyle=(i+j)%2?'#16181c':'#f4f5f7';g.fillRect(x,y,4.6,4.5);}g.fillStyle='rgba(255,255,255,.12)';g.fillRect(-21,-9,46,4);},
+  vache: (g,d)=>{g.fillStyle='#f6f3ea';g.fillRect(-21,-9,46,18);g.fillStyle='#16181c';seed=6;for(let i=0;i<8;i++){const x=-18+rnd()*40,y=-7+rnd()*14;g.beginPath();g.ellipse(x,y,2+rnd()*3.2,1.4+rnd()*2.4,rnd()*3,0,7);g.fill();}},
   coeurs: (g,d)=>{g.fillStyle='#ff4a7a';g.fillRect(-21,-9,46,18);const he=(x,y,r,c)=>{g.fillStyle=c;g.beginPath();g.moveTo(x,y+r*.9);g.bezierCurveTo(x-r*1.6,y-r*.1,x-r*.8,y-r*1.3,x,y-r*.45);g.bezierCurveTo(x+r*.8,y-r*1.3,x+r*1.6,y-r*.1,x,y+r*.9);g.fill();};for(let x=-19;x<26;x+=6)for(let y=-6;y<10;y+=6){const o=(Math.round((y+6)/6)&1)*3;he(x+o,y,1.9,((x+y)|0)%2?'#fff':'#ffb3cb');}},
   marguerites: (g,d)=>{g.fillStyle='#2f9a45';g.fillRect(-21,-9,46,18);seed=3;for(let i=0;i<10;i++){const x=-19+(i%5)*9.6+(i>4?4:0),y=i>4?5.5:-5;g.save();g.translate(x,y);g.fillStyle='#fff';for(let k=0;k<8;k++){g.rotate(Math.PI/4);g.beginPath();g.ellipse(2.3,0,2,.9,0,0,7);g.fill();}g.fillStyle='#ffd23a';g.beginPath();g.arc(0,0,1.3,0,7);g.fill();g.restore();}},
 };
@@ -1782,7 +1781,7 @@ const RAR_ITEMS = [
   ['c6', 'c8', 'c9', 'c13', 'c11', 'c17', 'c19', 'c34', 'c18', 'c24', 'c25', 'c27', 'c28', 'c29'],
   ['c7', 'c10', 'c12', 'c33', 'c21', 'c22', 'c23', 'c15', 'c16', 'c20', 'c26', 'c30'],
   ['c35', 'c36', 'c37', 'c38', 'c39', 'c14', 'c31', 'c40', 'c41'],
-  ['c44', 'c51', 'c43', 'c47', 'c50', 'c42']];
+  ['c44', 'c51', 'c43', 'c47', 'c50', 'c42', 'c52']];
 const RAR_OF = {}; RAR_ITEMS.forEach((l, r) => l.forEach(k => RAR_OF[k] = r));
 const ALL_KEYS = Object.keys(RAR_OF);
 const COIN_ODDS = [0, 62, 27, 9, 2], LVL_ODDS = [0, 40, 36, 18, 6], CHEST_COST = 100; // % by rarity; a level chest is better than a coin chest
@@ -2431,7 +2430,7 @@ $('menuBtn').addEventListener('click', goHome);
 $('editBtn').addEventListener('click', () => openEditor(mine.find(c => c.id === ui.tid)));
 $('dupBtn').addEventListener('click', () => {
   const d = findDef(ui.tid); if (!d) return;
-  openEditor({ id: null, name: ('Copie de ' + d.name).slice(0, 28), env: d.custom ? d.env : ({ dunes2: 3, neige2: 0, erables: 1 }[d.id] ?? Math.max(0, DEFS.indexOf(d))), verts: d.verts });
+  openEditor({ id: null, name: ('Copie de ' + d.name).slice(0, 28), env: d.custom ? d.env : ({ dunes2: 3, neige2: 0 }[d.id] ?? Math.max(0, DEFS.indexOf(d))), verts: d.verts });
 });
 // Likes: one per player and circuit, for any circuit but your own (claude.ai: votes documents; elsewhere: the hub's gossip).
 function refreshLike() {
@@ -2486,7 +2485,7 @@ const isPlayerPeer = p => p.kind === 'viewer' && (p.presence.role === 'host' || 
 // A game is a star: the host owns the PeerJS id of the game's name and relays everyone's presence to every guest.
 // It mimics the parts of the room capability the game uses (peers, presence, join, leave).
 const P2P_PREFIX = 'monoplace-gp-v1-'; // the names every version so far has used: old and new pages still find each other
-const VERSION = 86; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
+const VERSION = 87; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
 // Relay for players whose networks refuse direct connections: turn.js, next to the page, holds the owner's own TURN account.
 const RELAY = window.TURN_CONFIG && TURN_CONFIG.username && TURN_CONFIG.credential ? TURN_CONFIG : null;
 const PEER_OPTS = RELAY ? { debug: 0, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, RELAY] } } : { debug: 0 };
@@ -3709,7 +3708,6 @@ const EN = new Map([
 ["« C’est parti ! » lance une course rapide : un tour contre des bots faciles. Ensuite, jouez contre les bots, en ligne, en partie classée ou entre amis. Vous pouvez revoir ce tutoriel à tout moment dans les réglages.", "“Let’s race!” starts a quick race: one lap against easy bots. After that, play against bots, online, ranked or with friends. You can watch this tutorial again at any time in the settings."],
 ["Aide", "Help"], ["Revoir le tutoriel", "Watch the tutorial again"],
 ["Une longue descente rectiligne, puis une succession d’esses et de virages serrés dans le sable.", "A long straight descent, then a run of esses and tight turns in the sand."],
-["Une vallée en automne : de longues courbes rapides, puis une descente sinueuse et une épingle au fond.", "An autumn valley: long fast bends, then a winding descent and a hairpin at the bottom."],
 ["Une route de montagne tout en courbes : une grande descente rapide puis un virage serré en bas.", "A mountain road made of curves: a big fast descent, then a tight bend at the bottom."],
 ["Compte CrazyGames", "CrazyGames account"], ["Se connecter", "Sign in"],
 ["Connecté : votre niveau, vos déblocages, vos records et vos circuits sont sauvegardés sur votre compte, sur tous vos appareils.", "Signed in: your level, unlocks, records and circuits are saved on your account, on all your devices."],
