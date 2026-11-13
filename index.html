@@ -1604,8 +1604,8 @@ function lapDone(c) {
   const pb = c.best == null || lt < c.best; if (pb) c.best = lt;
   if (!c.isPlayer) c.ai.form = 1 + (Math.random() - 0.5) * 0.025;
   else {
-    const id = G.T.def.id, rec = records[id];
-    if (!rec || lt < rec.lap) {
+    const id = G.T.def.id, rec = records[id], chrono = G.mode === 'tt' && !G.quali; // only Time Trial laps count for records and rankings
+    if (chrono && (!rec || lt < rec.lap)) {
       records[id] = { lap: lt, sec: c.cur.slice() }; saveRecords();
       store.set(GHOST_KEY + id, { d: G.rec });
       if (G.mode === 'tt' && !G.quali) G.ghosts = G.ghosts.filter(g => !g.mine).concat({ mine: true, d: G.rec, hz: 30, drv: c.drv, label: '' });
@@ -1613,7 +1613,7 @@ function lapDone(c) {
       if (hub) hub.share(); // the others' lap rankings get it now
     } else if (pb) { c.lastCls = 'g'; toast('Meilleur tour · ' + fmt(lt), 'g'); }
     else c.lastCls = '';
-    shareLap(id, lt, c.drv.color, G.rec);
+    if (chrono) shareLap(id, lt, c.drv.color, G.rec);
     G.rec = [];
   }
   if (G.mode === 'race' && !G.attract && (c.lap >= G.laps || G.leaderDone)) {
@@ -2485,7 +2485,7 @@ const isPlayerPeer = p => p.kind === 'viewer' && (p.presence.role === 'host' || 
 // A game is a star: the host owns the PeerJS id of the game's name and relays everyone's presence to every guest.
 // It mimics the parts of the room capability the game uses (peers, presence, join, leave).
 const P2P_PREFIX = 'monoplace-gp-v1-'; // the names every version so far has used: old and new pages still find each other
-const VERSION = 87; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
+const VERSION = 88; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
 // Relay for players whose networks refuse direct connections: turn.js, next to the page, holds the owner's own TURN account.
 const RELAY = window.TURN_CONFIG && TURN_CONFIG.username && TURN_CONFIG.credential ? TURN_CONFIG : null;
 const PEER_OPTS = RELAY ? { debug: 0, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, RELAY] } } : { debug: 0 };
@@ -3138,8 +3138,8 @@ async function renderLaps() {
     t.className = 't'; t.textContent = fmt(r.t);
     li.append(p, c, n, t); return li;
   }));
-  $('lapNote').textContent = rows.length ? 'Le meilleur tour de chaque joueur sur ce circuit, en Chrono ou en course. Le vôtre y est ajouté automatiquement.' + (DB ? '' : ' Les temps se transmettent entre les joueurs qui se retrouvent en ligne.')
-    : 'Aucun temps sur ce circuit pour l’instant : faites un tour en Chrono ou en course pour être le premier.';
+  $('lapNote').textContent = rows.length ? 'Le meilleur tour de chaque joueur sur ce circuit, en Chrono uniquement. Le vôtre y est ajouté automatiquement.' + (DB ? '' : ' Les temps se transmettent entre les joueurs qui se retrouvent en ligne.')
+    : 'Aucun temps sur ce circuit pour l’instant : faites un tour en Chrono pour être le premier.';
 }
 $('lapSearch').addEventListener('input', renderLaps);
 function renderLevels() { // everybody met so far, by total XP, with the yellow level next to the name
@@ -3936,7 +3936,7 @@ const EN = new Map([
 ["hôte", "host"],
 ["prêt", "ready"],
 ["Aucune partie classée terminée pour l’instant. Lancez « Partie classée » dans Grand Prix : la course part dès que 6 pilotes sont là.", "No ranked game finished yet. Start “Ranked game” in Grand Prix: the race starts as soon as 6 drivers are in."],
-["Aucun temps sur ce circuit pour l’instant : faites un tour en Chrono ou en course pour être le premier.", "No times on this circuit yet: drive a lap in Time Trial or in a race to be the first."],
+["Aucun temps sur ce circuit pour l’instant : faites un tour en Chrono pour être le premier.", "No times on this circuit yet: drive a Time Trial lap to be the first."],
 ["Serveur du jeu en ligne injoignable : vérifiez votre connexion internet.", "Online game server unreachable: check your internet connection."],
 ["Aucune connexion directe avec les autres joueurs depuis cet appareil : essayez un autre navigateur ou un autre réseau.", "No direct connection to other players from this device: try another browser or network."],
 ["Lien copié", "Link copied"],
@@ -3960,7 +3960,7 @@ const EN = new Map([
 ["voitures · solo ou en ligne", "cars · solo or online"],
 ["pilotes en ligne · les bots complètent la grille", "drivers online · bots fill the grid"],
 ["pilote en ligne · les bots complètent la grille", "driver online · bots fill the grid"],
-["Le meilleur tour de chaque joueur sur ce circuit, en Chrono ou en course. Le vôtre y est ajouté automatiquement.", "Each player’s best lap on this circuit, in Time Trial or in a race. Yours is added automatically."],
+["Le meilleur tour de chaque joueur sur ce circuit, en Chrono uniquement. Le vôtre y est ajouté automatiquement.", "Each player’s best lap on this circuit, in Time Trial only. Yours is added automatically."],
 ["Mode", "Mode"],
 ["Modes", "Modes"]
 ]);
@@ -4001,7 +4001,7 @@ const EN_FRAGS = [
 [/^Qualifications · /, 'Qualifying · '], [/^Course en ligne : elle continue pendant la pause\. /, 'Online race: it keeps going while paused. '],
 [/Meilleur tour de la séance : /, 'Best lap of the session: '], [/ · record du circuit : /, ' · track record: '], [/ · pneus /, ' · tyres '], [/ · record /, ' · record '],
 [/^Points par place : 25, 18, 15, 12, 10, 8\./, 'Points per place: 25, 18, 15, 12, 10, 8.'],
-[/^Le meilleur tour de chaque joueur sur ce circuit, en Chrono ou en course\. Le vôtre y est ajouté automatiquement\./, 'Each player’s best lap on this circuit, in Time Trial or in a race. Yours is added automatically.'],
+[/^Le meilleur tour de chaque joueur sur ce circuit, en Chrono uniquement\. Le vôtre y est ajouté automatiquement\./, 'Each player’s best lap on this circuit, in Time Trial only. Yours is added automatically.'],
 [/ Ce classement se transmet entre les joueurs qui se retrouvent en ligne\./, ' This ranking passes between players who meet online.'],
 [/ Les temps se transmettent entre les joueurs qui se retrouvent en ligne\./, ' Times pass between players who meet online.'],
 ];
@@ -4051,6 +4051,29 @@ $('tutoSkip').addEventListener('click', closeTuto);
 $('tutoBtn').addEventListener('click', () => openTuto('settings'));
 if (!store.get(TUTO_KEY) && !window.__NO_TUTO && !/notuto/.test(location.search) && !/^#partie-/.test(location.hash)) openTuto('home');
 if (document.fonts) document.fonts.ready.then(() => { if (!el.home.hidden) drawModeArts(); });
+// ---------- Daily reward: once a day, XP for your place in the Time Trial ranking of every official circuit ----------
+const DAILY_KEY = 'monoplace-gp.daily', DAILY_XP = [40, 30, 24, 18, 14, 10, 8, 6, 5, 4]; // by place; further down 2 XP
+function lapPlace(id) { // [my place, players with a time] on one circuit, from the same data as the Time Trial ranking
+  let rows;
+  if (DB) rows = Object.entries(board).map(([uid, d]) => { const e = d && d[lbKey(id)]; return { me: uid === ME, t: e && e.t }; });
+  else { lapMine(); rows = Object.entries(lapLocal).map(([pid, e]) => ({ me: pid === PID, t: e.l && e.l[id] })); }
+  rows = rows.filter(r => okLap(r.t)); const mine = rows.find(r => r.me);
+  return mine ? [1 + rows.filter(r => r.t < mine.t).length, rows.length] : null;
+}
+function maybeDaily() {
+  const today = new Date().toLocaleDateString('en-CA');
+  if (store.get(DAILY_KEY) === today || el.home.hidden || (DB && !Object.keys(board).length)) return;
+  let total = 0; const parts = [];
+  for (const d of DEFS) { const r = lapPlace(d.id); if (!r) continue; const xp = Math.round((DAILY_XP[r[0] - 1] || 2) * Math.min(1, r[1] / 5)); // a ranking with few players pays less, so nobody farms an empty one
+    if (xp > 0) { total += xp; parts.push(d.name + ' P' + r[0]); } }
+  if (!total) return; // no Time Trial time yet: nothing to pay, try again later
+  store.set(DAILY_KEY, today);
+  const before = levelOf(XP)[0]; XP += total; store.set(XP_KEY, XP); const after = levelOf(XP)[0]; INV.chests += after - before; saveInv();
+  toast(L('Récompense du jour : +', 'Daily reward: +') + total + ' XP · ' + parts.join(', '), 'p');
+  if (after > before) { toast(L('Niveau ', 'Level ') + after + L(' ! Coffre gagné', ' ! Chest won'), 'p'); sfxChime([659, 784, 1047]); }
+  refreshProfile(); if (hub) hub.share();
+}
+setTimeout(maybeDaily, 6000); setInterval(maybeDaily, 60000);
 initCloud(); cgInit();
 let last = performance.now();
 function frame(now) {
