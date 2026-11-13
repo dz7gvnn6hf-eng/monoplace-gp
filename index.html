@@ -1176,6 +1176,7 @@ const TEAMS = [
   { name: L('Donut', 'Donut'), color: '#ff8fc0', alt: '#ff6fa8', helmet: '#f4f5f7', paint: 'donut' },
   { name: L('Échecs', 'Chess'), color: '#16181c', alt: '#16181c', helmet: '#f4f5f7', paint: 'echecs' },
   { name: L('Marguerites', 'Daisies'), color: '#2f9a45', alt: '#f4f5f7', helmet: '#ffd23a', paint: 'marguerites' },
+  { name: L('Cœurs', 'Hearts'), color: '#ff4a7a', alt: '#ffb3cb', helmet: '#f4f5f7', paint: 'coeurs' },
 ].map((t, i) => ({ ...t, i }));
 const FINISH = { pearl: [[0, '#ffffff'], [.35, '#f7e4ee'], [.65, '#e3ecfa'], [1, '#fbf6e6']], holo: [[0, '#ff5fd0'], [.25, '#7a6bff'], [.5, '#33e0ff'], [.75, '#7dff9b'], [1, '#ffd84a']],
   gold: [[0, '#fff6c0'], [.18, '#f6cf3e'], [.4, '#b07a0a'], [.55, '#ffe88a'], [.75, '#d9a520'], [1, '#fff0a8']],
@@ -1193,6 +1194,7 @@ const PAINTS = {
   arcenciel: (g,d)=>{const C=['#ff3b3b','#ff9a1e','#ffe14a','#3ed16a','#36a9ff','#5b5cff','#b34cff'];C.forEach((c,i)=>{g.fillStyle=c;g.beginPath();g.moveTo(-21+i*0,-9+i*2.6);g.lineTo(25,-9+i*2.6);g.lineTo(25,-9+i*2.6+2.7);g.lineTo(-21,-9+i*2.6+2.7);g.closePath();g.fill();});},
   donut: (g,d)=>{g.fillStyle='#ff8fc0';g.fillRect(-21,-9,46,18);g.fillStyle='#ff6fa8';for(let x=-21;x<26;x+=2.2){g.beginPath();g.arc(x,-9,2.2+Math.abs(x%3),0,Math.PI);g.fill();g.beginPath();g.arc(x+1,9,2.2+Math.abs(x%2),Math.PI,0);g.fill();}seed=6;const C=['#fff','#ffe14a','#4aa3ff','#4aff7a','#b45cff'];for(let i=0;i<34;i++){g.save();g.translate(-20+rnd()*44,-8+rnd()*16);g.rotate(rnd()*3);g.fillStyle=C[i%5];g.fillRect(-.9,-.3,1.8,.6);g.restore();}},
   echecs: (g,d)=>{for(let x=-21,i=0;x<25;x+=4.6,i++)for(let y=-9,j=0;y<9;y+=4.5,j++){g.fillStyle=(i+j)%2?'#16181c':'#f4f5f7';g.fillRect(x,y,4.6,4.5);}g.fillStyle='rgba(255,255,255,.12)';g.fillRect(-21,-9,46,4);},
+  coeurs: (g,d)=>{g.fillStyle='#ff4a7a';g.fillRect(-21,-9,46,18);const he=(x,y,r,c)=>{g.fillStyle=c;g.beginPath();g.moveTo(x,y+r*.9);g.bezierCurveTo(x-r*1.6,y-r*.1,x-r*.8,y-r*1.3,x,y-r*.45);g.bezierCurveTo(x+r*.8,y-r*1.3,x+r*1.6,y-r*.1,x,y+r*.9);g.fill();};for(let x=-19;x<26;x+=6)for(let y=-6;y<10;y+=6){const o=(Math.round((y+6)/6)&1)*3;he(x+o,y,1.9,((x+y)|0)%2?'#fff':'#ffb3cb');}},
   marguerites: (g,d)=>{g.fillStyle='#2f9a45';g.fillRect(-21,-9,46,18);seed=3;for(let i=0;i<10;i++){const x=-19+(i%5)*9.6+(i>4?4:0),y=i>4?5.5:-5;g.save();g.translate(x,y);g.fillStyle='#fff';for(let k=0;k<8;k++){g.rotate(Math.PI/4);g.beginPath();g.ellipse(2.3,0,2,.9,0,0,7);g.fill();}g.fillStyle='#ffd23a';g.beginPath();g.arc(0,0,1.3,0,7);g.fill();g.restore();}},
 };
 const PAINT_CV = {};
@@ -1761,7 +1763,7 @@ function levelOf(xp) { let n = 1; while (xp >= xpNeed(n)) { xp -= xpNeed(n); n++
 // Item keys: c<TEAMS index>. Free: colours 0-5.
 const RARS = [['Commun', 'Common', '#b7bec9'], ['Rare', 'Rare', '#3ed16a'], ['Super rare', 'Super rare', '#4aa3ff'], ['Épique', 'Epic', '#b45cff'], ['Légendaire', 'Legendary', '#ffb81c']];
 const RAR_ITEMS = [
-  ['c6', 'c10', 'c9', 'c7', 'c8', 'c12', 'c13', 'c32', 'c33', 'c44', 'c48', 'c49'],
+  ['c6', 'c10', 'c9', 'c7', 'c8', 'c12', 'c13', 'c32', 'c33', 'c44', 'c48', 'c49', 'c51'],
   ['c11', 'c17', 'c19', 'c21', 'c22', 'c23', 'c34', 'c43', 'c45', 'c47', 'c50'],
   ['c18', 'c24', 'c25', 'c27', 'c28', 'c29', 'c35', 'c36', 'c42'],
   ['c16', 'c20', 'c26', 'c15', 'c37', 'c38', 'c39', 'c46'],
@@ -2474,7 +2476,7 @@ const isPlayerPeer = p => p.kind === 'viewer' && (p.presence.role === 'host' || 
 // A game is a star: the host owns the PeerJS id of the game's name and relays everyone's presence to every guest.
 // It mimics the parts of the room capability the game uses (peers, presence, join, leave).
 const P2P_PREFIX = 'monoplace-gp-v1-'; // the names every version so far has used: old and new pages still find each other
-const VERSION = 75; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
+const VERSION = 76; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
 // Relay for players whose networks refuse direct connections: turn.js, next to the page, holds the owner's own TURN account.
 const RELAY = window.TURN_CONFIG && TURN_CONFIG.username && TURN_CONFIG.credential ? TURN_CONFIG : null;
 const PEER_OPTS = RELAY ? { debug: 0, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, RELAY] } } : { debug: 0 };
