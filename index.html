@@ -2287,10 +2287,10 @@ const ART = {
     g.restore();
   },
   ranked(g, w, h) { // six cars in a triangle, the golden one at the tip
-    const k = Math.min(w / 320, h / 330); g.save(); g.translate(w / 2 - 160 * k, 8 * k); g.scale(k, k);
+    const k = Math.min(w / 330, h / 385); g.save(); g.translate(w / 2 - 160 * k, 8 * k); g.scale(k, k);
     g.strokeStyle = 'rgba(30,196,107,.3)'; g.lineWidth = 2; for (let i = 0; i < 12; i++) { const x = 20 + i * 26; g.beginPath(); g.moveTo(x, 10 + (i % 4) * 14); g.lineTo(x, 80 + (i % 4) * 40); g.stroke(); }
-    [[160, 140, 14], [108, 226, 0], [212, 226, 3], [56, 312, 1], [264, 312, 2], [160, 312, 4]].forEach(([x, y, t], i) => {
-      g.save(); g.translate(x, y); g.scale(1.95, 1.95); if (!i) { g.shadowColor = '#ffd23a'; g.shadowBlur = 16; }
+    [[160, 134, 14], [104, 234, 0], [216, 234, 3], [48, 334, 1], [272, 334, 2], [160, 334, 4]].forEach(([x, y, t], i) => {
+      g.save(); g.translate(x, y); g.scale(2.1, 2.1); if (!i) { g.shadowColor = '#ffd23a'; g.shadowBlur = 16; }
       drawCar({ x: 0, y: 0, a: -Math.PI / 2, steer: 0, drv: { ...TEAMS[t], motif: 'classic', trail: 'none' } }, g); g.restore(); });
     g.restore();
   },
@@ -2685,7 +2685,7 @@ const isPlayerPeer = p => p.kind === 'viewer' && (p.presence.role === 'host' || 
 // A game is a star: the host owns the PeerJS id of the game's name and relays everyone's presence to every guest.
 // It mimics the parts of the room capability the game uses (peers, presence, join, leave).
 const P2P_PREFIX = 'monoplace-gp-v1-'; // the names every version so far has used: old and new pages still find each other
-const VERSION = 69; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
+const VERSION = 70; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
 // Relay for players whose networks refuse direct connections: turn.js, next to the page, holds the owner's own TURN account.
 const RELAY = window.TURN_CONFIG && TURN_CONFIG.username && TURN_CONFIG.credential ? TURN_CONFIG : null;
 const PEER_OPTS = RELAY ? { debug: 0, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, RELAY] } } : { debug: 0 };
