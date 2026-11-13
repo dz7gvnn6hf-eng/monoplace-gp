@@ -827,9 +827,9 @@ const DEFS = [
   { id: 'cretes', name: L('Col des Crêtes', 'Ridge Pass'), blurb: 'Lacets techniques à flanc de montagne et grande courbe rapide au retour.',
     theme: { out: '#5e5038', run: '#9a8a5c', stripe: '#938356', wall: '#26231f', dash: '#f1c22e', asph: '#3b3d42', deco: 'rocks', d1: '#4b402c', d2: '#7a6d4f' },
     verts: [[0,0,300],[3200,0,200],[3200,700,170],[1800,700,170],[1800,1150,170],[3200,1150,200],[3200,1900,300],[200,1900,350],[700,1100,250],[-200,500,300]] },
-  { id: 'dunes2', name: L('Piste des Dunes', 'Dune Run'), blurb: 'Un long serpentin dans le désert : épingles serrées, lacets et détours qui obligent à freiner sans cesse.',
+  { id: 'dunes2', name: L('Piste des Dunes', 'Dune Run'), blurb: 'Un long ruban sinueux dans le désert : de grandes esses qui s’enchaînent et deux épingles serrées.',
     theme: { out: '#c9a86a', run: '#dcc08a', stripe: '#d4b87f', wall: '#5b4a33', dash: '#e8392a', asph: '#4a4640', deco: 'rocks', d1: '#a88a52', d2: '#c4a46a' },
-    verts: [[0,0,420],[3600,0,520],[3900,1500,300],[3000,1700,160],[2950,900,160],[2200,950,160],[2150,2000,190],[1450,2050,170],[1400,1100,160],[700,1150,160],[650,2500,260],[-250,2500,450],[-450,1200,450]] },
+    verts: [[0,0,369],[2706,0,369],[3198,533,271],[2542,1107,426],[1886,615,426],[1230,1107,426],[615,820,262],[533,1599,262],[1148,1886,426],[1804,1394,426],[2460,1886,426],[3075,1681,262],[2993,2460,262],[2378,2788,426],[1722,2296,426],[1066,2788,426],[328,2501,312],[-451,1394,369]] },
   { id: 'neige', name: L('Col Blanc', 'Snow Pass'), blurb: 'Virages techniques dans la neige, avec des épingles qui s’enchaînent.',
     theme: { out: '#dfe8f0', run: '#f4f8fb', stripe: '#e8eff5', wall: '#7b8794', dash: '#3a7bd5', asph: '#3b4450', deco: 'none', d1: '#274638', d2: '#3a6a54' }, // no trees on the snow
     verts: [[0,0,350],[2800,0,300],[3300,700,250],[2500,1100,200],[3300,1500,220],[2700,2100,300],[1200,2100,250],[900,1500,170],[400,1800,170],[-100,1200,300],[-300,500,300]] },
@@ -1691,20 +1691,10 @@ function drawWorld(T, x0, y0, x1, y1) {
     ctx.fillStyle = th.shore; ctx.beginPath(); ctx.ellipse(cx, cy, rx + 30, ry + 30, 0, 0, 7); ctx.fill();
     ctx.fillStyle = th.water; ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, 0, 0, 7); ctx.fill();
   }
-  const tree = (d, th) => { // a round crown made of overlapping lobes, each tree a little different (d.a picks the tint and the lobe layout)
-    const r = d.r, t = d.a / Math.PI, a = d.a * 7;
-    ctx.fillStyle = 'rgba(0,0,0,.22)'; ctx.beginPath(); ctx.ellipse(d.x + r * .35, d.y + r * .5, r * 1.02, r * .86, 0, 0, 7); ctx.fill();
-    ctx.fillStyle = th.d1; disc(ctx, d.x, d.y, r);
-    ctx.fillStyle = th.d2;
-    for (let k = 0; k < 3; k++) { const q = a + k * 2.09; disc(ctx, d.x + Math.cos(q) * r * .32, d.y + Math.sin(q) * r * .32, r * .66); }
-    ctx.fillStyle = t < .33 ? 'rgba(150,200,90,.28)' : t < .66 ? 'rgba(110,170,80,.26)' : 'rgba(190,210,100,.24)';
-    disc(ctx, d.x - r * .22, d.y - r * .26, r * .5);
-    ctx.fillStyle = 'rgba(235,250,190,.2)'; disc(ctx, d.x - r * .32, d.y - r * .36, r * .22);
-  };
   for (const d of T.deco) {
     if (th.deco === 'none') break;
     if (d.x < x0 - 60 || d.x > x1 + 60 || d.y < y0 - 60 || d.y > y1 + 60) continue;
-    if (th.deco === 'trees') { tree(d, th); }
+    if (th.deco === 'trees') { ctx.fillStyle = th.d1; disc(ctx, d.x + 5, d.y + 6, d.r); ctx.fillStyle = th.d2; disc(ctx, d.x, d.y, d.r); }
     else if (th.deco === 'rocks') { ctx.fillStyle = th.d1; ctx.beginPath(); ctx.ellipse(d.x + 4, d.y + 4, d.r, d.r * .7, d.a, 0, 7); ctx.fill(); ctx.fillStyle = th.d2; ctx.beginPath(); ctx.ellipse(d.x, d.y, d.r, d.r * .7, d.a, 0, 7); ctx.fill(); }
     else { ctx.save(); ctx.translate(d.x, d.y); ctx.rotate(Math.round(d.a / 1.57) * 1.57); ctx.fillStyle = th.d1; ctx.fillRect(-d.r * 1.6, -d.r, d.r * 3.2, d.r * 2); ctx.fillStyle = th.d2; ctx.fillRect(-d.r * 1.3, -d.r * .7, d.r * 2.6, d.r * 1.4); ctx.restore(); }
   }
@@ -2481,7 +2471,7 @@ const isPlayerPeer = p => p.kind === 'viewer' && (p.presence.role === 'host' || 
 // A game is a star: the host owns the PeerJS id of the game's name and relays everyone's presence to every guest.
 // It mimics the parts of the room capability the game uses (peers, presence, join, leave).
 const P2P_PREFIX = 'monoplace-gp-v1-'; // the names every version so far has used: old and new pages still find each other
-const VERSION = 79; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
+const VERSION = 80; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
 // Relay for players whose networks refuse direct connections: turn.js, next to the page, holds the owner's own TURN account.
 const RELAY = window.TURN_CONFIG && TURN_CONFIG.username && TURN_CONFIG.credential ? TURN_CONFIG : null;
 const PEER_OPTS = RELAY ? { debug: 0, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, RELAY] } } : { debug: 0 };
@@ -3692,7 +3682,7 @@ const EN = new Map([
 ["Chaque course rapporte de l’XP et des pièces. Chaque niveau gagné donne un coffre, et 100 pièces en ouvrent un : ils cachent des couleurs de plus en plus rares.", "Every race gives XP and coins. Each level gives a chest, and 100 coins open one: they hide ever rarer colours."],
 ["« C’est parti ! » lance une course rapide : un tour contre des bots faciles. Ensuite, jouez contre les bots, en ligne, en partie classée ou entre amis. Vous pouvez revoir ce tutoriel à tout moment dans les réglages.", "“Let’s race!” starts a quick race: one lap against easy bots. After that, play against bots, online, ranked or with friends. You can watch this tutorial again at any time in the settings."],
 ["Aide", "Help"], ["Revoir le tutoriel", "Watch the tutorial again"],
-["Un long serpentin dans le désert : épingles serrées, lacets et détours qui obligent à freiner sans cesse.", "A long serpentine through the desert: tight hairpins, switchbacks and detours that keep you on the brakes."],
+["Un long ruban sinueux dans le désert : de grandes esses qui s’enchaînent et deux épingles serrées.", "A long winding ribbon through the desert: big flowing esses and two tight hairpins."],
 ["Virages techniques dans la neige, avec des épingles qui s’enchaînent.", "Technical corners in the snow, with hairpins that follow each other."],
 ["Compte CrazyGames", "CrazyGames account"], ["Se connecter", "Sign in"],
 ["Connecté : votre niveau, vos déblocages, vos records et vos circuits sont sauvegardés sur votre compte, sur tous vos appareils.", "Signed in: your level, unlocks, records and circuits are saved on your account, on all your devices."],
