@@ -1232,7 +1232,7 @@ function makeCar(T, slot, drv, isPlayer, skill, errEvery) {
     lap: 0, passed: Math.floor(dist / (T.N / NSPLIT)), sec: Math.floor(dist / (T.N / 3)), splits: [], lapStart: 0, secStart: 0,
     cur: [null, null, null], curCls: ['', '', ''], last: null, lastCls: '', best: null, fin: false, finT: 0, finLap: 0, finPassed: 0, pen: 0, hits: 0, dmg: 0, pull: 0, scCap: 0,
     tyre: 1, tow: 0, service: 0, pitted: false, pitLap: -1, box: slot, pitAsph: false, wrongBox: false, wl: new Float32Array(4), wlOk: false, remote: false, bot: false,
-    drv, isPlayer, auto: !isPlayer, ai: { skill, off: 0, stuck: 0, rev: 0, err: 0, errEvery, errIn: errEvery * (0.5 + Math.random()), form: 1, pit: 0 } };
+    drv, isPlayer, auto: !isPlayer, ai: { skill, off: 0, stuck: 0, rev: 0, err: 0, errEvery, errIn: errEvery * (0.5 + Math.random()), form: 1, pit: 0, ...startFlaw() } };
 }
 
 let G = null;
@@ -1293,6 +1293,8 @@ function startSession(o) {
 }
 
 // ---------- Simulation ----------
+// A standing start is rarely perfect: each bot reacts at its own moment (about one in five is really late) and some spin the wheels off the line.
+function startFlaw() { return { react: Math.random() < .2 ? .6 + Math.random() * .9 : Math.random() * .4, launch: Math.random() < .3 ? .55 + Math.random() * .3 : 1 }; }
 function botDrive(c) {
   const T = G.T, N = T.N, ai = c.ai, v = Math.hypot(c.vx, c.vy), fx = Math.cos(c.a), fy = Math.sin(c.a);
   let want = 0, def = 0, cap = 1e9;
@@ -1322,7 +1324,7 @@ function botDrive(c) {
     if (ai.err > 0) ai.err -= H;
     else if ((ai.errIn -= H) <= 0 && T.prof[(c.idx + 25) % N] < MAXV * 0.7) { ai.err = 1.1; ai.errIn = ai.errEvery * (0.5 + Math.random()); }
   }
-  let vt = T.prof[(c.idx + 2) % N] * ai.skill * ai.form * (ai.err > 0 ? 1.18 : 1) * (1 + 0.06 * c.tow) * (G.rain ? 0.86 : 1) * (0.84 + 0.16 * c.tyre) * (1 - 0.1 * c.dmg);
+  let vt = T.prof[(c.idx + 2) % N] * ai.skill * ai.form * (ai.err > 0 ? 1.18 : 1) * (1 + 0.06 * c.tow) * (G.rain ? 0.86 : 1) * (0.72 + 0.28 * c.tyre) * (1 - 0.1 * c.dmg);
   if (c.scCap) vt = Math.min(vt, c.scCap);
   if (pitting && ai.pit === 1) {
     const toEntry = (PA - rel) * DS, toBox = (myBox - rel) * DS;
@@ -1332,6 +1334,7 @@ function botDrive(c) {
   const e = Math.min(vt, cap) - v;
   c.thr = e > 0 ? clamp(e / 30, 0.25, 1) : 0;
   c.brk = e < -10 ? clamp(-e / 90, 0.15, 1) : 0;
+  if (G.mode === 'race' && !G.attract && G.t < ai.react + 2) { if (G.t < ai.react) { c.thr = 0; c.brk = 0; } else c.thr *= ai.launch; } // the start of the race only
 }
 
 // Jump start: the gas pressed while all five lights are on, before they go out. The car is released early and the driver pays 5 s
@@ -1476,11 +1479,11 @@ function physics(c) {
     if ((c.service -= H) <= 0) { if (c.isPlayer) toast(c.dmg > 0.15 ? 'Pneus neufs · voiture réparée' : 'Pneus neufs', 'g'); c.tyre = 1; c.dmg = 0; c.pitted = true; c.ai.pit = c.ai.pit ? 2 : 0; }
     return;
   }
-  const T = G.T, fx = Math.cos(c.a), fy = Math.sin(c.a), grass = c.off > HW + 6 && !c.pitAsph, wet = G.rain, g = 0.42 + 0.58 * c.tyre; // worn tyres: less grip in corners, longer braking, a lower top speed
+  const T = G.T, fx = Math.cos(c.a), fy = Math.sin(c.a), grass = c.off > HW + 6 && !c.pitAsph, wet = G.rain, g = 0.3 + 0.7 * c.tyre; // worn tyres: much less grip in corners, longer braking, slower acceleration and a lower top speed
   let vf = c.vx * fx + c.vy * fy, vl = -c.vx * fy + c.vy * fx;
   c.steer += clamp(clamp(c.inSteer + c.pull * c.dmg * 0.18, -1, 1) - c.steer, -H * 7, H * 7); // a broken wing pulls to its side
-  const top = grass ? MAXV * 0.42 : MAXV * (1 + 0.06 * c.tow) * (1 - 0.12 * c.dmg) * (0.96 + 0.04 * c.tyre);
-  if (c.thr > 0) { if (vf < -2) vf = Math.min(0, vf + BRAKE * c.thr * H); else vf += ACC * c.thr * (grass ? .55 : 1) * (wet ? .85 : 1) * (1 + .25 * c.tow) * Math.max(0, 1 - (vf / top) ** 2) * H; }
+  const top = grass ? MAXV * 0.42 : MAXV * (1 + 0.06 * c.tow) * (1 - 0.12 * c.dmg) * (0.9 + 0.1 * c.tyre);
+  if (c.thr > 0) { if (vf < -2) vf = Math.min(0, vf + BRAKE * c.thr * H); else vf += ACC * c.thr * (grass ? .55 : 1) * (wet ? .85 : 1) * (0.72 + 0.28 * c.tyre) * (1 + .25 * c.tow) * Math.max(0, 1 - (vf / top) ** 2) * H; }
   if (c.brk > 0) { if (vf > 2) vf = Math.max(0, vf - BRAKE * c.brk * (grass ? .5 : 1) * (wet ? .72 : 1) * g * H); else if (!c.thr) vf = Math.max(-150, vf - 280 * c.brk * H); }
   if (c.pz && vf > PIT_V) vf = Math.max(PIT_V, vf - BRAKE * 1.6 * H); // pit-lane speed limiter
   if (c.scCap && vf > c.scCap) vf = Math.max(c.scCap, vf - BRAKE * H); // safety-car pace
@@ -2480,7 +2483,7 @@ const isPlayerPeer = p => p.kind === 'viewer' && (p.presence.role === 'host' || 
 // A game is a star: the host owns the PeerJS id of the game's name and relays everyone's presence to every guest.
 // It mimics the parts of the room capability the game uses (peers, presence, join, leave).
 const P2P_PREFIX = 'monoplace-gp-v1-'; // the names every version so far has used: old and new pages still find each other
-const VERSION = 84; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
+const VERSION = 85; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
 // Relay for players whose networks refuse direct connections: turn.js, next to the page, holds the owner's own TURN account.
 const RELAY = window.TURN_CONFIG && TURN_CONFIG.username && TURN_CONFIG.credential ? TURN_CONFIG : null;
 const PEER_OPTS = RELAY ? { debug: 0, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, RELAY] } } : { debug: 0 };
