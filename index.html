@@ -1168,6 +1168,14 @@ const TEAMS = [
   { name: L('Obsidienne', 'Obsidian'), color: '#14101c', alt: '#b45cff', helmet: '#ffb81c', fin: 'obsidian' },
   { name: L('Diamant', 'Diamond'), color: '#e8f4ff', alt: '#6fa8dc', helmet: '#ffffff', fin: 'diamond' },
   { name: L('Vagues japonaises', 'Japanese waves'), color: '#16407a', alt: '#f4f5f7', helmet: '#f1c22e', fin: 'wave' },
+  { name: L('Azulejo', 'Azulejo'), color: '#1d4fb0', alt: '#f4f5f7', helmet: '#1d4fb0', paint: 'azulejo' },
+  { name: L('Nuages', 'Clouds'), color: '#6fb0f0', alt: '#f4f5f7', helmet: '#1d4fb0', paint: 'nuages' },
+  { name: L('Flocons', 'Snowflakes'), color: '#4a76b8', alt: '#f4f5f7', helmet: '#2b4f8a', paint: 'flocons' },
+  { name: L('Planètes', 'Planets'), color: '#0b0e24', alt: '#c4601a', helmet: '#f4f5f7', paint: 'planetes' },
+  { name: L('Arc-en-ciel', 'Rainbow'), color: '#3ed16a', alt: '#f4f5f7', helmet: '#16181c', paint: 'arcenciel' },
+  { name: L('Donut', 'Donut'), color: '#ff8fc0', alt: '#ff6fa8', helmet: '#f4f5f7', paint: 'donut' },
+  { name: L('Échecs', 'Chess'), color: '#16181c', alt: '#16181c', helmet: '#f4f5f7', paint: 'echecs' },
+  { name: L('Marguerites', 'Daisies'), color: '#2f9a45', alt: '#f4f5f7', helmet: '#ffd23a', paint: 'marguerites' },
 ].map((t, i) => ({ ...t, i }));
 const FINISH = { pearl: [[0, '#ffffff'], [.35, '#f7e4ee'], [.65, '#e3ecfa'], [1, '#fbf6e6']], holo: [[0, '#ff5fd0'], [.25, '#7a6bff'], [.5, '#33e0ff'], [.75, '#7dff9b'], [1, '#ffd84a']],
   gold: [[0, '#fff6c0'], [.18, '#f6cf3e'], [.4, '#b07a0a'], [.55, '#ffe88a'], [.75, '#d9a520'], [1, '#fff0a8']],
@@ -1175,6 +1183,23 @@ const FINISH = { pearl: [[0, '#ffffff'], [.35, '#f7e4ee'], [.65, '#e3ecfa'], [1,
   ocean: [[0, '#7dffe1'], [.5, '#1a8fd8'], [1, '#0b2f6a']], aurora: [[0, '#4bff9a'], [.35, '#33e0ff'], [.7, '#8b5cf6'], [1, '#ff5fd0']],
   obsidian: [[0, '#2a2140'], [.3, '#07050c'], [.55, '#3a2c66'], [1, '#07050c']], wave: [[0, '#16407a'], [1, '#3a7fc9']], diamond: [[0, '#ffffff'], [.2, '#bfe6ff'], [.4, '#f6e0ff'], [.6, '#d4fff0'], [.8, '#bfe6ff'], [1, '#ffffff']] };
 const SWATCH_BG = t => t.fin ? 'linear-gradient(135deg,' + FINISH[t.fin].map(([o, c]) => c + ' ' + o * 100 + '%').join(',') + ')' : t.color;
+// Painted colours: a whole-body picture drawn once per colour (car coordinates, x -21..25, y -9..9) and clipped to the body.
+let seed = 1; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647; // the painters reseed themselves so each picture is always the same
+const PAINTS = {
+  azulejo: (g,d)=>{g.fillStyle='#f4f5f7';g.fillRect(-21,-9,46,18);for(let x=-21;x<25;x+=6)for(let y=-9;y<9;y+=6){g.fillStyle='#1d4fb0';g.fillRect(x+.4,y+.4,5.2,5.2);g.fillStyle='#f4f5f7';g.beginPath();g.arc(x+3,y+3,1.9,0,7);g.fill();g.fillStyle='#1d4fb0';g.beginPath();g.arc(x+3,y+3,.8,0,7);g.fill();for(const[dx,dy]of[[1,1],[5,1],[1,5],[5,5]]){g.fillStyle='#f4f5f7';g.beginPath();g.arc(x+dx,y+dy,.7,0,7);g.fill();}}},
+  nuages: (g,d)=>{const gr=g.createLinearGradient(0,-9,0,9);gr.addColorStop(0,'#4f9fee');gr.addColorStop(1,'#bfe0ff');g.fillStyle=gr;g.fillRect(-21,-9,46,18);g.fillStyle='rgba(255,255,255,.96)';const cl=(x,y,k)=>{for(const[dx,dy,r]of[[0,0,3],[3,-.6,2.4],[-3,.5,2.2],[1.4,1.4,2.2]]){g.beginPath();g.arc(x+dx*k,y+dy*k,r*k,0,7);g.fill();}};cl(14,.2,.95);cl(-11.5,-.4,1.15);cl(5.5,-5.2,.55);cl(5.5,5.4,.55);cl(-4.5,-5.6,.5);cl(-4.5,5.6,.5);cl(20,-3,.4);},
+  flocons: (g,d)=>{const gr=g.createLinearGradient(0,-9,0,9);gr.addColorStop(0,'#2b4f8a');gr.addColorStop(1,'#7aa8e0');g.fillStyle=gr;g.fillRect(-21,-9,46,18);g.strokeStyle='#fff';g.lineWidth=.35;g.lineCap='round';seed=22;for(let i=0;i<12;i++){const x=-19+rnd()*42,y=-7+rnd()*14,r=1.4+rnd()*1.6;g.beginPath();for(let k=0;k<3;k++){const a=k*Math.PI/3+i;g.moveTo(x-Math.cos(a)*r,y-Math.sin(a)*r);g.lineTo(x+Math.cos(a)*r,y+Math.sin(a)*r);}g.stroke();}},
+  planetes: (g,d)=>{g.fillStyle='#0b0e24';g.fillRect(-21,-9,46,18);seed=7;g.fillStyle='#fff';for(let i=0;i<24;i++){g.globalAlpha=.4+rnd()*.6;g.fillRect(-21+rnd()*46,-9+rnd()*18,.5,.5);}g.globalAlpha=1;const pl=(x,y,r,c1,c2,ring)=>{const gr=g.createRadialGradient(x-r*.3,y-r*.3,0,x,y,r);gr.addColorStop(0,c1);gr.addColorStop(1,c2);if(ring){g.strokeStyle='rgba(240,210,150,.8)';g.lineWidth=.7;g.beginPath();g.ellipse(x,y,r*1.9,r*.5,-.3,0,7);g.stroke();}g.fillStyle=gr;g.beginPath();g.arc(x,y,r,0,7);g.fill();if(ring){g.strokeStyle='rgba(240,210,150,.9)';g.lineWidth=.7;g.beginPath();g.ellipse(x,y,r*1.9,r*.5,-.3,0,Math.PI);g.stroke();}};pl(15,-3.5,3.4,'#ffd28a','#c4601a',true);pl(-13,4,3,'#8fd0ff','#1a5fb8',false);pl(-9,-6.5,1.6,'#ff9a8a','#b83a2a',false);pl(20,6,1.5,'#d0ffd8','#3a9a5a',false);},
+  arcenciel: (g,d)=>{const C=['#ff3b3b','#ff9a1e','#ffe14a','#3ed16a','#36a9ff','#5b5cff','#b34cff'];C.forEach((c,i)=>{g.fillStyle=c;g.beginPath();g.moveTo(-21+i*0,-9+i*2.6);g.lineTo(25,-9+i*2.6);g.lineTo(25,-9+i*2.6+2.7);g.lineTo(-21,-9+i*2.6+2.7);g.closePath();g.fill();});},
+  donut: (g,d)=>{g.fillStyle='#ff8fc0';g.fillRect(-21,-9,46,18);g.fillStyle='#ff6fa8';for(let x=-21;x<26;x+=2.2){g.beginPath();g.arc(x,-9,2.2+Math.abs(x%3),0,Math.PI);g.fill();g.beginPath();g.arc(x+1,9,2.2+Math.abs(x%2),Math.PI,0);g.fill();}seed=6;const C=['#fff','#ffe14a','#4aa3ff','#4aff7a','#b45cff'];for(let i=0;i<34;i++){g.save();g.translate(-20+rnd()*44,-8+rnd()*16);g.rotate(rnd()*3);g.fillStyle=C[i%5];g.fillRect(-.9,-.3,1.8,.6);g.restore();}},
+  echecs: (g,d)=>{for(let x=-21,i=0;x<25;x+=4.6,i++)for(let y=-9,j=0;y<9;y+=4.5,j++){g.fillStyle=(i+j)%2?'#16181c':'#f4f5f7';g.fillRect(x,y,4.6,4.5);}g.fillStyle='rgba(255,255,255,.12)';g.fillRect(-21,-9,46,4);},
+  marguerites: (g,d)=>{g.fillStyle='#2f9a45';g.fillRect(-21,-9,46,18);seed=3;for(let i=0;i<10;i++){const x=-19+(i%5)*9.6+(i>4?4:0),y=i>4?5.5:-5;g.save();g.translate(x,y);g.fillStyle='#fff';for(let k=0;k<8;k++){g.rotate(Math.PI/4);g.beginPath();g.ellipse(2.3,0,2,.9,0,0,7);g.fill();}g.fillStyle='#ffd23a';g.beginPath();g.arc(0,0,1.3,0,7);g.fill();g.restore();}},
+};
+const PAINT_CV = {};
+function paintCanvas(id) {
+  if (!PAINT_CV[id]) { const S = 8, cv = document.createElement('canvas'); cv.width = 46 * S; cv.height = 18 * S; const g = cv.getContext('2d'); g.scale(S, S); g.translate(21, 9); PAINTS[id](g); PAINT_CV[id] = cv; }
+  return PAINT_CV[id];
+}
 let wavePat = null; // seigaiha: rows of concentric arcs, drawn once at 8x and shrunk back so it stays sharp when the camera zooms
 function waveFill(g) {
   if (!wavePat) {
@@ -1736,10 +1761,10 @@ function levelOf(xp) { let n = 1; while (xp >= xpNeed(n)) { xp -= xpNeed(n); n++
 // Item keys: c<TEAMS index>. Free: colours 0-5.
 const RARS = [['Commun', 'Common', '#b7bec9'], ['Rare', 'Rare', '#3ed16a'], ['Super rare', 'Super rare', '#4aa3ff'], ['Épique', 'Epic', '#b45cff'], ['Légendaire', 'Legendary', '#ffb81c']];
 const RAR_ITEMS = [
-  ['c6', 'c10', 'c9', 'c7', 'c8', 'c12', 'c13', 'c32', 'c33'],
-  ['c11', 'c17', 'c19', 'c21', 'c22', 'c23', 'c34'],
+  ['c6', 'c10', 'c9', 'c7', 'c8', 'c12', 'c13', 'c32', 'c33', 'c44', 'c48', 'c49'],
+  ['c11', 'c17', 'c19', 'c21', 'c22', 'c23', 'c34', 'c43', 'c45', 'c47', 'c50'],
   ['c18', 'c24', 'c25', 'c27', 'c28', 'c29', 'c35', 'c36', 'c42'],
-  ['c16', 'c20', 'c26', 'c15', 'c37', 'c38', 'c39'],
+  ['c16', 'c20', 'c26', 'c15', 'c37', 'c38', 'c39', 'c46'],
   ['c14', 'c30', 'c31', 'c41', 'c40']];
 const RAR_OF = {}; RAR_ITEMS.forEach((l, r) => l.forEach(k => RAR_OF[k] = r));
 const ALL_KEYS = Object.keys(RAR_OF);
@@ -1751,7 +1776,7 @@ let INV = (s => {
   if (s && s.v === 4 && Array.isArray(s.own)) return { v: 4, own: s.own.filter(k => k in RAR_OF), coins, chests: Math.max(0, s.chests | 0) };
   if (s && Array.isArray(s.own)) {
     let chests = Math.max(0, s.chests | 0); const own = [];
-    for (const k of s.own) { if (k in RAR_OF) own.push(k); else chests++; }
+    for (const k of s.own) { if (k in RAR_OF && !(k[0] === 'c' && +k.slice(1) >= 43)) own.push(k); else chests++; } // c43+ were colours made from old motifs, since removed
     return { v: 4, own: [...new Set(own)], coins, chests };
   }
   return { v: 4, own: [], coins, chests: levelOf(XP)[0] - 1 };
@@ -1820,11 +1845,12 @@ function drawCar(c, g = ctx) {
   if (!wreck && dm <= 0.5) { if (dm > 0.3) g.fillRect(19, s > 0 ? -11 : 0, 4, 11); else g.fillRect(19, -11, 4, 22); } // front wing: half gone, then all of it
   const body = () => { g.beginPath(); for (const [px, py, w] of BODY) g.lineTo(px > 20 ? px - 3 * k : px, px > 20 ? s * 1.5 * k : py * s > 0 ? py * (1 - w * k) : py); g.closePath(); };
   g.fillStyle = wreck ? '#2a2a2d' : bodyFill(g, d); body(); g.fill();
+  if (d.paint && !wreck) { g.save(); body(); g.clip(); g.drawImage(paintCanvas(d.paint), -21, -9, 46, 18); g.restore(); }
   if (k > 0.25 || wreck) { // exposed carbon and scratches on the hit side
     g.fillStyle = 'rgba(12,12,15,.6)'; g.beginPath(); g.ellipse(-4, s * 3.6, 4 + 3 * k, 1.2 + 1.4 * k, 0, 0, 7); g.fill();
     g.strokeStyle = 'rgba(12,12,15,.55)'; g.lineWidth = 0.8; g.beginPath(); g.moveTo(10, s * 1); g.lineTo(5, s * 2.6); g.moveTo(-9, s * 1.5); g.lineTo(-14, s * 2.2); g.stroke();
   }
-  if (!wreck) { g.fillStyle = d.alt; g.fillRect(-16, -1.3, 13, 2.6); }
+  if (!wreck && !d.paint) { g.fillStyle = d.alt; g.fillRect(-16, -1.3, 13, 2.6); }
   g.fillStyle = '#0b0c0f'; g.beginPath(); g.ellipse(0, 0, 4.6, 3, 0, 0, 7); g.fill();
   if (!wreck) { g.fillStyle = d.helmet; disc(g, -0.6, 0, 2.3); }
   if (wreck || dm > 0.85) { // flames from the engine
@@ -2448,7 +2474,7 @@ const isPlayerPeer = p => p.kind === 'viewer' && (p.presence.role === 'host' || 
 // A game is a star: the host owns the PeerJS id of the game's name and relays everyone's presence to every guest.
 // It mimics the parts of the room capability the game uses (peers, presence, join, leave).
 const P2P_PREFIX = 'monoplace-gp-v1-'; // the names every version so far has used: old and new pages still find each other
-const VERSION = 74; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
+const VERSION = 75; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
 // Relay for players whose networks refuse direct connections: turn.js, next to the page, holds the owner's own TURN account.
 const RELAY = window.TURN_CONFIG && TURN_CONFIG.username && TURN_CONFIG.credential ? TURN_CONFIG : null;
 const PEER_OPTS = RELAY ? { debug: 0, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, RELAY] } } : { debug: 0 };
