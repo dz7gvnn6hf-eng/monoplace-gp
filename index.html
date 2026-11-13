@@ -842,6 +842,9 @@ const DEFS = [
   { id: 'neige2', name: L('Col Blanc', 'Snow Pass'), blurb: 'Une route de montagne tout en courbes : une grande descente rapide puis un virage serré en bas.',
     theme: { out: '#dfe8f0', run: '#f4f8fb', stripe: '#e8eff5', wall: '#7b8794', dash: '#3a7bd5', asph: '#3b4450', deco: 'none', d1: '#274638', d2: '#3a6a54' }, // no trees on the snow
     verts: [[351,-25,900],[2319,53,900],[2800,150,900],[3400,500,360],[3350,1000,336],[2800,1150,664],[2500,1600,288],[3000,2050,279],[2600,2500,417],[2206,2509,900],[1800,2400,724],[1300,1900,900],[900,1300,646],[300,1200,900],[-300,800,667],[-450,300,324],[0,0,611]] },
+  { id: 'erables', name: L('Vallée des Érables', 'Maple Valley'), blurb: 'Une vallée en automne : de longues courbes rapides, puis une descente sinueuse et une épingle au fond.',
+    theme: { out: '#5a3b1c', run: '#8f6c32', stripe: '#876630', wall: '#2a1c10', dash: '#f1c22e', asph: '#3a3d42', deco: 'trees', d1: '#7a2a10', d2: '#d0601c' },
+    verts: [[373,-25,900],[2263,24,900],[2659,65,900],[3000,150,900],[3431,391,900],[3700,700,413],[3600,1400,394],[3281,1612,900],[2900,1700,501],[2300,1400,364],[1900,1900,403],[2300,2500,167],[2025,2706,730],[1600,2800,900],[1162,2712,900],[800,2500,401],[700,1800,681],[1100,1300,295],[600,900,652],[-200,800,380],[-500,300,268],[0,0,711]] },
 ];
 const OFFICIAL_IDS = new Set(DEFS.map(d => d.id));
 const CHAMP = DEFS.slice(0, 4); // four rounds; the player can swap each circuit in the setup
@@ -2428,7 +2431,7 @@ $('menuBtn').addEventListener('click', goHome);
 $('editBtn').addEventListener('click', () => openEditor(mine.find(c => c.id === ui.tid)));
 $('dupBtn').addEventListener('click', () => {
   const d = findDef(ui.tid); if (!d) return;
-  openEditor({ id: null, name: ('Copie de ' + d.name).slice(0, 28), env: d.custom ? d.env : ({ dunes2: 3, neige2: 0 }[d.id] ?? Math.max(0, DEFS.indexOf(d))), verts: d.verts });
+  openEditor({ id: null, name: ('Copie de ' + d.name).slice(0, 28), env: d.custom ? d.env : ({ dunes2: 3, neige2: 0, erables: 1 }[d.id] ?? Math.max(0, DEFS.indexOf(d))), verts: d.verts });
 });
 // Likes: one per player and circuit, for any circuit but your own (claude.ai: votes documents; elsewhere: the hub's gossip).
 function refreshLike() {
@@ -2483,7 +2486,7 @@ const isPlayerPeer = p => p.kind === 'viewer' && (p.presence.role === 'host' || 
 // A game is a star: the host owns the PeerJS id of the game's name and relays everyone's presence to every guest.
 // It mimics the parts of the room capability the game uses (peers, presence, join, leave).
 const P2P_PREFIX = 'monoplace-gp-v1-'; // the names every version so far has used: old and new pages still find each other
-const VERSION = 85; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
+const VERSION = 86; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
 // Relay for players whose networks refuse direct connections: turn.js, next to the page, holds the owner's own TURN account.
 const RELAY = window.TURN_CONFIG && TURN_CONFIG.username && TURN_CONFIG.credential ? TURN_CONFIG : null;
 const PEER_OPTS = RELAY ? { debug: 0, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, RELAY] } } : { debug: 0 };
@@ -3706,6 +3709,7 @@ const EN = new Map([
 ["« C’est parti ! » lance une course rapide : un tour contre des bots faciles. Ensuite, jouez contre les bots, en ligne, en partie classée ou entre amis. Vous pouvez revoir ce tutoriel à tout moment dans les réglages.", "“Let’s race!” starts a quick race: one lap against easy bots. After that, play against bots, online, ranked or with friends. You can watch this tutorial again at any time in the settings."],
 ["Aide", "Help"], ["Revoir le tutoriel", "Watch the tutorial again"],
 ["Une longue descente rectiligne, puis une succession d’esses et de virages serrés dans le sable.", "A long straight descent, then a run of esses and tight turns in the sand."],
+["Une vallée en automne : de longues courbes rapides, puis une descente sinueuse et une épingle au fond.", "An autumn valley: long fast bends, then a winding descent and a hairpin at the bottom."],
 ["Une route de montagne tout en courbes : une grande descente rapide puis un virage serré en bas.", "A mountain road made of curves: a big fast descent, then a tight bend at the bottom."],
 ["Compte CrazyGames", "CrazyGames account"], ["Se connecter", "Sign in"],
 ["Connecté : votre niveau, vos déblocages, vos records et vos circuits sont sauvegardés sur votre compte, sur tous vos appareils.", "Signed in: your level, unlocks, records and circuits are saved on your account, on all your devices."],
