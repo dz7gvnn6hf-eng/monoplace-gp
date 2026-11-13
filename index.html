@@ -1772,19 +1772,11 @@ const RAR_OF = {}; RAR_ITEMS.forEach((l, r) => l.forEach(k => RAR_OF[k] = r));
 const ALL_KEYS = Object.keys(RAR_OF);
 const COIN_ODDS = [0, 62, 27, 9, 2], LVL_ODDS = [0, 40, 36, 18, 6], CHEST_COST = 100; // % by rarity; a level chest is better than a coin chest
 const INV_KEY = 'monoplace-gp.inv';
-// v:4: skins are colours only. An older save keeps its colours; every motif, speed effect or removed colour it owned is paid back as one chest. No save: no skins and one chest per level gained.
+// v:6: everybody restarts with no skins and one chest per level gained (coins are kept) after the rarities were reordered. Already-converted saves are left alone.
 let INV = (s => {
   const coins = Math.max(0, s && s.coins | 0);
-  if (s && s.v === 5 && Array.isArray(s.own)) return { v: 5, own: s.own.filter(k => k in RAR_OF), coins, chests: Math.max(0, s.chests | 0) };
-  if (s && s.v === 4 && Array.isArray(s.own)) { // the colours dropped when tiers were reordered are paid back as chests
-    const gone = new Set(['c32', 'c45', 'c46', 'c48', 'c49']); return { v: 5, own: s.own.filter(k => k in RAR_OF), coins, chests: Math.max(0, s.chests | 0) + s.own.filter(k => gone.has(k)).length };
-  }
-  if (s && Array.isArray(s.own)) {
-    let chests = Math.max(0, s.chests | 0); const own = [];
-    for (const k of s.own) { if (k in RAR_OF && !(k[0] === 'c' && +k.slice(1) >= 43)) own.push(k); else chests++; } // c43+ were colours made from old motifs, since removed
-    return { v: 5, own: [...new Set(own)].filter(k => k in RAR_OF), coins, chests: chests + own.filter(k => ['c32', 'c45', 'c46', 'c48', 'c49'].includes(k)).length };
-  }
-  return { v: 5, own: [], coins, chests: levelOf(XP)[0] - 1 };
+  if (s && s.v === 6 && Array.isArray(s.own)) return { v: 6, own: s.own.filter(k => k in RAR_OF), coins, chests: Math.max(0, s.chests | 0) };
+  return { v: 6, own: [], coins, chests: levelOf(XP)[0] - 1 };
 })(store.get(INV_KEY));
 const saveInv = () => store.set(INV_KEY, INV);
 saveInv();
@@ -2479,7 +2471,7 @@ const isPlayerPeer = p => p.kind === 'viewer' && (p.presence.role === 'host' || 
 // A game is a star: the host owns the PeerJS id of the game's name and relays everyone's presence to every guest.
 // It mimics the parts of the room capability the game uses (peers, presence, join, leave).
 const P2P_PREFIX = 'monoplace-gp-v1-'; // the names every version so far has used: old and new pages still find each other
-const VERSION = 77; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
+const VERSION = 78; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
 // Relay for players whose networks refuse direct connections: turn.js, next to the page, holds the owner's own TURN account.
 const RELAY = window.TURN_CONFIG && TURN_CONFIG.username && TURN_CONFIG.credential ? TURN_CONFIG : null;
 const PEER_OPTS = RELAY ? { debug: 0, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, RELAY] } } : { debug: 0 };
