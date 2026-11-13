@@ -548,8 +548,6 @@ label.btn{cursor:pointer;display:inline-block}
     <div class="lvl"><b id="pfLvl"></b><div class="bar"><i id="pfBar"></i></div><span id="pfXp"></span></div>
     <div class="grp"><p class="lbl">Coffres</p><p class="note" id="pfInv"></p><div class="actions"><button id="pfChest" class="btn" type="button">🎁 Ouvrir des coffres</button></div></div>
     <div class="grp"><p class="lbl">Couleur de votre voiture</p><div class="motifs" id="teams"></div><p class="note">Les éléments grisés se trouvent dans les coffres : la couleur du cadre indique leur rareté.</p></div>
-    <div class="grp"><p class="lbl">Motif</p><div class="motifs" id="motifs"></div></div>
-    <div class="grp"><p class="lbl">Effet de vitesse</p><div class="motifs" id="trails"></div></div>
     <label class="grp"><span class="lbl">Pseudo</span><input id="nick" class="input" maxlength="20" autocomplete="off" spellcheck="false"></label>
     <p class="note">Votre pseudo s’affiche pour les autres joueurs en ligne. Votre photo reste sur cet appareil : les autres ne la voient pas.</p>
     <div class="grp" id="cgAcc" hidden><p class="lbl">Compte CrazyGames</p><p class="note" id="cgAccTxt"></p><div class="actions"><button id="cgLogin" class="btn" type="button" hidden>Se connecter</button></div></div>
@@ -601,7 +599,7 @@ label.btn{cursor:pointer;display:inline-block}
     </div>
     <div class="tstep" data-s="3" hidden>
       <h2>Progresser</h2>
-      <p>Chaque course rapporte de l’XP et des pièces. Chaque niveau gagné donne un coffre, et 100 pièces en ouvrent un : ils cachent des couleurs, des motifs et des effets de vitesse de plus en plus rares.</p>
+      <p>Chaque course rapporte de l’XP et des pièces. Chaque niveau gagné donne un coffre, et 100 pièces en ouvrent un : ils cachent des couleurs de plus en plus rares.</p>
       <p>« C’est parti ! » lance une course rapide : un tour contre des bots faciles. Ensuite, jouez contre les bots, en ligne, en partie classée ou entre amis. Vous pouvez revoir ce tutoriel à tout moment dans les réglages.</p>
     </div>
     <div class="dots" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
@@ -1170,7 +1168,15 @@ const TEAMS = [
   { name: L('Obsidienne', 'Obsidian'), color: '#14101c', alt: '#b45cff', helmet: '#ffb81c', fin: 'obsidian' },
   { name: L('Diamant', 'Diamond'), color: '#e8f4ff', alt: '#6fa8dc', helmet: '#ffffff', fin: 'diamond' },
   { name: L('Vagues japonaises', 'Japanese waves'), color: '#16407a', alt: '#f4f5f7', helmet: '#f1c22e', fin: 'wave' },
-].map((t, i) => ({ ...t, i }));
+  { name: L('Tigre', 'Tiger'), color: '#ff8a1e', alt: '#16181c', helmet: '#2f6bff', motif: 'tiger' },
+  { name: L('Camouflage', 'Camouflage'), color: '#1d5e34', alt: '#f4f5f7', helmet: '#f1c22e', motif: 'camo' },
+  { name: L('Fibre de carbone', 'Carbon fibre'), color: '#f5c518', alt: '#16181c', helmet: '#ec3a2a', motif: 'carbon' },
+  { name: L('Hexagones', 'Hexagons'), color: '#18b3a0', alt: '#0b2f2b', helmet: '#f4f5f7', motif: 'hex' },
+  { name: L('Dégradé violet', 'Purple fade'), color: '#8b5cf6', alt: '#f1c22e', helmet: '#f4f5f7', motif: 'fade' },
+  { name: L('Flammes', 'Flames'), color: '#24272d', alt: '#ec3a2a', helmet: '#f1c22e', motif: 'flames' },
+  { name: L('Néon', 'Neon'), color: '#3b1f6b', alt: '#45c4f5', helmet: '#f4f5f7', motif: 'neon' },
+  { name: L('Tribal', 'Tribal'), color: '#0b5563', alt: '#f1c22e', helmet: '#f4f5f7', motif: 'tribal' },
+].map((t, i) => ({ motif: 'classic', ...t, i }));
 const FINISH = { pearl: [[0, '#ffffff'], [.35, '#f7e4ee'], [.65, '#e3ecfa'], [1, '#fbf6e6']], holo: [[0, '#ff5fd0'], [.25, '#7a6bff'], [.5, '#33e0ff'], [.75, '#7dff9b'], [1, '#ffd84a']],
   gold: [[0, '#fff6c0'], [.18, '#f6cf3e'], [.4, '#b07a0a'], [.55, '#ffe88a'], [.75, '#d9a520'], [1, '#fff0a8']],
   copper: [[0, '#e8a06a'], [.5, '#a85a2e'], [1, '#e8a06a']], nebula: [[0, '#2b1a7a'], [.5, '#9b4dff'], [1, '#ff6ad5']], lava: [[0, '#ffc21a'], [.4, '#ff4a1a'], [.8, '#7a0d0d'], [1, '#1a0505']],
@@ -1224,7 +1230,7 @@ function startSession(o) {
       usedS.add(s.s); usedT.add(s.t);
       const me = s.p === o.online.me;
       const nk = s.nick || 'Pilote', code = nk.normalize('NFD').replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase() || 'P' + (6 - s.s);
-      const c = makeCar(T, s.s, { ...TEAMS[s.t], motif: cleanMotif(s.m), trail: cleanTrail(s.tr), code: me ? 'VOUS' : code, name: me ? 'Vous' : nk }, me, 0, 0);
+      const c = makeCar(T, s.s, { ...TEAMS[s.t], code: me ? 'VOUS' : code, name: me ? 'Vous' : nk }, me, 0, 0);
       if (me) G.player = c; else { c.remote = true; c.auto = false; c.peer = s.p; c.by = s.by; }
       G.cars.push(c);
     }
@@ -1238,7 +1244,7 @@ function startSession(o) {
     }
     G.online = { host: o.online.host, lastPub: 0 };
   } else {
-    const team = o.team || 0, me = { ...TEAMS[team], motif: ui.motif, trail: ui.trail, code: 'VOUS', name: 'Vous' };
+    const team = o.team || 0, me = { ...TEAMS[team], code: 'VOUS', name: 'Vous' };
     if (o.mode === 'tt') G.cars.push(G.player = makeCar(T, 0, me, true, 0, 0));
     else {
       const others = TEAMS.filter((_, i) => i !== team);
@@ -1739,10 +1745,6 @@ const MOTIFS = (() => {
   const mix = (h, t, k) => '#' + [1, 3, 5].map(i => Math.round(parseInt(h.slice(i, i + 2), 16) * (1 - k) + t * k).toString(16).padStart(2, '0')).join('');
   return [
     ['classic', L('Classique', 'Classic'), (g, d) => rect(g, d.alt, -16, -1.3, 13, 2.6)],
-    ['phantom', L('Fantôme', 'Ghost'), (g, d) => rect(g, d.alt, -16, -1.3, 13, 2.6)], // the whole car is drawn see-through, like the time-trial ghost (see drawCar)
-    ['stripe', L('Bande centrale', 'Centre stripe'), (g, d) => { rect(g, d.alt, -20, -2.3, 44, 4.6); rect(g, d.helmet, -20, -3.1, 44, .8); rect(g, d.helmet, -20, 2.3, 44, .8); }],
-    ['twin', L('Double bande', 'Twin stripes'), (g, d) => { rect(g, d.alt, -20, -4, 44, 1.6); rect(g, d.alt, -20, 2.4, 44, 1.6); }],
-    ['split', L('Bicolore', 'Two-tone'), (g, d) => { g.fillStyle = d.alt; poly(g, [[-20, -8], [1, -8], [-5, 8], [-20, 8]]); rect(g, d.helmet, -20, -.6, 44, 1.2); }],
     ['tiger', L('Tigre', 'Tiger'), (g, d) => { // tapered stripes coming in from both edges, long and short in turn
       g.fillStyle = d.alt;
       [20, 16.8, 13.6, 10.4, 7.2, 4, .5, -3, -6.5, -10, -13.5, -16.8].forEach((x, k) => {
@@ -1762,9 +1764,6 @@ const MOTIFS = (() => {
       const gr = g.createLinearGradient(24, 0, -15, 0); gr.addColorStop(0, '#fff3b0'); gr.addColorStop(.3, '#ffc21e'); gr.addColorStop(.62, '#ff7a1a'); gr.addColorStop(1, '#d42a18');
       flame(); g.fillStyle = gr; g.fill(); g.strokeStyle = '#f4f5f7'; g.lineWidth = .5; g.stroke();
       g.save(); g.translate(10, 0); g.scale(.6, .62); flame(); g.fillStyle = 'rgba(255,240,160,.6)'; g.fill(); g.restore(); }],
-    ['bolt', L('Éclair', 'Lightning'), (g, d) => { const bolt = [[17, .2], [2, -4.6], [3, -1], [-17, -5.6], [5.5, 5.4], [4.5, 1.6], [17, 4.4]];
-      g.fillStyle = d.helmet; poly(g, bolt.map(([x, y]) => [x + .8, y + .8])); g.fillStyle = d.alt; poly(g, bolt); }],
-    ['sash', L('Écharpe', 'Sash'), (g, d) => { g.fillStyle = d.alt; poly(g, [[9, -8], [14, -8], [-1, 8], [-6, 8]]); g.fillStyle = d.helmet; poly(g, [[14.5, -8], [16, -8], [1, 8], [-.5, 8]]); }],
     ['camo', L('Camouflage', 'Camouflage'), (g, d) => { // layers of soft blobs in shades of the body colour, then a fine grain
       let seed = 11; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
       const blob = (cx, cy, r, col) => { const n = 9, pts = [];
@@ -1804,115 +1803,40 @@ const MOTIFS = (() => {
       g.beginPath(); g.moveTo(-4, 0); g.quadraticCurveTo(-11, -1.6, -19.5, 0); g.quadraticCurveTo(-11, 1.6, -4, 0); g.fill(); }],
   ];
 })();
-const MOTIF_IDS = MOTIFS.map(m => m[0]);
-const TRAILS = (() => {
-  const off = (q, back, lat) => [q[0] - Math.cos(q[2]) * back - Math.sin(q[2]) * lat, q[1] - Math.sin(q[2]) * back + Math.cos(q[2]) * lat]; // a point behind / beside the car
-  const ribbon = (g, pts, back, lat, w, col, k, pow = 2, taper = .7) => { // a band that fades and thins toward the oldest position
-    g.lineCap = 'round';
-    for (let i = 0; i < pts.length - 1; i++) { const t = i / (pts.length - 1), a = off(pts[i], back, lat), b = off(pts[i + 1], back, lat);
-      g.globalAlpha = k * (1 - t) ** pow; g.strokeStyle = col; g.lineWidth = w * (1 - t * taper); g.beginPath(); g.moveTo(...a); g.lineTo(...b); g.stroke(); }
-    g.globalAlpha = 1; };
-  // One tapered band filled with a gradient (no overlapping pieces, so no visible steps): solid at the car, fading to nothing.
-  const band = (g, pts, back, lat, w, hex, k, taper = .95, mid = .4) => {
-    const n = pts.length; if (n < 3) return;
-    const L = [], R = [];
-    for (let i = 0; i < n; i++) { const t = i / (n - 1), q = pts[i], c = off(q, back, lat), hw = w * (1 - t * taper) / 2, nx = -Math.sin(q[2]), ny = Math.cos(q[2]);
-      L.push([c[0] + nx * hw, c[1] + ny * hw]); R.push([c[0] - nx * hw, c[1] - ny * hw]); }
-    const a = off(pts[0], back, lat), z = off(pts[n - 1], back, lat), v = parseInt(hex.slice(1), 16), rgb = (v >> 16) + ',' + (v >> 8 & 255) + ',' + (v & 255);
-    const gr = g.createLinearGradient(a[0], a[1], z[0], z[1]);
-    gr.addColorStop(0, 'rgba(' + rgb + ',' + (k * .85).toFixed(3) + ')'); gr.addColorStop(.4, 'rgba(' + rgb + ',' + (k * mid).toFixed(3) + ')'); gr.addColorStop(1, 'rgba(' + rgb + ',0)');
-    g.fillStyle = gr; g.beginPath(); L.forEach((q, i) => i ? g.lineTo(...q) : g.moveTo(...q)); for (let i = n - 1; i >= 0; i--) g.lineTo(...R[i]); g.closePath(); g.fill();
-  };
-  const hash = (id, n) => { let x = Math.imul(id * 31 + n + 1, 2654435761) >>> 0; x ^= x >>> 15; x = Math.imul(x, 2246822519) >>> 0; x ^= x >>> 13; return (x >>> 0) / 4294967296; }; // same id, same look
-  const each = (pts, every, fn) => { const n = pts.length; for (let i = 0; i < n; i++) { const q = pts[i], id = q[3] | 0; if (every > 1 && id % every) continue; fn(q, i / (n - 1), id); } }; // one particle per history sample
-  const along = (pts, t) => pts[Math.min(pts.length - 1, Math.round(t * (pts.length - 1)))];
-  return [
-    ['none', L('Aucun', 'None'), () => {}],
-    ['trail', L('Traînée', 'Trail'), (g, pts, d, k) => { for (const s of [-1, 1]) band(g, pts.slice(0, 20), 15, s * 9.5, 3.4, d.color, k); }],
-    ['fire', L('Feu', 'Fire'), (g, pts, d, k) => {
-      for (let j = 0; j < 30; j++) { const t = Math.random(), q = along(pts, t * .45), [x, y] = off(q, 20 + Math.random() * 4, (Math.random() - .5) * (2 + t * 10));
-        g.globalAlpha = k * (1 - t) * .9; g.fillStyle = t < .25 ? '#fff1a8' : t < .55 ? '#ffb21e' : t < .8 ? '#ff6a1a' : '#9a1c10'; disc(g, x, y, (1 - t) * 3.4 + .6); }
-      const q = pts[0], f = 10 + Math.random() * 6; g.globalAlpha = k; g.save(); g.translate(q[0], q[1]); g.rotate(q[2]); g.fillStyle = '#ffe36b';
-      for (const s of [-1, 1]) { g.beginPath(); g.moveTo(-19, s * 1.6); g.quadraticCurveTo(-19 - f * .5, s * 3, -19 - f, s * .6); g.quadraticCurveTo(-19 - f * .5, s * .6, -19, 0); g.fill(); }
-      g.restore(); g.globalAlpha = 1; }],
-    ['volt', L('Électrique', 'Electric'), (g, pts, d, k) => {
-      g.lineJoin = 'miter'; g.lineCap = 'round';
-      for (let b = 0; b < 3; b++) { const path = pts.map((q, i) => off(q, 19, (b - 1) * 5 + (Math.random() - .5) * 9 * (1 + i / pts.length)));
-        for (const [w, col, a] of [[3.2, '#3fa8ff', .25], [1.4, '#7cc8ff', .7], [.5, '#ffffff', .95]]) {
-          g.strokeStyle = col; g.lineWidth = w;
-          for (let i = 0; i < path.length - 1; i += 2) { g.globalAlpha = k * a * (1 - i / path.length); g.beginPath(); g.moveTo(...path[i]); g.lineTo(...path[Math.min(i + 2, path.length - 1)]); g.stroke(); } } }
-      g.globalAlpha = 1; }],
-    ['glow', L('Néon', 'Neon'), (g, pts, d, k) => { // layered gradient bands: a wide soft halo, the colour, then a white-hot core, each fading smoothly to nothing
-      for (const s of [-1, 1]) { band(g, pts, 15, s * 9.5, 14, d.color, k * .22, .45, .7); band(g, pts, 15, s * 9.5, 8, d.color, k * .4, .55, .65); band(g, pts, 15, s * 9.5, 4, d.color, k * .8, .65, .6); band(g, pts, 15, s * 9.5, 1.6, '#ffffff', k, .8, .55); } }],
-    ['rainbow', L('Arc-en-ciel', 'Rainbow'), (g, pts, d, k) => ['#ff3b3b', '#ff9a1e', '#ffe14a', '#3ed16a', '#36a9ff', '#5b5cff', '#b34cff'].forEach((c, i) => ribbon(g, pts, 18, -6.3 + i * 2.1, 2.2, c, k))],
-    ['sparks', L('Étincelles dorées', 'Golden sparks'), (g, pts, d, k) => {
-      for (let j = 0; j < 60; j++) { const t = Math.random() ** 1.3, [x, y] = off(along(pts, t), 19, (Math.random() - .5) * (6 + t * 30));
-        g.globalAlpha = k * (1 - t * .85); g.fillStyle = Math.random() < .5 ? '#f1c22e' : '#ffe9a0'; disc(g, x, y, (1 - t) * 1.3 + .25); }
-      g.globalAlpha = 1; }],
-    ['smoke', L('Fumée', 'Smoke'), (g, pts, d, k) => { each(pts, 1, (q, t, id) => { const [x, y] = off(q, 22, (hash(id, 0) - .5) * 5 * (1 + t * 3));
-      g.globalAlpha = k * (1 - t) * .34; g.fillStyle = id % 2 ? '#e6e9ee' : '#b9bec7'; disc(g, x, y, 2.4 + t * 10); }); g.globalAlpha = 1; }],
-    ['bubbles', L('Bulles', 'Bubbles'), (g, pts, d, k) => { g.lineWidth = .7; each(pts, 1, (q, t, id) => { const [x, y] = off(q, 22, (hash(id, 0) - .5) * (4 + t * 34)), r = 1.8 + hash(id, 1) * 4.2 * (1 - t * .4);
-      g.globalAlpha = k * (1 - t) ** 1.1; g.strokeStyle = '#bfe8ff'; g.fillStyle = 'rgba(160,220,255,.16)'; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill(); g.stroke();
-      g.fillStyle = '#ffffff'; disc(g, x - r * .35, y - r * .35, r * .22); }); g.globalAlpha = 1; }],
-    ['pixels', L('Pixels', 'Pixels'), (g, pts, d, k) => { each(pts, 1, (q, t, id) => { const [x, y] = off(q, 20, (hash(id, 0) - .5) * (4 + t * 24)), sz = (1 - t) * 2.4 + 1.1;
-      g.globalAlpha = k * (1 - t) ** 1.1; g.fillStyle = hash(id, 1) < .66 ? d.color : '#ffffff'; g.fillRect(Math.round(x / 2.2) * 2.2, Math.round(y / 2.2) * 2.2, sz, sz); }); g.globalAlpha = 1; }],
-    ['snow', L('Neige', 'Snow'), (g, pts, d, k) => { g.strokeStyle = '#ffffff'; g.lineCap = 'round'; each(pts, 1, (q, t, id) => { const [x, y] = off(q, 21, (hash(id, 0) - .5) * (6 + t * 34)), r = (1 - t * .6) * 2.3 + .5, rot = hash(id, 1) * 3;
-      g.globalAlpha = k * (1 - t) ** 1.1; g.lineWidth = .4 + (1 - t) * .5; g.beginPath(); for (let j = 0; j < 3; j++) { const a = rot + j * Math.PI / 3; g.moveTo(x - Math.cos(a) * r, y - Math.sin(a) * r); g.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r); } g.stroke(); }); g.globalAlpha = 1; }],
-    ['hearts', L('Cœurs', 'Hearts'), (g, pts, d, k) => { each(pts, 1, (q, t, id) => { const [x, y] = off(q, 22, (hash(id, 0) - .5) * (4 + t * 30)), r = (1 - t * .5) * 3.4 + .8;
-      g.globalAlpha = k * (1 - t) ** 1.05; g.fillStyle = id % 2 ? '#ff5fa2' : '#ff8fb8'; g.save(); g.translate(x, y); g.rotate((hash(id, 1) - .5) * 1.2);
-      g.beginPath(); g.moveTo(0, r * .9); g.bezierCurveTo(-r * 1.6, -r * .1, -r * .8, -r * 1.3, 0, -r * .45); g.bezierCurveTo(r * .8, -r * 1.3, r * 1.6, -r * .1, 0, r * .9); g.fill(); g.restore(); }); g.globalAlpha = 1; }],
-    ['notes', L('Notes de musique', 'Music notes'), (g, pts, d, k) => { g.save(); g.textAlign = 'center'; g.textBaseline = 'middle'; each(pts, 2, (q, t, id) => { const [x, y] = off(q, 24, (hash(id, 0) - .5) * (4 + t * 30)), r = (1 - t * .5) * 8 + 4;
-      g.globalAlpha = k * (1 - t) ** 1.05; g.fillStyle = ['#7cf0ff', '#ff8fd0', '#ffe14a'][(id >> 1) % 3]; g.font = '700 ' + r.toFixed(1) + 'px sans-serif'; g.fillText((id >> 1) % 2 ? '♪' : '♫', x, y); }); g.restore(); }],
-    ['laser', L('Laser', 'Laser'), (g, pts, d, k) => { for (const s of [-1, 1]) { band(g, pts, 19, s * 9.5, 3.4, '#ff2a3a', k * .4, .1, .8); band(g, pts, 19, s * 9.5, 1.5, '#ff5a66', k * .8, .1, .85); band(g, pts, 19, s * 9.5, .6, '#ffffff', k, .1, .9); } }],
-    ['comet', L('Comète', 'Comet'), (g, pts, d, k) => {
-      band(g, pts, 19, 0, 11, '#8fd0ff', k * .6, .9, .55); band(g, pts.slice(0, 17), 19, 0, 2.8, '#ffffff', k, .9, .55);
-      each(pts, 1, (q, t, id) => { if (hash(id, 2) > .8) return; const [x, y] = off(q, 20, (hash(id, 0) - .5) * (4 + t * 18)); g.globalAlpha = k * (1 - t) ** 1.2 * .95; g.fillStyle = id % 3 ? '#ffffff' : '#bfe6ff'; disc(g, x, y, (1 - t) * 1.1 + .25); });
-      const [x0, y0] = off(pts[0], 21, 0), gr = g.createRadialGradient(x0, y0, 0, x0, y0, 14); gr.addColorStop(0, 'rgba(255,255,255,' + (k * .95).toFixed(3) + ')'); gr.addColorStop(.4, 'rgba(150,210,255,' + (k * .5).toFixed(3) + ')'); gr.addColorStop(1, 'rgba(150,210,255,0)');
-      g.globalAlpha = 1; g.fillStyle = gr; g.fillRect(x0 - 14, y0 - 14, 28, 28); }],
-    ['ghost', L('Fantôme', 'Ghost'), (g, pts, d, k) => { // a see-through copy is left behind every few frames: it stays where it was, the car drives off, and it fades away
-      const drv = { ...d, trail: 'none', motif: d.motif === 'phantom' ? 'classic' : d.motif }, a0 = g.globalAlpha;
-      for (let i = pts.length - 1; i >= 3; i--) { const q = pts[i]; if (q[3] % 6) continue; const t = i / 40; g.globalAlpha = a0 * k * .5 * Math.min(1, (i - 2) / 6) * (1 - t) * (1 - t); drawCar({ x: q[0], y: q[1], a: q[2], steer: 0, drv }, g); }
-      g.globalAlpha = a0; }],
-    ['light', L('Ruban de lumière', 'Ribbon of light'), (g, pts, d, k) => { g.lineCap = 'round';
-      for (const [w, white] of [[8, 0], [2.4, 1]]) for (let i = 0; i < pts.length - 1; i++) { const t = i / (pts.length - 1), a = off(pts[i], 19, 0), b = off(pts[i + 1], 19, 0);
-        g.globalAlpha = k * (1 - t) ** 1.6; g.strokeStyle = white ? '#ffffff' : 'hsl(' + (300 - t * 220) + ',95%,62%)'; g.lineWidth = w * (1 - t * .8); g.beginPath(); g.moveTo(...a); g.lineTo(...b); g.stroke(); }
-      g.globalAlpha = 1; }],
-  ];
-})();
-const TRAIL_IDS = TRAILS.map(t => t[0]);
-const cleanTrail = t => TRAIL_IDS.includes(t) ? t : 'none';
-function drawTrail(c, g = ctx) { // the chosen effect shows above about 200 km/h, fading in with speed
-  const id = c.drv.trail; if (!id || id === 'none' || c.wreck > 0 || c.out) { c.hist = null; return; }
-  const sp = Math.hypot(c.vx, c.vy), h = c.hist || (c.hist = []);
-  if (G.state !== 'paused') { h.unshift([c.x, c.y, c.a, c.hid = (c.hid | 0) + 1]); if (h.length > 40) h.length = 40; }
-  const k = clamp((sp / MAXV - .5) / .25, 0, 1);
-  if (k > 0 && h.length > 3) TRAILS.find(t => t[0] === id)[2](g, id === 'ghost' ? h : h.slice(0, 24), c.drv, k); // only the ghost uses the longer history
-}
 // ---------- Driver level: every finished race gives XP, levels never end, motifs unlock on the way ----------
 const XP_KEY = 'monoplace-gp.xp';
 let XP = Math.max(0, Math.floor(+store.get(XP_KEY) || 0));
 const xpNeed = n => 20 + 10 * (n - 1); // XP to go from level n to n + 1: 20, 30, 40...
 function levelOf(xp) { let n = 1; while (xp >= xpNeed(n)) { xp -= xpNeed(n); n++; } return [n, xp, xpNeed(n)]; }
 // Skins come from chests.
-// Item keys: c<TEAMS index> colour, m:<id> livery, t:<id> speed effect. Free: colours 0-5, classic, none.
+// Item keys: c<TEAMS index>. Free: colours 0-5.
 const RARS = [['Commun', 'Common', '#b7bec9'], ['Rare', 'Rare', '#3ed16a'], ['Super rare', 'Super rare', '#4aa3ff'], ['Épique', 'Epic', '#b45cff'], ['Légendaire', 'Legendary', '#ffb81c']];
 const RAR_ITEMS = [
-  ['c6', 'c10', 'c9', 'c7', 'c8', 'c12', 'c13', 'c32', 'c33', 'm:stripe', 'm:twin', 'm:split', 'm:sash', 't:trail', 't:smoke', 't:bubbles', 't:pixels'],
-  ['c11', 'c17', 'c19', 'c21', 'c22', 'c23', 'c34', 'm:fade', 'm:bolt', 'm:hex', 't:fire', 't:snow', 't:hearts'],
-  ['c18', 'c24', 'c25', 'c27', 'c28', 'c29', 'c35', 'c36', 'c42', 'm:tiger', 'm:carbon', 'm:camo', 't:volt', 't:glow', 't:notes', 't:laser'],
-  ['c16', 'c20', 'c26', 'c15', 'c37', 'c38', 'c39', 't:light', 'm:flames', 'm:neon', 'm:tribal', 't:rainbow', 't:comet', 't:sparks'],
-  ['c14', 'c30', 'c31', 'c41', 'c40', 'm:phantom', 't:ghost']];
+  ['c6', 'c10', 'c9', 'c7', 'c8', 'c12', 'c13', 'c32', 'c33'],
+  ['c11', 'c17', 'c19', 'c21', 'c22', 'c23', 'c34', 'c46', 'c47'],
+  ['c18', 'c24', 'c25', 'c27', 'c28', 'c29', 'c35', 'c36', 'c42', 'c43', 'c44', 'c45'],
+  ['c16', 'c20', 'c26', 'c15', 'c37', 'c38', 'c39', 'c48', 'c49', 'c50'],
+  ['c14', 'c30', 'c31', 'c41', 'c40']];
 const RAR_OF = {}; RAR_ITEMS.forEach((l, r) => l.forEach(k => RAR_OF[k] = r));
 const ALL_KEYS = Object.keys(RAR_OF);
 const COIN_ODDS = [55, 28, 12, 4, 1], LVL_ODDS = [30, 35, 22, 10, 3], CHEST_COST = 100; // % by rarity; a level chest is better than a coin chest
 const INV_KEY = 'monoplace-gp.inv';
-// v:2 = chests era. Any older save (or none) starts again with no skins and one chest per level gained; coins are kept.
-let INV = (s => s && s.v === 2 && Array.isArray(s.own) ? { v: 2, own: s.own.filter(k => k in RAR_OF), coins: Math.max(0, s.coins | 0), chests: Math.max(0, s.chests | 0) }
-  : { v: 2, own: [], coins: Math.max(0, s && s.coins | 0), chests: levelOf(XP)[0] - 1 })(store.get(INV_KEY));
+// v:3: skins are colours only. An older save keeps its colours; a motif that became a colour is converted, any other motif or speed effect is paid back as one chest. No save: no skins and one chest per level gained.
+const MOTIF_COLOUR = { tiger: 43, camo: 44, carbon: 45, hex: 46, fade: 47, flames: 48, neon: 49, tribal: 50 };
+let INV = (s => {
+  const coins = Math.max(0, s && s.coins | 0);
+  if (s && s.v === 3 && Array.isArray(s.own)) return { v: 3, own: s.own.filter(k => k in RAR_OF), coins, chests: Math.max(0, s.chests | 0) };
+  if (s && s.v === 2 && Array.isArray(s.own)) {
+    let chests = Math.max(0, s.chests | 0); const own = [];
+    for (const k of s.own) { if (k[0] === 'c') own.push(k); else if (k[0] === 'm' && MOTIF_COLOUR[k.slice(2)]) own.push('c' + MOTIF_COLOUR[k.slice(2)]); else chests++; }
+    return { v: 3, own: [...new Set(own)].filter(k => k in RAR_OF), coins, chests };
+  }
+  return { v: 3, own: [], coins, chests: levelOf(XP)[0] - 1 };
+})(store.get(INV_KEY));
 const saveInv = () => store.set(INV_KEY, INV);
 saveInv();
 const owned = k => !(k in RAR_OF) || INV.own.includes(k);
-const colorOpen = i => owned('c' + i), motifOpen = id => owned('m:' + id), trailOpen = id => owned('t:' + id);
+const colorOpen = i => owned('c' + i);
 const rarOf = k => RAR_OF[k] == null ? -1 : RAR_OF[k];
 // Draws one rarity then one unowned item of it (rarities with nothing left are skipped). null when the collection is complete.
 function rollChest(odds) {
@@ -1928,8 +1852,7 @@ function openChest(kind) {
   if (kind === 'lvl') INV.chests--; else INV.coins -= CHEST_COST;
   saveInv(); return k;
 }
-function itemName(k) { return k[0] === 'c' ? TEAMS[+k.slice(1)].name : (k[0] === 'm' ? MOTIFS : TRAILS).find(m => m[0] === k.slice(2))[1]; }
-const itemKind = k => k[0] === 'c' ? L('Couleur', 'Colour') : k[0] === 'm' ? L('Motif', 'Livery') : L('Effet de vitesse', 'Speed effect');
+const itemName = k => TEAMS[+k.slice(1)].name;
 const POS_XP = [1, .8, .65, .5, .4, .3]; // share of the race's XP by finishing place
 // One race: bots < online < ranked; harder bots and longer races give more; a championship round gives a quarter more.
 function raceBase() {
@@ -1955,16 +1878,14 @@ function giveXp(pos) {
   if (after > before) { toast(L('Niveau ', 'Level ') + after + L(' ! Coffre gagné', ' ! Chest won'), 'p'); sfxChime([659, 784, 1047]); }
   refreshProfile();
 }
-const cleanMotif = m => MOTIF_IDS.includes(m) ? m : 'classic';
-const myMotif = m => motifOpen(cleanMotif(m)) ? cleanMotif(m) : 'classic';
-const myTrail = t => trailOpen(cleanTrail(t)) ? cleanTrail(t) : 'none';
 const LIVERY = new Map(); // motif + colours → painted canvas, so a car costs one drawImage per frame
 function livery(d) {
+  const mo = MOTIFS.find(m => m[0] === d.motif); if (!mo) return null; // an unknown livery from an older client or saved ghost is just not painted
   const key = d.motif + d.color + d.alt + d.helmet;
   let cv = LIVERY.get(key);
   if (!cv) {
     const S = 6; cv = document.createElement('canvas'); cv.width = 45 * S; cv.height = 18 * S;
-    const g = cv.getContext('2d'); g.scale(S, S); g.translate(20, 9); MOTIFS.find(m => m[0] === d.motif)[2](g, d);
+    const g = cv.getContext('2d'); g.scale(S, S); g.translate(20, 9); mo[2](g, d);
     LIVERY.set(key, cv);
   }
   return cv;
@@ -1972,7 +1893,7 @@ function livery(d) {
 
 const GHOST_ALPHA = 0.38; // time-trial ghosts and the Ghost livery
 function drawCar(c, g = ctx) {
-  const a0 = g.globalAlpha; if (c.drv.motif === 'phantom') g.globalAlpha = a0 * GHOST_ALPHA;
+  const a0 = g.globalAlpha;
   const d = c.drv, dm = c.dmg || 0, wreck = c.wreck > 0, s = c.pull > 0 ? 1 : -1, k = clamp((dm - 0.15) / 0.6, 0, 1); // s: the side that took the hits
   g.save(); g.translate(c.x + 4, c.y + 5); g.rotate(c.a); g.fillStyle = 'rgba(0,0,0,.3)'; g.fillRect(-22, -11, 44, 22); g.restore();
   g.save(); g.translate(c.x, c.y); g.rotate(c.a);
@@ -2046,11 +1967,10 @@ function render(dt) {
     if ((i + 1) * 3 + 2 >= d.length) continue;
     const gx = d[i * 3] + (d[i * 3 + 3] - d[i * 3]) * f, gy = d[i * 3 + 1] + (d[i * 3 + 4] - d[i * 3 + 1]) * f;
     ctx.globalAlpha = 0.38;
-    drawCar({ x: gx, y: gy, a: d[i * 3 + 2] + wrapA(d[i * 3 + 5] - d[i * 3 + 2]) * f, steer: 0, drv: gh.drv.motif === 'phantom' ? { ...gh.drv, motif: 'classic' } : gh.drv });
+    drawCar({ x: gx, y: gy, a: d[i * 3 + 2] + wrapA(d[i * 3 + 5] - d[i * 3 + 2]) * f, steer: 0, drv: gh.drv });
     ctx.globalAlpha = 1;
     if (gh.label) { ctx.font = '700 15px "Barlow Semi Condensed", sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(244,245,247,.85)'; ctx.fillText(gh.label, gx, gy - 30); }
   }
-  for (const c of G.cars) if (c.drv.trail) drawTrail(c);
   for (const c of G.cars) if (c.x > x0 - 40 && c.x < x1 + 40 && c.y > y0 - 40 && c.y < y1 + 40) drawCar(c);
   if (G.sc && !G.sc.gone) {
     const sc = G.sc, blink = (performance.now() / 250 | 0) % 2;
@@ -2220,26 +2140,15 @@ function hud(dt) {
 }
 
 // ---------- Home, setup and track list ----------
-const ui = { sub: 'bots', mode: 'race', tid: 'lac', laps: 3, diff: 'normal', weather: 'dry', team: (t => colorOpen(t) ? t : 0)(Math.min(TEAMS.length - 1, Math.max(0, store.get('monoplace-gp.team') | 0))), champ: null, sort: 'pop', friends: false, motif: myMotif(store.get('monoplace-gp.motif')), trail: myTrail(store.get('monoplace-gp.trail')) };
+const ui = { sub: 'bots', mode: 'race', tid: 'lac', laps: 3, diff: 'normal', weather: 'dry', team: (t => colorOpen(t) ? t : 0)(Math.min(TEAMS.length - 1, Math.max(0, store.get('monoplace-gp.team') | 0))), champ: null, sort: 'pop', friends: false };
 const MODE_NAMES = { race: 'Grand Prix', champ: L('Championnat', 'Championship'), tt: L('Chrono', 'Time Trial') };
 const recTxt = id => { const r = records[id]; return r ? 'Record <b>' + fmt(r.lap) + '</b>' : 'Pas encore de record'; };
 
-$('motifs').innerHTML = [...MOTIFS].sort((a, b) => rarOf('m:' + a[0]) - rarOf('m:' + b[0])).map(([id, name]) => '<button type="button" data-k="motif" data-v="' + id + '"><canvas width="96" height="56" aria-hidden="true"></canvas><span>' + name + '</span><small></small></button>').join('');
-$('trails').innerHTML = [...TRAILS].sort((a, b) => rarOf('t:' + a[0]) - rarOf('t:' + b[0])).map(([id, name]) => '<button type="button" data-k="trail" data-v="' + id + '"><canvas width="120" height="56" aria-hidden="true"></canvas><span>' + name + '</span><small></small></button>').join('');
 const rarName = k => L(RARS[rarOf(k)][0], RARS[rarOf(k)][1]), rarCol = k => RARS[Math.max(0, rarOf(k))][2];
-function drawMotifs() {
-  document.querySelectorAll('#trails button').forEach(b => { const cv = b.firstChild, g = cv.getContext('2d'), id = b.dataset.v, open = trailOpen(id);
-    g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, cv.width, cv.height); g.setTransform(1.3, 0, 0, 1.3, 92, 28);
-    const pts = Array.from({ length: 24 }, (_, i) => [-i * 3.6, 0, 0, i + 1]), drv = { ...TEAMS[ui.team], motif: ui.motif, trail: id };
-    TRAILS.find(t => t[0] === id)[2](g, pts, drv, 1); drawCar({ x: 0, y: 0, a: 0, steer: 0, drv }, g);
-    b.disabled = !open; b.lastChild.textContent = open ? '' : '🔒 ' + rarName('t:' + id); b.style.setProperty('--rc', rarCol('t:' + id)); }); // previews in the chosen colour; locked items show their rarity
+function drawTeams() {
   document.querySelectorAll('#teams button').forEach(b => { const cv = b.firstChild, g = cv.getContext('2d'), i = +b.dataset.v, open = colorOpen(i); g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, cv.width, cv.height);
     b.disabled = !open; b.lastChild.textContent = open ? '' : '🔒 ' + rarName('c' + i); b.style.setProperty('--rc', rarCol('c' + i));
-    g.setTransform(1.75, 0, 0, 1.75, 46, 28); drawCar({ x: 0, y: 0, a: 0, steer: 0, drv: { ...TEAMS[i], motif: ui.motif } }, g); });
-  document.querySelectorAll('#motifs button').forEach(b => { const cv = b.firstChild, g = cv.getContext('2d'), open = motifOpen(b.dataset.v); g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, cv.width, cv.height);
-    b.disabled = !open; b.lastChild.textContent = open ? '' : '🔒 ' + rarName('m:' + b.dataset.v); b.style.setProperty('--rc', rarCol('m:' + b.dataset.v));
-    b.title = open ? '' : L('À trouver dans les coffres', 'Found in chests');
-    g.setTransform(1.75, 0, 0, 1.75, 46, 28); drawCar({ x: 0, y: 0, a: 0, steer: 0, drv: { ...TEAMS[ui.team], motif: b.dataset.v } }, g); });
+    g.setTransform(1.75, 0, 0, 1.75, 46, 28); drawCar({ x: 0, y: 0, a: 0, steer: 0, drv: TEAMS[i] }, g); });
 }
 $('teams').innerHTML = TEAMS.map((t, i) => [t, i]).sort((a, b) => rarOf('c' + a[1]) - rarOf('c' + b[1])).map(([t, i]) => '<button type="button" data-k="team" data-v="' + i + '"><canvas width="96" height="56" aria-hidden="true"></canvas><span>' + t.name + '</span><small></small></button>').join('');
 // Championship circuits: four rounds, each one picked among the official circuits (kept on this device; the host's choice is what guests play).
@@ -2368,7 +2277,7 @@ $('trackSearch').addEventListener('input', renderTrackList);
 
 function refreshSetup() {
   document.querySelectorAll('[data-k]').forEach(b => b.setAttribute('aria-pressed', String(ui[b.dataset.k]) === b.dataset.v));
-  drawMotifs();
+  drawTeams();
   if (!findDef(ui.tid)) ui.tid = 'lac';
   const mode = ui.mode, champ = mode === 'champ', def = findDef(ui.tid), r = records[ui.tid];
   $('setupTitle').textContent = MODE_NAMES[mode];
@@ -2408,8 +2317,6 @@ document.querySelectorAll('[data-k]').forEach(b => b.addEventListener('click', (
   const k = b.dataset.k, v = b.dataset.v;
   ui[k] = k === 'laps' || k === 'team' ? +v : v;
   if (k === 'team') store.set('monoplace-gp.team', ui.team);
-  if (k === 'motif') store.set('monoplace-gp.motif', ui.motif);
-  if (k === 'trail') store.set('monoplace-gp.trail', ui.trail);
   refreshSetup();
 }));
 
@@ -2632,7 +2539,7 @@ const isPlayerPeer = p => p.kind === 'viewer' && (p.presence.role === 'host' || 
 // A game is a star: the host owns the PeerJS id of the game's name and relays everyone's presence to every guest.
 // It mimics the parts of the room capability the game uses (peers, presence, join, leave).
 const P2P_PREFIX = 'monoplace-gp-v1-'; // the names every version so far has used: old and new pages still find each other
-const VERSION = 72; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
+const VERSION = 73; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
 // Relay for players whose networks refuse direct connections: turn.js, next to the page, holds the owner's own TURN account.
 const RELAY = window.TURN_CONFIG && TURN_CONFIG.username && TURN_CONFIG.credential ? TURN_CONFIG : null;
 const PEER_OPTS = RELAY ? { debug: 0, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, RELAY] } } : { debug: 0 };
@@ -2771,7 +2678,7 @@ async function hostGame(pub, fixed, rankedWanted) {
   try { net.room = await ROOM.join(name, { host: true }); }
   catch (e) { if (e && e.code === 'taken' && fixed) { NET = null; return false; } lobbyFail(NETMSG[e && e.code] || 'Impossible de créer la partie pour le moment. Réessayez dans un instant.', e && e.code); return true; }
   if (NET !== net) { net.room.leave().catch(() => {}); return true; }
-  net.room.presence({ role: 'host', team: ui.team, motif: ui.motif, trail: ui.trail, nick: myNick(), game: net.cfg, ...(ROOM.p2p ? { rk: rankOwn(), lv: lvOwn() } : {}) }).catch(() => {});
+  net.room.presence({ role: 'host', team: ui.team, nick: myNick(), game: net.cfg, ...(ROOM.p2p ? { rk: rankOwn(), lv: lvOwn() } : {}) }).catch(() => {});
   ROOM.presence({ st: 'host', g: name, open: pub, ranked, n: 1 }).catch(() => {});
   if (!pub) location.hash = 'partie-' + code;
   hubGame();
@@ -2786,7 +2693,7 @@ async function joinGame(name, probe) {
   try { net.room = await (probe && ROOM.p2p ? ROOM.join(name, { wait: 12000 }) : ROOM.join(name)); }
   catch (e) { lastJoinErr = e && e.code; if (probe) { NET = null; return false; } lobbyFail(lastJoinErr === 'not_found' ? 'Cette partie n’existe plus, ou le code est faux : vérifiez-le auprès de votre ami.' : NETMSG[lastJoinErr] || 'Impossible de rejoindre cette partie.', lastJoinErr); return false; }
   if (NET !== net) { net.room.leave().catch(() => {}); return false; }
-  net.room.presence({ role: 'guest', team: ui.team, motif: ui.motif, trail: ui.trail, nick: myNick(), ...(ROOM.p2p ? { rk: rankOwn(), lv: lvOwn() } : {}) }).catch(() => {});
+  net.room.presence({ role: 'guest', team: ui.team, nick: myNick(), ...(ROOM.p2p ? { rk: rankOwn(), lv: lvOwn() } : {}) }).catch(() => {});
   ROOM.presence({ st: 'play', g: name, open: null, n: null }).catch(() => {});
   if (probe) { // a public slot: stay only if its game is still waiting for players
     let host = null;
@@ -2944,7 +2851,7 @@ function hostStart() {
     let t = clamp(p.presence.team | 0, 0, TEAMS.length - 1);
     if (usedT.has(t)) t = TEAMS.findIndex((_, x) => !usedT.has(x));
     usedT.add(t);
-    return { p: p.peer, by: typeof p.by === 'string' ? p.by : null, nick: cleanNick(p.presence.nick), t, m: cleanMotif(p.presence.motif), tr: cleanTrail(p.presence.trail), s: i + botT.filter(b => b < qTime(p)).length };
+    return { p: p.peer, by: typeof p.by === 'string' ? p.by : null, nick: cleanNick(p.presence.nick), t, s: i + botT.filter(b => b < qTime(p)).length };
   });
   net.cfg = { ...net.cfg, state: 'go', seq: Date.now() % 1e9, slots, bots: null }; net.qAt = 0;
   net.closed = true; hubGame();
@@ -2997,7 +2904,7 @@ function startOnline(g) {
   stopLobbyTick();
   const T = trackFromPayload(g.track), me = selfPeer(NET.room);
   const slots = (Array.isArray(g.slots) ? g.slots : []).filter(s => s && typeof s.p === 'string' && Number.isInteger(s.s) && s.s >= 0 && s.s < 6)
-    .map(s => ({ p: s.p, by: typeof s.by === 'string' ? s.by : null, nick: cleanNick(s.nick), s: s.s, t: clamp(s.t | 0, 0, TEAMS.length - 1), m: cleanMotif(s.m), tr: cleanTrail(s.tr) })).slice(0, 6);
+    .map(s => ({ p: s.p, by: typeof s.by === 'string' ? s.by : null, nick: cleanNick(s.nick), s: s.s, t: clamp(s.t | 0, 0, TEAMS.length - 1) })).slice(0, 6);
   if (!T || !slots.some(s => s.p === me)) return lobbyFail('Cette course ne peut pas être chargée.');
   startSession({ mode: 'race', T, laps: [3, 5, 10].includes(g.laps) ? g.laps : 3, diff: DIFF[g.diff] ? g.diff : 'normal', rain: g.rain === true,
     hold: clamp(+g.hold || 1, 0.4, 1.5), team: 0, online: { slots, me, host: NET.host, ranked: g.ranked === true } });
@@ -3625,7 +3532,7 @@ function refreshProfile() {
   $('profLvl').textContent = L('Niv. ', 'Lv ') + n + (INV.chests > 0 || INV.coins >= CHEST_COST ? ' 🎁' : ''); $('pfLvl').textContent = L('Niveau ', 'Level ') + n;
   $('pfXp').textContent = have + ' / ' + need + ' XP'; $('pfBar').style.width = (have / need * 100).toFixed(1) + '%';
   $('pfInv').textContent = '🪙 ' + INV.coins + ' ' + L('pièces', 'coins') + ' · 🎁 ' + INV.chests + ' ' + L('coffre(s) de niveau', 'level chest(s)') + ' · ' + L('Collection ', 'Collection ') + INV.own.length + '/' + ALL_KEYS.length;
-  drawMotifs();
+  drawTeams();
 }
 $('nick').addEventListener('change', () => { $('nick').value = myNick(); store.set('monoplace-gp.nick', myNick()); refreshProfile(); if (hub) hub.share(); });
 // A chosen photo is cut to a 160 px square and kept on this device only.
@@ -3654,11 +3561,8 @@ function chestUi() {
   $('chOdds').textContent = RARS.map(r => L(r[0], r[1])).join(' / ') + ' — ' + L('coffre de niveau : ', 'level chest: ') + pct(LVL_ODDS) + ' · ' + L('coffre de pièces : ', 'coin chest: ') + pct(COIN_ODDS) + (full ? ' — ' + L('Collection complète !', 'Collection complete!') : '');
 }
 function previewItem(cv, k) {
-  const g = cv.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, cv.width, cv.height);
-  const drv = { ...TEAMS[k[0] === 'c' ? +k.slice(1) : ui.team], motif: k[0] === 'm' ? k.slice(2) : 'classic', trail: k[0] === 't' ? k.slice(2) : 'none' };
-  if (k[0] === 't') { g.setTransform(2.4, 0, 0, 2.4, cv.width * .72, cv.height / 2); TRAILS.find(t => t[0] === drv.trail)[2](g, Array.from({ length: 24 }, (_, i) => [-i * 3.6, 0, 0, i + 1]), drv, 1); }
-  else g.setTransform(3.2, 0, 0, 3.2, cv.width / 2, cv.height / 2);
-  drawCar({ x: 0, y: 0, a: 0, steer: 0, drv }, g);
+  const g = cv.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, cv.width, cv.height); g.setTransform(3.2, 0, 0, 3.2, cv.width / 2, cv.height / 2);
+  drawCar({ x: 0, y: 0, a: 0, steer: 0, drv: TEAMS[+k.slice(1)] }, g);
 }
 function doOpen(kind) {
   if (chestBusy) return;
@@ -3669,7 +3573,7 @@ function doOpen(kind) {
   setTimeout(() => {
     chestBusy = false; chestItem = k; const r = RARS[rarOf(k)];
     box.style.setProperty('--rc', r[2]);
-    box.innerHTML = '<canvas width="240" height="110" aria-hidden="true"></canvas><div class="rar" style="color:' + r[2] + '">' + esc(L(r[0], r[1])) + '</div><b>' + esc(itemName(k)) + '</b><span class="note">' + esc(itemKind(k)) + ' · ' + L('Nouveau !', 'New!') + '</span>';
+    box.innerHTML = '<canvas width="240" height="110" aria-hidden="true"></canvas><div class="rar" style="color:' + r[2] + '">' + esc(L(r[0], r[1])) + '</div><b>' + esc(itemName(k)) + '</b><span class="note">' + L('Nouveau !', 'New!') + '</span>';
     previewItem(box.firstChild, k); sfxChime(rarOf(k) >= 3 ? [659, 784, 1047, 1319] : [659, 784]);
     $('chEquip').hidden = false; chestUi(); refreshProfile();
   }, 900);
@@ -3679,7 +3583,7 @@ $('pfChest').addEventListener('click', () => openChestScreen('profile'));
 $('resChestBtn').addEventListener('click', () => openChestScreen('results'));
 $('chLvl').addEventListener('click', () => doOpen('lvl'));
 $('chCoin').addEventListener('click', () => doOpen('coin'));
-$('chEquip').addEventListener('click', () => { if (!chestItem) return; const k = chestItem, d = k[0] === 'c' ? ['team', k.slice(1)] : [k[0] === 'm' ? 'motif' : 'trail', k.slice(2)]; document.querySelector('[data-k="' + d[0] + '"][data-v="' + d[1] + '"]').click(); $('chEquip').hidden = true; toast(L('Équipé !', 'Equipped!'), 'p'); });
+$('chEquip').addEventListener('click', () => { if (!chestItem) return; document.querySelector('[data-k="team"][data-v="' + chestItem.slice(1) + '"]').click(); $('chEquip').hidden = true; toast(L('Équipé !', 'Equipped!'), 'p'); });
 $('chClose').addEventListener('click', () => { if (chestBusy) return; refreshProfile(); show(chestBack); if (chestBack === 'results') $('resChestBtn').hidden = INV.chests < 1 && INV.coins < CHEST_COST; });
 function refreshSettings() {
   document.querySelectorAll('[data-set]').forEach(b => b.setAttribute('aria-pressed', b.dataset.set === 'lang' ? b.dataset.v === LANG : b.dataset.set === 'sound' ? (b.dataset.v === 'on') === SND.on : b.dataset.v === UNIT));
@@ -3843,7 +3747,7 @@ const EN = new Map([
 ["Roulez juste derrière une voiture : l’aspiration vous fait gagner de la vitesse.", "Drive right behind a car: the slipstream makes you faster."],
 ["Restez sur la piste. Les murs abîment la voiture, et les pneus s’usent : plus ils sont usés, moins la voiture accroche et plus elle est lente.", "Stay on the track. Walls damage the car, and the tyres wear out: the more worn they are, the less the car grips and the slower it gets."],
 ["À partir de 5 tours, un arrêt au stand est obligatoire : entrez dans la voie des stands, à gauche de la ligne de départ, et arrêtez-vous dans votre garage.", "From 5 laps on, a pit stop is mandatory: enter the pit lane, to the left of the start line, and stop in your garage."],
-["Chaque course rapporte de l’XP et des pièces. Chaque niveau gagné donne un coffre, et 100 pièces en ouvrent un : ils cachent des couleurs, des motifs et des effets de vitesse de plus en plus rares.", "Every race gives XP and coins. Each level gives a chest, and 100 coins open one: they hide ever rarer colours, liveries and speed effects."],
+["Chaque course rapporte de l’XP et des pièces. Chaque niveau gagné donne un coffre, et 100 pièces en ouvrent un : ils cachent des couleurs de plus en plus rares.", "Every race gives XP and coins. Each level gives a chest, and 100 coins open one: they hide ever rarer colours."],
 ["« C’est parti ! » lance une course rapide : un tour contre des bots faciles. Ensuite, jouez contre les bots, en ligne, en partie classée ou entre amis. Vous pouvez revoir ce tutoriel à tout moment dans les réglages.", "“Let’s race!” starts a quick race: one lap against easy bots. After that, play against bots, online, ranked or with friends. You can watch this tutorial again at any time in the settings."],
 ["Aide", "Help"], ["Revoir le tutoriel", "Watch the tutorial again"],
 ["Grandes lignes droites dans le désert, avec un détour serré qui casse la vitesse.", "Big straights through the desert, with a tight detour that kills your speed."],
