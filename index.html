@@ -550,7 +550,6 @@ label.btn{cursor:pointer;display:inline-block}
     <div class="chbox" id="chBox" aria-live="polite"></div>
     <div class="actions">
       <button id="chLvl" class="go" type="button"></button>
-      <button id="chCoin" class="btn" type="button"></button>
       <button id="chEquip" class="btn" type="button" hidden>Équiper</button>
       <button id="chClose" class="btn" type="button">Fermer</button>
     </div>
@@ -597,7 +596,7 @@ label.btn{cursor:pointer;display:inline-block}
     </div>
     <div class="tstep" data-s="3" hidden>
       <h2>Progresser</h2>
-      <p>Chaque course rapporte de l’XP et des pièces. Chaque niveau gagné donne un coffre, et 100 pièces en ouvrent un : ils cachent des couleurs de plus en plus rares.</p>
+      <p>Chaque course rapporte de l’XP. Chaque niveau gagné donne un coffre qui cache une couleur, de plus en plus rare.</p>
       <p>« C’est parti ! » lance une course rapide : un tour contre des bots faciles. Ensuite, jouez contre les bots, en ligne, en partie classée ou entre amis. Vous pouvez revoir ce tutoriel à tout moment dans les réglages.</p>
     </div>
     <div class="dots" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
@@ -1022,6 +1021,7 @@ let DB = null, USER = null, ME = null, board = {}, boardState = 'off', myLaps = 
 let myGhosts = null, likes = new Map(), myVotes = new Set();
 const GHOST_CACHE = new Map();
 async function initCloud() {
+  if (window.MGP_SOLO) return; // solo build (CrazyGames): no online at all
   if (!window.claude || !window.claude.use) { if (window.Peer) { initRoom(p2pLobby()); refreshOthers(); hubStart(); } return; }
   const [db, user, room] = await Promise.all(['db', 'user', 'room'].map(n => window.claude.use(n)));
   USER = user; ME = user ? await user.id() : null;
@@ -1824,13 +1824,12 @@ const RAR_ITEMS = [
   ['c44', 'c51', 'c43', 'c47', 'c50', 'c42', 'c52']];
 const RAR_OF = {}; RAR_ITEMS.forEach((l, r) => l.forEach(k => RAR_OF[k] = r));
 const ALL_KEYS = Object.keys(RAR_OF);
-const COIN_ODDS = [0, 62, 27, 9, 2], LVL_ODDS = [0, 40, 36, 18, 6], CHEST_COST = 100; // % by rarity; a level chest is better than a coin chest
+const LVL_ODDS = [0, 40, 36, 18, 6]; // % by rarity
 const INV_KEY = 'monoplace-gp.inv';
-// v:6: everybody restarts with no skins and one chest per level gained (coins are kept) after the rarities were reordered. Already-converted saves are left alone.
+// v:6: everybody restarts with no skins and one chest per level gained after the rarities were reordered. Already-converted saves are left alone.
 let INV = (s => {
-  const coins = Math.max(0, s && s.coins | 0);
-  if (s && s.v === 6 && Array.isArray(s.own)) return { v: 6, own: s.own.filter(k => k in RAR_OF), coins, chests: Math.max(0, s.chests | 0) };
-  return { v: 6, own: [], coins, chests: levelOf(XP)[0] - 1 };
+  if (s && s.v === 6 && Array.isArray(s.own)) return { v: 6, own: s.own.filter(k => k in RAR_OF), chests: Math.max(0, s.chests | 0) };
+  return { v: 6, own: [], chests: levelOf(XP)[0] - 1 };
 })(store.get(INV_KEY));
 const saveInv = () => store.set(INV_KEY, INV);
 saveInv();
@@ -1844,11 +1843,10 @@ function rollChest(odds) {
   let x = Math.random() * tot, r = 0; while (x >= w[r]) { x -= w[r]; r++; }
   const k = left[r][Math.floor(Math.random() * left[r].length)]; INV.own.push(k); return k;
 }
-// kind 'lvl' spends a level chest, 'coin' spends 100 coins. Returns the item key, or null when nothing can be opened.
-function openChest(kind) {
-  if (INV.own.length >= ALL_KEYS.length || (kind === 'lvl' ? INV.chests < 1 : INV.coins < CHEST_COST)) return null;
-  const k = rollChest(kind === 'lvl' ? LVL_ODDS : COIN_ODDS);
-  if (kind === 'lvl') INV.chests--; else INV.coins -= CHEST_COST;
+// Spends a level chest. Returns the item key, or null when nothing can be opened.
+function openChest() {
+  if (INV.own.length >= ALL_KEYS.length || INV.chests < 1) return null;
+  const k = rollChest(LVL_ODDS); INV.chests--;
   saveInv(); return k;
 }
 const itemName = k => TEAMS[+k.slice(1)].name;
@@ -1865,9 +1863,9 @@ function giveXp(pos) {
   let add = pos >= 1 && pos <= 6 ? raceBase() * POS_XP[pos - 1] : 0; // a retired car gets nothing
   add = Math.round(add);
   const before = levelOf(XP)[0]; XP += add; store.set(XP_KEY, XP);
-  const after = levelOf(XP)[0], coins = Math.round(add * .5), chests = after - before; // coins follow the XP; each new level gives a chest
-  INV.coins += coins; INV.chests += chests; saveInv();
-  G.xp = { add, before, after, coins, chests };
+  const after = levelOf(XP)[0], chests = after - before; // each new level gives a chest
+  INV.chests += chests; saveInv();
+  G.xp = { add, before, after, chests };
   if (hub) hub.share();
   if (after > before) { toast(L('Niveau ', 'Level ') + after + L(' ! Coffre gagné', ' ! Chest won'), 'p'); sfxChime([659, 784, 1047]); }
   refreshProfile();
@@ -2026,8 +2024,8 @@ function renderResults() {
   if (G.xp && G.xp.none) $('resXp').textContent = txt('Pas d’XP sur les circuits créés par les joueurs : seuls les circuits officiels en donnent.', 'No XP on player-made circuits: only official circuits give XP.');
   else if (G.xp) { const x = G.xp, [n, have, need] = levelOf(XP);
     $('resXp').innerHTML = '<b>+' + x.add + ' XP</b>' + ' · ' + (x.after > x.before ? '<b class="up">' + txt('Niveau ', 'Level ') + n + ' !</b>' : txt('Niveau ', 'Level ') + n + ' · ' + have + ' / ' + need + ' XP') +
-      (x.coins ? ' · <b>+' + x.coins + ' ' + txt('pièces', 'coins') + '</b>' : '') + (x.chests ? '<br>🎁 ' + txt('Coffre de niveau gagné !', 'Level chest won!') : ''); }
-  $('resChestBtn').hidden = INV.chests < 1 && INV.coins < CHEST_COST;
+      (x.chests ? '<br>🎁 ' + txt('Coffre de niveau gagné !', 'Level chest won!') : ''); }
+  $('resChestBtn').hidden = INV.chests < 1;
   $('resChat').hidden = !G.online;
   if (G.online) collectSays();
   $('againTxt').textContent = G.online ? 'Rejouer ensemble' : 'Rejouer';
@@ -2234,7 +2232,7 @@ function refreshSetup() {
   $('editBtn').hidden = !mine.some(c => c.id === ui.tid);
   refreshLike();
   ui.friends = ui.sub === 'friends';
-  const subs = mode === 'tt' ? [] : [['bots', 'Contre les bots'], ['online', 'En ligne'], ['friends', 'Entre amis']];
+  const subs = mode === 'tt' || window.MGP_SOLO ? [] : [['bots', 'Contre les bots'], ['online', 'En ligne'], ['friends', 'Entre amis']];
   $('subSeg').hidden = !subs.length;
   $('subSeg').replaceChildren(...subs.map(([v, t]) => { const b = document.createElement('button'); b.type = 'button'; b.dataset.sub = v; b.textContent = L(t, { 'Contre les bots': 'Against bots', 'En ligne': 'Online', 'Entre amis': 'With friends' }[t]); b.setAttribute('aria-pressed', ui.sub === v); return b; }));
   const net = mode !== 'tt' && ui.sub !== 'bots';
@@ -2473,7 +2471,7 @@ const isPlayerPeer = p => p.kind === 'viewer' && (p.presence.role === 'host' || 
 // A game is a star: the host owns the PeerJS id of the game's name and relays everyone's presence to every guest.
 // It mimics the parts of the room capability the game uses (peers, presence, join, leave).
 const P2P_PREFIX = 'monoplace-gp-v1-'; // the names every version so far has used: old and new pages still find each other
-const VERSION = 91; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
+const VERSION = 92; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
 // Relay for players whose networks refuse direct connections: turn.js, next to the page, holds the owner's own TURN account.
 const RELAY = window.TURN_CONFIG && TURN_CONFIG.username && TURN_CONFIG.credential ? TURN_CONFIG : null;
 const PEER_OPTS = RELAY ? { debug: 0, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, RELAY] } } : { debug: 0 };
@@ -3447,10 +3445,10 @@ function refreshProfile() {
   $('pfInit').hidden = !!ph; $('pfInit').textContent = nm.slice(0, 1).toUpperCase();
   $('pfRemove').hidden = !ph; $('profName').textContent = nm;
   const [n, have, need] = levelOf(XP);
-  $('profLvl').textContent = L('Niv. ', 'Lv ') + n + (INV.chests > 0 || INV.coins >= CHEST_COST ? ' 🎁' : ''); $('pfLvl').textContent = L('Niveau ', 'Level ') + n;
+  $('profLvl').textContent = L('Niv. ', 'Lv ') + n + (INV.chests > 0 ? ' 🎁' : ''); $('pfLvl').textContent = L('Niveau ', 'Level ') + n;
   $('stWins').textContent = STATS.wins; $('stRaces').textContent = STATS.races; $('stKm').textContent = STATS.km.toFixed(STATS.km < 100 ? 1 : 0).replace('.', ',');
   $('pfXp').textContent = have + ' / ' + need + ' XP'; $('pfBar').style.width = (have / need * 100).toFixed(1) + '%';
-  $('pfInv').textContent = '🪙 ' + INV.coins + ' ' + L('pièces', 'coins') + ' · 🎁 ' + INV.chests + ' ' + L('coffre(s) de niveau', 'level chest(s)') + ' · ' + L('Collection ', 'Collection ') + INV.own.length + '/' + ALL_KEYS.length;
+  $('pfInv').textContent = '🎁 ' + INV.chests + ' ' + L('coffre(s) de niveau', 'level chest(s)') + ' · ' + L('Collection ', 'Collection ') + INV.own.length + '/' + ALL_KEYS.length;
   drawTeams();
 }
 $('nick').addEventListener('change', () => { $('nick').value = myNick(); store.set('monoplace-gp.nick', myNick()); refreshProfile(); if (hub) hub.share(); });
@@ -3474,10 +3472,9 @@ $('pfClose').addEventListener('click', () => show('home'));
 let chestBack = 'home', chestItem = null, chestBusy = false;
 function chestUi() {
   const full = INV.own.length >= ALL_KEYS.length, pct = o => o.join(' / ') + ' %';
-  $('chInfo').textContent = '🪙 ' + INV.coins + ' ' + L('pièces', 'coins') + ' · 🎁 ' + INV.chests + ' ' + L('coffre(s) de niveau', 'level chest(s)') + ' · ' + L('Collection ', 'Collection ') + INV.own.length + '/' + ALL_KEYS.length;
+  $('chInfo').textContent = '🎁 ' + INV.chests + ' ' + L('coffre(s) de niveau', 'level chest(s)') + ' · ' + L('Collection ', 'Collection ') + INV.own.length + '/' + ALL_KEYS.length;
   $('chLvl').textContent = '🎁 ' + L('Coffre de niveau', 'Level chest') + ' (' + INV.chests + ')'; $('chLvl').disabled = full || INV.chests < 1 || chestBusy;
-  $('chCoin').textContent = '🪙 ' + L('Coffre à ', 'Chest for ') + CHEST_COST + ' ' + L('pièces', 'coins'); $('chCoin').disabled = full || INV.coins < CHEST_COST || chestBusy;
-  const live = RARS.map((r, i) => i).filter(i => RAR_ITEMS[i].length); $('chOdds').textContent = live.map(i => L(RARS[i][0], RARS[i][1])).join(' / ') + ' — ' + L('coffre de niveau : ', 'level chest: ') + pct(LVL_ODDS.filter((_, i) => live.includes(i))) + ' · ' + L('coffre de pièces : ', 'coin chest: ') + pct(COIN_ODDS.filter((_, i) => live.includes(i))) + (full ? ' — ' + L('Collection complète !', 'Collection complete!') : '');
+  const live = RARS.map((r, i) => i).filter(i => RAR_ITEMS[i].length); $('chOdds').textContent = live.map(i => L(RARS[i][0], RARS[i][1])).join(' / ') + ' — ' + L('coffre de niveau : ', 'level chest: ') + pct(LVL_ODDS.filter((_, i) => live.includes(i))) + (full ? ' — ' + L('Collection complète !', 'Collection complete!') : '');
 }
 function previewItem(cv, k) {
   const g = cv.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, cv.width, cv.height); g.setTransform(3.2, 0, 0, 3.2, cv.width / 2, cv.height / 2);
@@ -3501,9 +3498,8 @@ function openChestScreen(back) { chestBack = back; chestItem = null; $('chEquip'
 $('pfChest').addEventListener('click', () => openChestScreen('profile'));
 $('resChestBtn').addEventListener('click', () => openChestScreen('results'));
 $('chLvl').addEventListener('click', () => doOpen('lvl'));
-$('chCoin').addEventListener('click', () => doOpen('coin'));
 $('chEquip').addEventListener('click', () => { if (!chestItem) return; document.querySelector('[data-k="team"][data-v="' + chestItem.slice(1) + '"]').click(); $('chEquip').hidden = true; toast(L('Équipé !', 'Equipped!'), 'p'); });
-$('chClose').addEventListener('click', () => { if (chestBusy) return; refreshProfile(); show(chestBack); if (chestBack === 'results') $('resChestBtn').hidden = INV.chests < 1 && INV.coins < CHEST_COST; });
+$('chClose').addEventListener('click', () => { if (chestBusy) return; refreshProfile(); show(chestBack); if (chestBack === 'results') $('resChestBtn').hidden = INV.chests < 1; });
 function refreshSettings() {
   document.querySelectorAll('[data-set]').forEach(b => b.setAttribute('aria-pressed', b.dataset.set === 'lang' ? b.dataset.v === LANG : b.dataset.set === 'sound' ? (b.dataset.v === 'on') === SND.on : b.dataset.v === UNIT));
   $('volume').value = SND.vol;
@@ -3665,7 +3661,7 @@ const EN = new Map([
 ["Roulez juste derrière une voiture : l’aspiration vous fait gagner de la vitesse.", "Drive right behind a car: the slipstream makes you faster."],
 ["Restez sur la piste. Les murs abîment la voiture, et les pneus s’usent : plus ils sont usés, moins la voiture accroche et plus elle est lente.", "Stay on the track. Walls damage the car, and the tyres wear out: the more worn they are, the less the car grips and the slower it gets."],
 ["À partir de 5 tours, un arrêt au stand est obligatoire : entrez dans la voie des stands, à gauche de la ligne de départ, et arrêtez-vous dans votre garage.", "From 5 laps on, a pit stop is mandatory: enter the pit lane, to the left of the start line, and stop in your garage."],
-["Chaque course rapporte de l’XP et des pièces. Chaque niveau gagné donne un coffre, et 100 pièces en ouvrent un : ils cachent des couleurs de plus en plus rares.", "Every race gives XP and coins. Each level gives a chest, and 100 coins open one: they hide ever rarer colours."],
+["Chaque course rapporte de l’XP. Chaque niveau gagné donne un coffre qui cache une couleur, de plus en plus rare.", "Every race gives XP. Each level gives a chest that hides a colour, ever rarer."],
 ["« C’est parti ! » lance une course rapide : un tour contre des bots faciles. Ensuite, jouez contre les bots, en ligne, en partie classée ou entre amis. Vous pouvez revoir ce tutoriel à tout moment dans les réglages.", "“Let’s race!” starts a quick race: one lap against easy bots. After that, play against bots, online, ranked or with friends. You can watch this tutorial again at any time in the settings."],
 ["Aide", "Help"], ["Revoir le tutoriel", "Watch the tutorial again"],
 ["Une longue descente rectiligne, puis une succession d’esses et de virages serrés dans le sable.", "A long straight descent, then a run of esses and tight turns in the sand."],
