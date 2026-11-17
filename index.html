@@ -215,10 +215,6 @@ h1 span{color:var(--red)}
 .rp-cap b{font:800 clamp(24px,4vw,44px)/1 var(--f-display);text-transform:uppercase;font-style:italic}.rp-cap span{font:700 16px/1.2 var(--f-body);color:#e6e9ef}
 .rp-bar{position:absolute;left:16px;right:16px;bottom:16px;display:flex;gap:8px;align-items:center;pointer-events:auto;background:rgba(8,10,14,.82);padding:10px}
 .rp-bar input{flex:1;min-width:60px}.rp-bar .rpsp[aria-pressed="true"]{background:var(--panel-sel);color:var(--fg)}
-.boost{position:absolute;left:50%;bottom:76px;transform:translateX(-50%);width:min(240px,60vw);height:20px;background:rgba(8,10,14,.75);box-shadow:inset 0 0 0 1px rgba(255,255,255,.2);overflow:hidden}
-.boost i{position:absolute;inset:0 auto 0 0;width:0;background:#3a7bd5;transition:width .1s linear}.boost.on i{background:#ff8a1e}.boost.ready i{background:#2ee66a}
-.boost span{position:relative;display:block;text-align:center;font:800 12px/20px var(--f-display);letter-spacing:.14em;text-shadow:0 1px 3px #000}
-.tb.boost{position:static;transform:none;width:auto;height:auto;background:none;overflow:visible}
 .lvlb{margin-left:8px;padding:2px 6px;background:var(--yellow);color:var(--ink);font:800 13px/1 var(--f-display)}
 .xpline{margin:0;color:var(--muted)}
 .xpline b{color:var(--yellow);font-weight:700}
@@ -379,11 +375,10 @@ label.btn{cursor:pointer;display:inline-block}
     <div id="lights" aria-hidden="true" hidden><i></i><i></i><i></i><i></i><i></i></div>
     <div id="toast" role="status"></div>
     <div id="tag" hidden></div>
-    <div id="boost" class="boost" aria-label="Boost"><i id="boostFill"></i><span id="boostTxt">BOOST</span></div>
-    <div class="speedo"><div class="v"><b id="spd" class="num">0</b><span class="lbl" id="spdUnit">km/h</span></div><div class="gear" id="gear">N</div></div>
+        <div class="speedo"><div class="v"><b id="spd" class="num">0</b><span class="lbl" id="spdUnit">km/h</span></div><div class="gear" id="gear">N</div></div>
     <div id="touch">
       <div><button class="tb" data-key="left" type="button" aria-label="Tourner à gauche">◀</button><button class="tb" data-key="right" type="button" aria-label="Tourner à droite">▶</button></div>
-      <div><button class="tb boost" data-key="boost" type="button">BOOST</button><button class="tb" data-key="brake" type="button">FREIN</button><button class="tb gas" data-key="gas" type="button">GAZ</button></div>
+      <div><button class="tb" data-key="brake" type="button">FREIN</button><button class="tb gas" data-key="gas" type="button">GAZ</button></div>
     </div>
   </div>
 </div>
@@ -467,7 +462,6 @@ label.btn{cursor:pointer;display:inline-block}
       <dt><kbd>↑</kbd><kbd>Z</kbd></dt><dd>Accélérer</dd>
       <dt><kbd>↓</kbd><kbd>S</kbd></dt><dd>Freiner, puis marche arrière</dd>
       <dt><kbd>←</kbd><kbd>→</kbd><kbd>Q</kbd><kbd>D</kbd></dt><dd>Diriger</dd>
-      <dt><kbd>Espace</kbd><kbd>Maj</kbd></dt><dd>Boost : une poussée de 2 secondes, prête toutes les 20 secondes</dd>
       <dt><kbd>Échap</kbd></dt><dd>Pause</dd>
       <dt><kbd>M</kbd></dt><dd>Couper ou remettre le son</dd>
     </dl>
@@ -1226,13 +1220,12 @@ function makeCar(T, slot, drv, isPlayer, skill, errEvery) {
   return { x: g.x, y: g.y, a: g.a, vx: 0, vy: 0, steer: 0, inSteer: 0, thr: 0, brk: 0, idx: g.i, off: 24, lat: 0, pz: false, dist, slot,
     lap: 0, passed: Math.floor(dist / (T.N / NSPLIT)), sec: Math.floor(dist / (T.N / 3)), splits: [], lapStart: 0, secStart: 0,
     cur: [null, null, null], curCls: ['', '', ''], last: null, lastCls: '', best: null, fin: false, finT: 0, finLap: 0, finPassed: 0, pen: 0, hits: 0, dmg: 0, pull: 0, scCap: 0,
-    tyre: 1, boost: 0, boostCd: 6, tow: 0, service: 0, pitted: false, pitLap: -1, box: slot, pitAsph: false, wrongBox: false, wl: new Float32Array(4), wlOk: false, remote: false, bot: false,
+    tyre: 1, tow: 0, service: 0, pitted: false, pitLap: -1, box: slot, pitAsph: false, wrongBox: false, wl: new Float32Array(4), wlOk: false, remote: false, bot: false,
     drv, isPlayer, auto: !isPlayer, ai: { skill, off: 0, stuck: 0, rev: 0, err: 0, errEvery, errIn: errEvery * (0.5 + Math.random()), form: 1, pit: 0, ...startFlaw() } };
 }
 
 let G = null;
-const keys = { gas: false, brake: false, left: false, right: false, boost: false };
-const BOOST_T = 2.2, BOOST_CD = 20; // a boost lasts 2.2 s and is ready again 20 s after it started
+const keys = { gas: false, brake: false, left: false, right: false };
 const tq = []; let toastT = 0;
 const toast = (msg, cls) => { tq.push([msg, cls || '']); if (cls === 'p') sfxChime([784, 1175, 1568]); else if (cls === 'g') sfxChime([659, 988]); };
 const SKN = 3000, skids = new Float32Array(SKN * 4); let skidI = 0, skidC = 0;
@@ -1330,7 +1323,6 @@ function botDrive(c) {
   const e = Math.min(vt, cap) - v;
   c.thr = e > 0 ? clamp(e / 30, 0.25, 1) : 0;
   c.brk = e < -10 ? clamp(-e / 90, 0.15, 1) : 0;
-  if (G.mode === 'race' && !G.attract && G.t > 8 && v > MAXV * .55 && T.prof[(c.idx + 40) % N] > MAXV * .85 && Math.random() < .004) useBoost(c); // bots boost on a fast stretch
   if (G.mode === 'race' && !G.attract && G.t < ai.react + 2) { if (G.t < ai.react) { c.thr = 0; c.brk = 0; } else c.thr *= ai.launch; } // the start of the race only
 }
 
@@ -1342,17 +1334,11 @@ function falseStart(c) {
   if (G.mode === 'tt') c.fsPen = FS_PEN; else c.pen += FS_PEN;
   toast(G.mode === 'tt' ? 'Faux départ · +5 s sur ce tour' : 'Faux départ · +5 s', 'r'); sfxBeep(200);
 }
-function useBoost(c) {
-  if (G.state !== 'race' || c.boost > 0 || c.boostCd > 0 || c.wreck > 0 || c.service > 0 || c.fin) return;
-  c.boost = BOOST_T; c.boostCd = BOOST_CD;
-  if (c.isPlayer && !c.auto) sfxChime([330, 494, 740]);
-}
 function drive(c) {
   if (c.remote) return;
   if (G.state === 'countdown' && c.isPlayer && !c.auto && !c.fs && !G.attract && !G.sim && G.cd >= 4 && keys.gas) falseStart(c);
   if ((G.state === 'countdown' && !c.fs) || c.service > 0) { c.thr = 0; c.brk = 0; c.inSteer = 0; return; }
   if (c.auto) return botDrive(c);
-  if (keys.boost) useBoost(c);
   c.inSteer = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
   c.thr = keys.gas ? 1 : 0; c.brk = keys.brake ? 1 : 0;
 }
@@ -1483,12 +1469,10 @@ function physics(c) {
     return;
   }
   const T = G.T, fx = Math.cos(c.a), fy = Math.sin(c.a), grass = c.off > HW + 6 && !c.pitAsph, g = 0.3 + 0.7 * c.tyre; // worn tyres: much less grip in corners, longer braking, slower acceleration and a lower top speed
-  if (G.state === 'race') { if (c.boost > 0) c.boost = Math.max(0, c.boost - H); if (c.boostCd > 0) c.boostCd = Math.max(0, c.boostCd - H); }
-  const bst = c.boost > 0; if (bst && !c.brk) c.thr = 1; // a boost pushes at full throttle
   let vf = c.vx * fx + c.vy * fy, vl = -c.vx * fy + c.vy * fx;
   c.steer += clamp(clamp(c.inSteer + c.pull * c.dmg * 0.18, -1, 1) - c.steer, -H * 7, H * 7); // a broken wing pulls to its side
-  const top = grass ? MAXV * 0.42 : MAXV * (1 + 0.06 * c.tow) * (bst ? 1.18 : 1) * (1 - 0.12 * c.dmg) * (0.9 + 0.1 * c.tyre);
-  if (c.thr > 0) { if (vf < -2) vf = Math.min(0, vf + BRAKE * c.thr * H); else vf += ACC * c.thr * (grass ? .55 : 1) * (bst ? 2.3 : 1) * (0.72 + 0.28 * c.tyre) * (1 + .25 * c.tow) * Math.max(0, 1 - (vf / top) ** 2) * H; }
+  const top = grass ? MAXV * 0.42 : MAXV * (1 + 0.06 * c.tow) * (1 - 0.12 * c.dmg) * (0.9 + 0.1 * c.tyre);
+  if (c.thr > 0) { if (vf < -2) vf = Math.min(0, vf + BRAKE * c.thr * H); else vf += ACC * c.thr * (grass ? .55 : 1) * (0.72 + 0.28 * c.tyre) * (1 + .25 * c.tow) * Math.max(0, 1 - (vf / top) ** 2) * H; }
   if (c.brk > 0) { if (vf > 2) vf = Math.max(0, vf - BRAKE * c.brk * (grass ? .5 : 1) * g * H); else if (!c.thr) vf = Math.max(-150, vf - 280 * c.brk * H); }
   if (c.pz && vf > PIT_V) vf = Math.max(PIT_V, vf - BRAKE * 1.6 * H); // pit-lane speed limiter
   if (c.scCap && vf > c.scCap) vf = Math.max(c.scCap, vf - BRAKE * H); // safety-car pace
@@ -1907,7 +1891,6 @@ function drawCar(c, g = ctx) {
   const body = () => { g.beginPath(); for (const [px, py, w] of BODY) g.lineTo(px > 20 ? px - 3 * k : px, px > 20 ? s * 1.5 * k : py * s > 0 ? py * (1 - w * k) : py); g.closePath(); };
   g.fillStyle = wreck ? '#2a2a2d' : bodyFill(g, d); body(); g.fill();
   if (d.paint && !wreck) { g.save(); body(); g.clip(); g.drawImage(paintCanvas(d.paint), -21, -9, 46, 18); g.restore(); }
-  if (c.boost > 0 && !wreck) { const f = 16 + Math.random() * 9; g.fillStyle = 'rgba(255,140,30,.85)'; g.beginPath(); g.moveTo(-19, -4); g.lineTo(-19 - f, 0); g.lineTo(-19, 4); g.fill(); g.fillStyle = 'rgba(255,240,160,.95)'; g.beginPath(); g.moveTo(-19, -2); g.lineTo(-19 - f * .6, 0); g.lineTo(-19, 2); g.fill(); }
   if (k > 0.25 || wreck) { // exposed carbon and scratches on the hit side
     g.fillStyle = 'rgba(12,12,15,.6)'; g.beginPath(); g.ellipse(-4, s * 3.6, 4 + 3 * k, 1.2 + 1.4 * k, 0, 0, 7); g.fill();
     g.strokeStyle = 'rgba(12,12,15,.55)'; g.lineWidth = 0.8; g.beginPath(); g.moveTo(10, s * 1); g.lineTo(5, s * 2.6); g.moveTo(-9, s * 1.5); g.lineTo(-14, s * 2.2); g.stroke();
@@ -2085,8 +2068,6 @@ function hud(dt) {
   el.last.textContent = fmt(p.last); el.last.className = p.lastCls;
   el.best.textContent = fmt(p.best);
   const rec = records[T.def.id]; el.rec.textContent = rec ? fmt(rec.lap) : '—';
-  { const b = $('boost'), f = p.boost > 0 ? p.boost / BOOST_T : 1 - Math.min(1, p.boostCd / BOOST_CD);
-    b.className = 'boost' + (p.boost > 0 ? ' on' : p.boostCd <= 0 ? ' ready' : ''); $('boostFill').style.width = (f * 100).toFixed(0) + '%'; $('boostTxt').textContent = p.boost > 0 ? 'BOOST' : p.boostCd <= 0 ? L('BOOST · ESPACE', 'BOOST · SPACE') : 'BOOST'; }
   el.tyre.textContent = Math.round(p.tyre * 100) + ' %'; el.tyre.className = p.tyre > 0.6 ? 'g' : p.tyre > 0.35 ? 'y' : 'r';
   const hp = p.wreck > 0 || p.out ? 0 : Math.round((1 - p.dmg) * 100); // the whole car's condition
   el.wing.textContent = hp + ' %'; el.wing.className = hp >= 85 ? 'g' : hp >= 50 ? 'y' : 'r';
@@ -2492,7 +2473,7 @@ const isPlayerPeer = p => p.kind === 'viewer' && (p.presence.role === 'host' || 
 // A game is a star: the host owns the PeerJS id of the game's name and relays everyone's presence to every guest.
 // It mimics the parts of the room capability the game uses (peers, presence, join, leave).
 const P2P_PREFIX = 'monoplace-gp-v1-'; // the names every version so far has used: old and new pages still find each other
-const VERSION = 90; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
+const VERSION = 91; // shortcut: bumped by hand on each release, shown in the lobby so players can check they run the same page
 // Relay for players whose networks refuse direct connections: turn.js, next to the page, holds the owner's own TURN account.
 const RELAY = window.TURN_CONFIG && TURN_CONFIG.username && TURN_CONFIG.credential ? TURN_CONFIG : null;
 const PEER_OPTS = RELAY ? { debug: 0, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, RELAY] } } : { debug: 0 };
@@ -3646,7 +3627,7 @@ function sfxBeep(freq) { if (SND.ctx) tone(freq, SND.ctx.currentTime, 0.18, 0.22
 function sfxChime(notes) { if (!SND.ctx) return; const t = SND.ctx.currentTime; notes.forEach((f, i) => tone(f, t + i * 0.11, 0.35, 0.16, 'triangle')); }
 
 // ---------- Input ----------
-const KEYMAP = { ArrowUp: 'gas', KeyW: 'gas', ArrowDown: 'brake', KeyS: 'brake', ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right', Space: 'boost', ShiftLeft: 'boost', ShiftRight: 'boost' };
+const KEYMAP = { ArrowUp: 'gas', KeyW: 'gas', ArrowDown: 'brake', KeyS: 'brake', ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right' };
 addEventListener('keydown', e => {
   if (ED) {
     if (e.target.tagName === 'INPUT' && e.target.type === 'text') return;
@@ -3658,7 +3639,6 @@ addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT') return;
   const k = KEYMAP[e.code];
   if (k && !G.attract) { keys[k] = true; e.preventDefault(); }
-  if (k === 'boost' && !e.repeat && G.player && !G.attract && !G.player.auto) useBoost(G.player); // act on the press itself so a quick tap is never missed
   if (e.code === 'Escape' || e.code === 'KeyP') { if (!el.pause.hidden) resume(); else pause(); }
   if (e.code === 'KeyM') toggleSound();
   if (e.code === 'KeyF') toggleFull();
@@ -3796,7 +3776,7 @@ const EN = new Map([
 ["Réessayer", "Try again"],
 ["Quitter", "Leave"],
 ["Parties classées", "Ranked games"],
-["▶ Revoir la course", "▶ Watch the race again"], ["Statistiques", "Statistics"], ["Boost : une poussée de 2 secondes, prête toutes les 20 secondes", "Boost: a 2-second push, ready again every 20 seconds"], ["Victoires", "Wins"], ["Courses", "Races"], ["Kilomètres", "Kilometres"], ["Coffres", "Chests"], ["🎁 Ouvrir des coffres", "🎁 Open chests"], ["🎁 Ouvrir un coffre", "🎁 Open a chest"], ["Équiper", "Equip"], ["Les éléments grisés se trouvent dans les coffres : la couleur du cadre indique leur rareté.", "Greyed-out items are found in chests: the colour of the frame shows their rarity."], ["Contre les bots, en ligne ou entre amis.", "Against bots, online or with friends."], ["Compétition", "Competition"], ["Classé", "Ranked"], ["6 vrais joueurs, une qualification puis 5 tours. Gagnez des points au classement.", "6 real players, a qualifying lap then 5 laps. Earn ranking points."], ["Entrer en piste", "Hit the track"], ["Options", "Options"], ["Courses", "Races"], ["Façon de jouer", "How to play"], ["En ligne", "Online"], ["Chercher une partie en ligne", "Find an online game"], ["Si une partie ouverte existe, vous la rejoignez ; sinon la vôtre est créée avec ce circuit, ces tours et cette météo. Les places libres sont prises par des bots.", "If an open game exists you join it; otherwise yours is created with this circuit, these laps and this weather. Free places are filled by bots."], ["Créez la partie avec ce circuit, puis donnez le code à vos amis. Les places libres sont prises par des bots.", "Create the game with this circuit, then give the code to your friends. Free places are filled by bots."], ["6 pilotes · 5 tours", "6 drivers · 5 laps"], ["Chercher une partie classée", "Find a ranked game"], ["6 vrais pilotes, une qualification puis 5 tours, sans bots. Points de la 1re à la 6e place : 25, 18, 15, 12, 10, 8.", "6 real drivers, a qualifying lap then 5 laps, no bots. Points from 1st to 6th place: 25, 18, 15, 12, 10, 8."], ["Meilleurs tours", "Best laps"], ["Niveaux", "Levels"], ["Niveau", "Level"], ["Niv.", "Lv"], ["L’XP vient des courses sur les circuits officiels. Les niveaux se transmettent entre les joueurs qui se retrouvent en ligne.", "XP comes from races on the official circuits. Levels are passed between players who meet online."],
+["▶ Revoir la course", "▶ Watch the race again"], ["Statistiques", "Statistics"], ["Victoires", "Wins"], ["Courses", "Races"], ["Kilomètres", "Kilometres"], ["Coffres", "Chests"], ["🎁 Ouvrir des coffres", "🎁 Open chests"], ["🎁 Ouvrir un coffre", "🎁 Open a chest"], ["Équiper", "Equip"], ["Les éléments grisés se trouvent dans les coffres : la couleur du cadre indique leur rareté.", "Greyed-out items are found in chests: the colour of the frame shows their rarity."], ["Contre les bots, en ligne ou entre amis.", "Against bots, online or with friends."], ["Compétition", "Competition"], ["Classé", "Ranked"], ["6 vrais joueurs, une qualification puis 5 tours. Gagnez des points au classement.", "6 real players, a qualifying lap then 5 laps. Earn ranking points."], ["Entrer en piste", "Hit the track"], ["Options", "Options"], ["Courses", "Races"], ["Façon de jouer", "How to play"], ["En ligne", "Online"], ["Chercher une partie en ligne", "Find an online game"], ["Si une partie ouverte existe, vous la rejoignez ; sinon la vôtre est créée avec ce circuit, ces tours et cette météo. Les places libres sont prises par des bots.", "If an open game exists you join it; otherwise yours is created with this circuit, these laps and this weather. Free places are filled by bots."], ["Créez la partie avec ce circuit, puis donnez le code à vos amis. Les places libres sont prises par des bots.", "Create the game with this circuit, then give the code to your friends. Free places are filled by bots."], ["6 pilotes · 5 tours", "6 drivers · 5 laps"], ["Chercher une partie classée", "Find a ranked game"], ["6 vrais pilotes, une qualification puis 5 tours, sans bots. Points de la 1re à la 6e place : 25, 18, 15, 12, 10, 8.", "6 real drivers, a qualifying lap then 5 laps, no bots. Points from 1st to 6th place: 25, 18, 15, 12, 10, 8."], ["Meilleurs tours", "Best laps"], ["Niveaux", "Levels"], ["Niveau", "Level"], ["Niv.", "Lv"], ["L’XP vient des courses sur les circuits officiels. Les niveaux se transmettent entre les joueurs qui se retrouvent en ligne.", "XP comes from races on the official circuits. Levels are passed between players who meet online."],
 ["6 vrais pilotes, qualifs puis 5 tours, sans bots", "6 real drivers, qualifying then 5 laps, no bots"],
 ["Pilote", "Driver"],
 ["Courses", "Races"],
