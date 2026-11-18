@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tour de ruche 3D</title>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#cfe6f5;font-family:system-ui,sans-serif}
+  #info{position:fixed;left:16px;bottom:16px;color:#3a2a10;background:#fff8e0cc;padding:8px 12px;border-radius:8px;font-size:14px}
+</style>
+<script type="importmap">
+{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/"}}
+</script>
+</head>
+<body>
+<div id="info">Glisser pour tourner · molette / pincer pour zoomer</div>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xcfe6f5);
+scene.fog = new THREE.Fog(0xcfe6f5, 25, 60);
+
+const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.1, 200);
+camera.position.set(9, 7, 11);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 3.5, 0);
+controls.enableDamping = true;
+controls.maxPolarAngle = Math.PI * 0.49;
+controls.minDistance = 4; controls.maxDistance = 30;
+
+scene.add(new THREE.HemisphereLight(0xffffff, 0x88aa55, 0.9));
+const sun = new THREE.DirectionalLight(0xfff2d0, 1.6);
+sun.position.set(8, 14, 6);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -10, right: 10, top: 12, bottom: -4 });
+scene.add(sun);
+
+// Sol
+const ground = new THREE.Mesh(new THREE.CircleGeometry(40, 64), new THREE.MeshLambertMaterial({ color: 0x7fb24a }));
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+const wood = (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.85 });
+const hive = new THREE.Group();
+scene.add(hive);
+const add = (mesh, y) => { mesh.position.y = y; mesh.castShadow = mesh.receiveShadow = true; hive.add(mesh); return mesh; };
+
+// Socle
+add(new THREE.Mesh(new THREE.CylinderGeometry(2.1, 2.3, 0.4, 6), wood(0x6b4a2b)), 0.2);
+add(new THREE.Mesh(new THREE.CylinderGeometry(1.95, 1.95, 0.25, 6), wood(0x8a6236)), 0.52);
+
+// Étages hexagonaux empilés
+const R = 1.8, H = 1.1, FLOORS = 5;
+const tones = [0xe0b46a, 0xd9a85a, 0xe6bd78, 0xd29e52, 0xe3b770];
+let y = 0.65;
+const cellGeo = new THREE.CylinderGeometry(0.11, 0.11, 0.06, 6);
+cellGeo.rotateX(Math.PI / 2);
+const cellMat = new THREE.MeshStandardMaterial({ color: 0xf2a516, roughness: 0.35, metalness: 0.1, emissive: 0x3a2000 });
+const cells = [];
+for (let f = 0; f < FLOORS; f++) {
+  add(new THREE.Mesh(new THREE.CylinderGeometry(R, R, H, 6), wood(tones[f])), y + H / 2);
+  add(new THREE.Mesh(new THREE.CylinderGeometry(R + 0.06, R + 0.06, 0.07, 6), wood(0x9c6f3c)), y + H); // liteau
+  // Alvéoles de miel sur chaque face (apothème = R·cos30°)
+  for (let s = 0; s < 6; s++) {
+    const a = s * Math.PI / 3 + Math.PI / 6;
+    const ap = R * Math.cos(Math.PI / 6) + 0.02;
+    for (let r = 0; r < 3; r++) for (let c = -3; c <= 3; c++) {
+      if ((f + s + r + c) % 3 === 0) continue; // trous dans le motif
+      const u = (c + (r % 2) * 0.5) * 0.2;
+      if (Math.abs(u) > 0.62) continue;
+      cells.push({ a, ap, u, v: y + 0.3 + r * 0.19 });
+    }
+  }
+  y += H + 0.07;
+}
+const honey = new THREE.InstancedMesh(cellGeo, cellMat, cells.length);
+const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0);
+cells.forEach((c, i) => {
+  q.setFromAxisAngle(up, c.a);
+  const pos = new THREE.Vector3(c.u, c.v, c.ap).applyAxisAngle(up, c.a);
+  m4.compose(pos, q, new THREE.Vector3(1, 1, 1));
+  honey.setMatrixAt(i, m4);
+});
+honey.castShadow = true;
+hive.add(honey);
+
+// Entrée (trou d'envol) en bas, face avant
+const door = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.18, 0.1), new THREE.MeshBasicMaterial({ color: 0x1a0f05 }));
+door.position.set(0, 0.85, R * Math.cos(Math.PI / 6) + 0.02);
+hive.add(door);
+add(new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.05, 0.5), wood(0x8a6236)), 0.7).position.z = R * 0.95; // planche d'envol
+
+// Toit
+add(new THREE.Mesh(new THREE.CylinderGeometry(R + 0.3, R + 0.3, 0.15, 6), wood(0x7a3b22)), y + 0.07);
+add(new THREE.Mesh(new THREE.ConeGeometry(R + 0.35, 1.3, 6), wood(0x8e4528)), y + 0.8);
+add(new THREE.Mesh(new THREE.SphereGeometry(0.15, 12, 8), wood(0xf2a516)), y + 1.5);
+const TOP = y;
+
+// Abeilles
+const bee = () => {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.09, 10, 8), new THREE.MeshStandardMaterial({ color: 0xffc81e }));
+  body.scale.set(1, 1, 1.6);
+  const band = new THREE.Mesh(new THREE.CylinderGeometry(0.088, 0.088, 0.05, 10), new THREE.MeshStandardMaterial({ color: 0x111111 }));
+  band.rotation.x = Math.PI / 2;
+  const band2 = band.clone(); band2.position.z = -0.08; band.position.z = 0.02;
+  const wingMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.6, side: THREE.DoubleSide });
+  const wings = [-1, 1].map(sd => {
+    const w = new THREE.Mesh(new THREE.CircleGeometry(0.08, 10), wingMat);
+    w.geometry.translate(sd * 0.08, 0, 0);
+    w.rotation.x = -Math.PI / 2;
+    w.position.y = 0.07;
+    g.add(w);
+    return w;
+  });
+  g.add(body, band, band2);
+  g.userData = {
+    wings, r: 2.6 + Math.random() * 3.5, h: 0.8 + Math.random() * (TOP + 1),
+    sp: (0.4 + Math.random() * 0.6) * (Math.random() < 0.5 ? -1 : 1), ph: Math.random() * 6.28, bob: Math.random() * 6.28,
+  };
+  scene.add(g);
+  return g;
+};
+const bees = Array.from({ length: 40 }, bee);
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+const clock = new THREE.Clock();
+const prev = new THREE.Vector3();
+renderer.setAnimationLoop(() => {
+  const t = clock.getElapsedTime();
+  for (const b of bees) {
+    const d = b.userData, a = d.ph + t * d.sp;
+    prev.copy(b.position);
+    b.position.set(Math.cos(a) * d.r, d.h + Math.sin(t * 2 + d.bob) * 0.3, Math.sin(a) * d.r);
+    b.lookAt(prev.multiplyScalar(-1).addScaledVector(b.position, 2)); // regarde dans le sens du vol
+    const flap = Math.sin(t * 60 + d.bob) * 0.6;
+    d.wings[0].rotation.z = flap; d.wings[1].rotation.z = -flap;
+  }
+  controls.update();
+  renderer.render(scene, camera);
+});
+</script>
+</body>
+</html>
