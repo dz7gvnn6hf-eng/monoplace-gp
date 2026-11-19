@@ -17,7 +17,7 @@
 <script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js"}}</script>
 </head>
 <body>
-<div id="hud">Cibles détruites : <b id="score">0</b><br><span id="tankName"></span> <button id="swap" type="button">Changer de tank (T)</button><br><span id="help">ZQSD / WASD / flèches : rouler · Souris : viser · Clic ou Espace : tirer</span></div>
+<div id="hud">Cibles détruites : <b id="score">0</b><br><span id="tankName"></span> <button id="swap" type="button">Prendre le navire (T)</button><br><span id="help">W A S D ou flèches : avancer et tourner · Souris : viser · Clic ou Espace : tirer</span></div>
 <div class="stick" id="stickL"><i></i></div>
 <div class="stick" id="stickR"><i></i></div>
 <script type="module">
@@ -29,6 +29,7 @@ const SHELL_SPEED = 45, SHELL_LIFE = 1.4;
 const UP = new THREE.Vector3(0, 1, 0);
 const rnd = (a = 1) => (Math.random() - 0.5) * 2 * a;
 const smoothstep = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+const WATER = -1.5, LAKE_X = 0, LAKE_Z = 62;    // niveau de l'eau et centre du lac (au sud du départ)
 
 // ---------- relief ----------
 const hash = (x, z) => { const s = Math.sin(x * 127.1 + z * 311.7) * 43758.5453; return s - Math.floor(s); };
@@ -39,7 +40,9 @@ function noise(x, z) {                           // bruit de valeur 2D, 0..1
 }
 function groundY(x, z) {
   const n = noise(x / 38, z / 38) + noise(x / 17 + 50, z / 17) * 0.45 + noise(x / 7, z / 7 + 20) * 0.1;
-  return (n - 0.78) * 13 * smoothstep(12, 35, Math.hypot(x, z));  // plat autour du départ
+  const hills = (n - 0.78) * 13 * smoothstep(12, 35, Math.hypot(x, z));  // plat autour du départ
+  const shore = 34 + (noise(x / 14 + 7, z / 14 + 3) - 0.5) * 16;           // rive irrégulière
+  return hills - 9 * smoothstep(shore + 8, shore - 6, Math.hypot(x - LAKE_X, z - LAKE_Z));
 }
 const groundNormal = (x, z, out) => out.set(groundY(x - 0.5, z) - groundY(x + 0.5, z), 1, groundY(x, z - 0.5) - groundY(x, z + 0.5)).normalize();
 const dirtAt = (x, z, slope) => Math.min(1, smoothstep(0.6, 0.75, noise(x / 12 + 100, z / 12)) + slope * 1.5);  // 0 = herbe, 1 = terre
@@ -98,10 +101,10 @@ const tp = terrainGeo.attributes.position;
 for (let i = 0; i < tp.count; i++) tp.setY(i, groundY(tp.getX(i), tp.getZ(i)));
 terrainGeo.computeVertexNormals();
 const colors = new Float32Array(tp.count * 3), col = new THREE.Color();
-const grassA = new THREE.Color(0x4c7a2e), grassB = new THREE.Color(0x7aa443), dirtC = new THREE.Color(0x8a6a48);
+const grassA = new THREE.Color(0x4c7a2e), grassB = new THREE.Color(0x7aa443), dirtC = new THREE.Color(0x8a6a48), sandC = new THREE.Color(0xc2a874);
 for (let i = 0; i < tp.count; i++) {
   const x = tp.getX(i), z = tp.getZ(i), slope = 1 - terrainGeo.attributes.normal.getY(i);
-  col.copy(grassA).lerp(grassB, noise(x / 6, z / 6)).lerp(dirtC, dirtAt(x, z, slope));
+  col.copy(grassA).lerp(grassB, noise(x / 6, z / 6)).lerp(dirtC, dirtAt(x, z, slope)).lerp(sandC, smoothstep(WATER + 0.9, WATER - 0.2, tp.getY(i)));  // plage
   col.multiplyScalar(0.92 + tp.getY(i) * 0.015);  // creux un peu plus sombres
   col.toArray(colors, i * 3);
 }
@@ -109,6 +112,27 @@ terrainGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 const terrain = new THREE.Mesh(terrainGeo, new THREE.MeshStandardMaterial({ map: detailTex, vertexColors: true, roughness: 1 }));
 terrain.receiveShadow = true;
 scene.add(terrain);
+
+// eau : un plan à niveau fixe, les terres plus hautes le cachent ; rides qui défilent
+const waterCanvas = document.createElement('canvas');
+waterCanvas.width = waterCanvas.height = 256;
+const wc = waterCanvas.getContext('2d');
+wc.fillStyle = '#c4dbe6'; wc.fillRect(0, 0, 256, 256);
+wc.strokeStyle = 'rgba(255,255,255,.55)'; wc.lineWidth = 1.5;
+for (let i = 0; i < 220; i++) {
+  const x = Math.random() * 256, y = Math.random() * 256, w = 6 + Math.random() * 16;
+  for (const ox of [-256, 0, 256]) for (const oy of [-256, 0, 256]) { wc.beginPath(); wc.ellipse(x + ox, y + oy, w, w * 0.25, 0, Math.PI * 1.1, Math.PI * 1.9); wc.stroke(); }
+}
+const waterTex = new THREE.CanvasTexture(waterCanvas);
+waterTex.wrapS = waterTex.wrapT = THREE.RepeatWrapping;
+waterTex.repeat.set(WORLD / 12, WORLD / 12);
+waterTex.colorSpace = THREE.SRGBColorSpace;
+const water = new THREE.Mesh(new THREE.PlaneGeometry(WORLD, WORLD).rotateX(-Math.PI / 2),
+  new THREE.MeshStandardMaterial({ color: 0x3d87ab, map: waterTex, roughness: 0.25, metalness: 0.1, transparent: true, opacity: 0.86 }));
+water.position.y = WATER;
+water.receiveShadow = true;
+scene.add(water);
+const surfaceY = (x, z) => Math.max(groundY(x, z), WATER);
 
 // touffes d'herbe (une seule géométrie instanciée), écrasées par le tank
 const tuftGeo = (() => {
@@ -139,7 +163,7 @@ function placeTuft(i) {
 }
 while (tufts.length < TUFTS) {
   const x = rnd(HALF), z = rnd(HALF);
-  if (dirtAt(x, z, 1 - groundNormal(x, z, nrm).y) > 0.35) continue;
+  if (dirtAt(x, z, 1 - groundNormal(x, z, nrm).y) > 0.35 || groundY(x, z) < WATER + 0.5) continue;
   const i = tufts.length;
   tufts.push({ x, z, yaw: Math.random() * 6, s: 0.8 + Math.random() * 0.8, flat: false });
   placeTuft(i);
@@ -237,7 +261,7 @@ const lightMat = mat(0xfff3c4, { emissive: 0xfff0b0, emissiveIntensity: 0.6 });
 const newRig = (name, stats) => {
   const body = new THREE.Group();
   tilt.add(body);
-  return { name, body, treads: [], wheels: [], antennas: [], exhausts: [], ...stats };
+  return { name, body, kind: 'tank', arc: Math.PI, circles: [0], radius: 2, zoom: 1, smoke: 0.18, kick: 1.4, pos: new THREE.Vector3(), yaw: Math.PI, treads: [], wheels: [], antennas: [], exhausts: [], ...stats };
 };
 // chenille texturée + roues à rayons (on voit la roue tourner)
 function addTrack(rig, sx, { x, w, h, len, wheelX, n, r, rEnd, wheelMat, hubMat }) {
@@ -265,7 +289,7 @@ const addAntenna = (rig, parent, x, y, z, h) => {
 
 function buildHeavy() {
   const green = mat(0x55703d), darkGreen = mat(0x405a2f), steel = mat(0x5b605a, { metalness: 0.4 }), tan = mat(0x6e5d3c);
-  const rig = newRig('Char lourd', { speed: 12, turn: 2.2, turretRate: 3.5, reload: 0.6, trackX: 1.5, trackLen: 4.3, barrelZ: 1.2, recoilLen: 0.6, muzzle: new THREE.Vector3(0, 0, 3.3) });
+  const rig = newRig('Tank', { speed: 12, turn: 2.2, turretRate: 3.5, reload: 0.6, trackX: 1.5, trackLen: 4.3, barrelZ: 1.2, recoilLen: 0.6, muzzle: new THREE.Vector3(0, 0, 3.3) });
   const b = rig.body;
   // caisse
   box(2.2, 0.6, 4.0, darkGreen, 0, 0.65, 0, b);
@@ -304,47 +328,57 @@ function buildHeavy() {
   return rig;
 }
 
-function buildLight() {
-  const sand = mat(0xc4a46c), sandDark = mat(0x9e8452), olive = mat(0x4a4a3c);
-  const rig = newRig('Char léger', { speed: 16, turn: 2.8, turretRate: 5, reload: 0.35, trackX: 1.35, trackLen: 4.6, barrelZ: 1.15, recoilLen: 0.4, muzzle: new THREE.Vector3(0, 0, 4.0) });
+function buildShip() {
+  const hullMat = mat(0x6b7480), upper = mat(0x8d959e), deck = mat(0x4d545a), glass = mat(0x1e2a33, { roughness: 0.2, metalness: 0.3 });
+  const orange = mat(0xe2722b), white = mat(0xe8ecef);
+  const rig = newRig('Navire de guerre', { kind: 'ship', speed: 10, turn: 0.7, turretRate: 2.5, reload: 0.9, barrelZ: 0.75, recoilLen: 0.35, kick: 0.3,
+    muzzle: new THREE.Vector3(0, 0, 2.45), arc: 2.4, circles: [-4.2, 0, 4.2], radius: 1.8, zoom: 1.3, smoke: 0.4, pos: findShipSpawn() });
   const b = rig.body;
-  // caisse basse et longue, nez pointu, jupes sur les côtés
-  box(2.0, 0.5, 4.4, sandDark, 0, 0.6, 0, b);
-  box(3.3, 0.3, 4.0, sand, 0, 1.0, -0.1, b);
-  box(3.3, 0.3, 1.0, sand, 0, 0.82, 2.2, b).rotation.x = 0.6;
-  box(3.3, 0.45, 0.15, sandDark, 0, 0.85, -2.15, b);
-  for (const sx of [-1, 1]) {
-    addTrack(rig, sx, { x: 1.35, w: 0.7, h: 0.75, len: 4.6, wheelX: 1.62, n: 6, r: 0.26, rEnd: 0.3, wheelMat: olive, hubMat: sandDark });
-    box(0.1, 0.42, 4.0, sandDark, sx * 1.72, 0.78, -0.1, b);                 // jupes latérales
-    box(0.4, 0.18, 1.0, olive, sx * 1.35, 1.24, -1.2, b);                    // paquetages
-  }
-  for (let i = 0; i < 4; i++) box(0.12, 0.05, 1.2, olive, -0.45 + i * 0.3, 1.17, -1.4, b);  // grille moteur
-  cyl(0.09, 0.09, 0.35, olive, 1.3, 0.9, -2.3, b).rotation.x = Math.PI / 2;
-  rig.exhausts.push(new THREE.Vector3(1.3, 0.9, -2.5));
-  for (const x of [-1.3, 1.3]) box(0.3, 0.1, 0.1, lightMat, x, 1.05, 2.05, b);
-  // tourelle basse en flèche
+  // coque : contour en pointe extrudé (y du dessin négatif = avant après rotation)
+  const outline = new THREE.Shape();
+  outline.moveTo(-1.45, 6); outline.lineTo(1.45, 6); outline.lineTo(1.65, -1);
+  outline.quadraticCurveTo(1.5, -4.6, 0, -6.4); outline.quadraticCurveTo(-1.5, -4.6, -1.65, -1); outline.closePath();
+  mesh(new THREE.ExtrudeGeometry(outline, { depth: 1.7, bevelEnabled: false }).rotateX(-Math.PI / 2).translate(0, -0.9, 0), hullMat, 0, 0, 0, b);
+  mesh(new THREE.ShapeGeometry(outline).rotateX(-Math.PI / 2), deck, 0, 0.81, 0, b).scale.set(0.96, 1, 0.97);
+  // superstructure
+  box(2.3, 1.1, 3.4, upper, 0, 1.35, -0.6, b);
+  box(2.5, 0.85, 1.5, upper, 0, 2.3, 0.4, b);                                // passerelle
+  box(2.52, 0.22, 0.12, glass, 0, 2.45, 1.16, b);
+  for (const sx of [-1, 1]) box(0.12, 0.22, 1.2, glass, sx * 1.26, 2.45, 0.4, b);
+  cyl(0.07, 0.12, 3.2, dark, 0, 4.2, -0.2, b);                               // mât
+  box(1.8, 0.06, 0.06, dark, 0, 5.0, -0.2, b);
+  rig.radar = new THREE.Group();
+  rig.radar.position.set(0, 5.85, -0.2);
+  box(1.3, 0.28, 0.08, white, 0, 0, 0, rig.radar);
+  b.add(rig.radar);
+  box(1.0, 1.4, 1.3, upper, 0, 2.5, -2.1, b).rotation.x = -0.12;            // cheminée
+  box(1.04, 0.22, 1.34, dark, 0, 3.22, -2.2, b).rotation.x = -0.12;
+  rig.exhausts.push(new THREE.Vector3(0, 3.4, -2.25));
+  box(2.2, 0.95, 1.8, upper, 0, 1.25, -3.3, b);                              // hangar
+  for (const sx of [-1, 1]) box(0.38, 0.32, 1.2, orange, sx * 1.3, 1.55, -1.0, b);  // canots de sauvetage
+  cyl(0.28, 0.32, 0.45, upper, 0, 1.95, -3.6, b);
+  mesh(new THREE.SphereGeometry(0.34, 14, 10), white, 0, 2.3, -3.6, b);       // radôme
+  mesh(new THREE.RingGeometry(0.7, 0.82, 28).rotateX(-Math.PI / 2), white, 0, 0.83, -5.0, b);  // hélipad
+  box(1.0, 0.05, 0.8, dark, 0, 0.83, 1.9, b);                                // silos à missiles
+  // tourelle de proue
   const t = rig.turret = new THREE.Group();
-  t.position.y = 1.15;
+  t.position.set(0, 0.8, 3.4);
   b.add(t);
-  box(2.1, 0.42, 2.0, sand, 0, 0.21, -0.3, t);
-  for (const sx of [-1, 1]) box(1.25, 0.42, 0.35, sand, sx * 0.48, 0.21, 0.95, t).rotation.y = sx * 0.5;
-  box(1.9, 0.38, 0.8, sandDark, 0, 0.2, -1.6, t);                            // panier
-  box(0.6, 0.35, 0.3, sandDark, 0, 0.2, 1.1, t);                             // masque
-  box(0.35, 0.3, 0.35, olive, -0.55, 0.57, 0.1, t);                          // viseur du chef
-  box(0.25, 0.2, 0.2, olive, -0.55, 0.78, 0.15, t);
-  box(0.45, 0.25, 0.5, olive, 0.5, 0.55, -0.4, t);                           // mitrailleuse téléopérée
-  cyl(0.035, 0.035, 0.7, olive, 0.5, 0.6, 0.05, t).rotation.x = Math.PI / 2;
-  for (const sx of [-1, 1]) for (let i = 0; i < 4; i++) cyl(0.06, 0.06, 0.22, olive, sx * (0.72 + i * 0.12), 0.48, 0.55 - i * 0.07, t, 8).rotation.x = Math.PI / 2;
-  addAntenna(rig, t, -0.8, 0.4, -1.75, 2.6);
-  addAntenna(rig, t, 0.8, 0.4, -1.75, 1.8);
-  // canon long avec manchon thermique
+  cyl(0.75, 0.85, 0.3, upper, 0, 0.15, 0, t, 20);
+  box(1.2, 0.55, 1.5, upper, 0, 0.55, -0.1, t);
+  box(1.2, 0.45, 0.55, upper, 0, 0.5, 0.75, t).rotation.x = 0.55;
   const br = rig.barrel = new THREE.Group();
-  br.position.set(0, 0.22, 1.15);
+  br.position.set(0, 0.55, 0.75);
   t.add(br);
-  cyl(0.09, 0.11, 3.9, olive, 0, 0, 1.95, br).rotation.x = Math.PI / 2;
-  for (const z of [1.0, 2.2]) cyl(0.13, 0.13, 0.5, sandDark, 0, 0, z, br).rotation.x = Math.PI / 2;
-  cyl(0.15, 0.15, 0.35, olive, 0, 0, 2.9, br).rotation.x = Math.PI / 2;     // évacuateur de fumée
+  cyl(0.08, 0.11, 2.4, dark, 0, 0, 1.2, br).rotation.x = Math.PI / 2;
   return rig;
+}
+function findShipSpawn() {                       // un endroit assez profond pour toute la coque
+  for (let r = 0; r < 40; r += 2) for (let a = 0; a < 6.28; a += 0.2) {
+    const x = LAKE_X + Math.cos(a) * r, z = LAKE_Z + Math.sin(a) * r;
+    if (Math.abs(z) + 7 < HALF && [-7, 0, 7].every((o) => groundY(x, z + o) < WATER - 2)) return new THREE.Vector3(x, WATER, z);
+  }
+  return new THREE.Vector3(LAKE_X, WATER, LAKE_Z);
 }
 
 // flash de bouche : boule + jets avant et latéraux, accroché au canon du tank choisi
@@ -358,53 +392,67 @@ for (const sx of [-1, 1]) { const c = new THREE.Mesh(coneGeo, flashMat2); c.rota
 flash.visible = false;
 const flashLight = new THREE.PointLight(0xffaa44, 0, 18);
 
-const rigs = [buildHeavy(), buildLight()];
+const rigs = [buildHeavy(), buildShip()];        // le tank part du centre, le navire du lac ; chacun garde sa place
 let rig;
+const swapBtn = document.getElementById('swap');
 function selectRig(i) {
+  if (rig) { rig.pos.copy(tank.position); rig.yaw = tank.rotation.y; }
   rig = rigs[i];
   for (const r of rigs) r.body.visible = r === rig;
   rig.barrel.add(flash, flashLight);
   flash.position.copy(rig.muzzle);
   flashLight.position.copy(rig.muzzle);
+  tank.position.copy(rig.pos);
+  tank.rotation.y = turretYaw = rig.yaw;
+  tilt.rotation.set(0, 0, 0);
+  speed = 0;
+  focus.copy(tank.position);
+  for (const tr of rig.treads) tr.last = null;
   document.getElementById('tankName').textContent = rig.name;
-  try { localStorage.setItem('tankStyle', String(i)); } catch {}
+  swapBtn.textContent = rig.kind === 'ship' ? 'Prendre le tank (T)' : 'Prendre le navire (T)';
+  try { localStorage.setItem('vehicle', String(i)); } catch {}
 }
-let savedStyle = 0;
-try { savedStyle = Number(localStorage.getItem('tankStyle')) || 0; } catch {}
-selectRig(savedStyle % rigs.length);
-const swapBtn = document.getElementById('swap');
 const nextRig = () => selectRig((rigs.indexOf(rig) + 1) % rigs.length);
 swapBtn.addEventListener('click', () => { nextRig(); swapBtn.blur(); });
-
-tank.rotation.y = Math.PI;                       // regarde vers le haut de l'écran
 scene.add(tank);
 
 let speed = 0, turretYaw = Math.PI, reload = 0, recoil = 0, shake = 0, score = 0, flashT = 0;
 let pitch = 0, pitchV = 0, sway = 0, swayV = 0, puffT = 0;
 const focus = new THREE.Vector3();               // point suivi par la caméra (lissé)
+let savedVehicle = 0;
+try { savedVehicle = Number(localStorage.getItem('vehicle')) || 0; } catch {}
+selectRig(savedVehicle % rigs.length);
 
 // ---------- cibles ----------
 const targets = [];
-function addTarget(x, z, kind) {
+function addTarget(x, z, kind, float = false) {
   const crate = kind === 'crate';
-  const m = crate ? box(2, 2, 2, mat(0xc98a4b), 0, 1, 0) : cyl(0.8, 0.8, 1.8, mat(0xc0392b), 0, 0.9, 0);
+  const m = crate ? box(2, 2, 2, mat(0xc98a4b), 0, 1, 0) : cyl(0.8, 0.8, 1.8, mat(float ? 0xf07a1a : 0xc0392b), 0, 0.9, 0);
   const g = new THREE.Group();
   g.add(m);
-  g.position.set(x, groundY(x, z), z);
+  g.position.set(x, float ? WATER - 0.5 : groundY(x, z), z);
   scene.add(g);
   const maxHp = crate ? 3 : 1;
-  targets.push({ g, mesh: m, r: crate ? 1.3 : 0.9, maxHp, hp: maxHp, home: g.position.clone(), vel: new THREE.Vector3(), hit: 0, dead: 0 });
+  targets.push({ g, mesh: m, r: crate ? 1.3 : 0.9, maxHp, hp: maxHp, float, home: g.position.clone(), vel: new THREE.Vector3(), hit: 0, dead: 0 });
 }
 for (let i = -3; i <= 3; i++) addTarget(i * 4, -20, i % 2 ? 'barrel' : 'crate');  // rangée de test devant
-for (let i = 0; i < 40; i++) {
-  const a = Math.random() * Math.PI * 2, d = 18 + Math.random() * 75;
-  addTarget(Math.cos(a) * d, Math.sin(a) * d, Math.random() < 0.5 ? 'crate' : 'barrel');
+for (let i = 0, tries = 0; i < 40 && tries < 5000; tries++) {
+  const a = Math.random() * Math.PI * 2, d = 18 + Math.random() * 75, x = Math.cos(a) * d, z = Math.sin(a) * d;
+  if (groundY(x, z) < WATER + 0.4) continue;    // pas sous l'eau
+  addTarget(x, z, Math.random() < 0.5 ? 'crate' : 'barrel');
+  i++;
+}
+for (let i = 0, tries = 0; i < 14 && tries < 5000; tries++) {  // bouées flottantes pour le navire
+  const a = Math.random() * Math.PI * 2, d = Math.random() * 32, x = LAKE_X + Math.cos(a) * d, z = LAKE_Z + Math.sin(a) * d;
+  if (groundY(x, z) > WATER - 1.5 || Math.abs(z) > HALF || Math.hypot(x - rigs[1].pos.x, z - rigs[1].pos.z) < 10) continue;  // pas collée au navire
+  addTarget(x, z, 'barrel', true);
+  i++;
 }
 
 // ---------- particules ----------
 const parts = [];
 const sphereGeo = new THREE.SphereGeometry(1, 10, 8), cubeGeo = new THREE.BoxGeometry(1, 1, 1);
-const ringGeo = new THREE.RingGeometry(0.85, 1, 40).rotateX(-Math.PI / 2);
+const ringGeo = new THREE.RingGeometry(0.85, 1, 40).rotateX(-Math.PI / 2), foamGeo = new THREE.CircleGeometry(1, 18).rotateX(-Math.PI / 2);
 // color → color2 au fil de la vie ; grow = taille finale multipliée par (1 + grow)
 function spawn({ geo = sphereGeo, color, color2, pos, vel = new THREE.Vector3(), life = 1, size = 1, grow = 0, grav = 0, drag = 0, opacity = 1, spin = false }) {
   const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false }));
@@ -438,16 +486,17 @@ scene.add(impactLight);
 
 function explode(pos, big, debrisColor = 0x5a4029) {
   const s = big ? 2 : 1;
-  const gy = groundY(pos.x, pos.z);
+  const gy = surfaceY(pos.x, pos.z), wet = groundY(pos.x, pos.z) < WATER;
   const p = pos.clone().setY(Math.max(pos.y, gy + 0.6));
   for (let i = 0; i < 5 * s; i++) spawn({ pos: jitter(p, 0.3 * s), vel: new THREE.Vector3(rnd(2), 1 + Math.random() * 2, rnd(2)), color: 0xfff1a8, color2: 0xff4d00, life: 0.3 + Math.random() * 0.15, size: 0.45 * s, grow: 2.5 });
   for (let i = 0; i < 9 * s; i++) spawn({ pos: jitter(p, 0.5 * s), vel: new THREE.Vector3(rnd(2.5 * s), 1.5 + Math.random() * 2.5, rnd(2.5 * s)), color: 0x3d3a36, color2: 0xb9b6b0, life: 1.4 + Math.random() * 1.2, size: 0.4 * s, grow: 3, drag: 1.5, opacity: 0.75 });
   for (let i = 0; i < 12 * s; i++) spawn({ geo: cubeGeo, pos: p, vel: new THREE.Vector3(rnd(8 * s), 4 + Math.random() * 8 * s, rnd(8 * s)), color: 0xffd34d, color2: 0xff5a1a, life: 0.35 + Math.random() * 0.2, size: 0.08, grav: 18 });
+  if (wet) for (let i = 0; i < 14 * s; i++) spawn({ pos: jitter(new THREE.Vector3(p.x, WATER, p.z), 0.4 * s), vel: new THREE.Vector3(rnd(1.5 * s), 5 + Math.random() * 6 * s, rnd(1.5 * s)), color: 0xffffff, color2: 0xcfe6f0, life: 0.9 + Math.random() * 0.4, size: 0.3 * s, grow: 1, grav: 14, opacity: 0.9 });  // gerbe d'eau
   for (let i = 0; i < 8 * s; i++) spawn({ geo: cubeGeo, pos: p, vel: new THREE.Vector3(rnd(6 * s), 3 + Math.random() * 7 * s, rnd(6 * s)), color: debrisColor, life: 1.2 + Math.random() * 0.6, size: 0.12 + Math.random() * 0.2 * s, grav: 25, spin: true });
-  spawn({ geo: ringGeo, pos: new THREE.Vector3(p.x, gy + 0.15, p.z), color: 0x8f8a82, life: 0.45, size: 0.6 * s, grow: 7, opacity: 0.6 });
+  spawn({ geo: ringGeo, pos: new THREE.Vector3(p.x, gy + 0.15, p.z), color: wet ? 0xffffff : 0x8f8a82, life: wet ? 0.8 : 0.45, size: 0.6 * s, grow: 7, opacity: 0.6 });
   impactLight.position.copy(p).y += 1.5;
   impactLight.intensity = 60 * s;
-  scorch(p, 2.4 * s);
+  if (!wet) scorch(p, 2.4 * s);
 }
 
 // ---------- tir ----------
@@ -456,10 +505,10 @@ const shellGeo = new THREE.SphereGeometry(1, 8, 6), shellMat = new THREE.MeshBas
 function fire() {
   if (reload > 0) return;
   reload = rig.reload; recoil = 1; shake = 0.45; flashT = 0.09;
-  pitchV -= 1.4; swayV -= 6;                     // la caisse se cabre, l'antenne fouette
+  pitchV -= rig.kick; swayV -= 6;                     // la caisse se cabre, l'antenne fouette
   rig.barrel.updateWorldMatrix(true, false);
   const tip = rig.barrel.localToWorld(rig.muzzle.clone());
-  const dir = new THREE.Vector3(Math.sin(turretYaw), 0, Math.cos(turretYaw));
+  const dir = rig.barrel.getWorldDirection(new THREE.Vector3()).setY(0).normalize();  // là où pointe vraiment le canon
   const side = new THREE.Vector3(dir.z, 0, -dir.x);
 
   const s = new THREE.Mesh(shellGeo, shellMat);
@@ -477,17 +526,24 @@ function fire() {
   for (const sx of [-1, 1]) for (let i = 0; i < 4; i++) spawn({ pos: tip, vel: side.clone().multiplyScalar(sx * (3 + Math.random() * 3)), color: 0xa8a49e, color2: 0xdddbd7, life: 1 + Math.random() * 0.5, size: 0.3, grow: 3, drag: 3, opacity: 0.6 });
   // étincelles
   for (let i = 0; i < 10; i++) spawn({ geo: cubeGeo, pos: tip, vel: dir.clone().multiplyScalar(14 + Math.random() * 12).add(jitter(UP, 3)), color: 0xffe066, color2: 0xff7a20, life: 0.25 + Math.random() * 0.15, size: 0.07, grav: 10 });
-  // le souffle soulève la poussière autour du tank
+  // le souffle soulève la poussière (ou l'eau) autour
+  const c = rig.kind === 'ship' ? tip : tank.position;
   for (let i = 0; i < 16; i++) {
-    const a = (i / 16) * Math.PI * 2, x = tank.position.x + Math.cos(a) * 2.4, z = tank.position.z + Math.sin(a) * 2.4;
-    spawn({ pos: new THREE.Vector3(x, groundY(x, z) + 0.3, z), vel: new THREE.Vector3(Math.cos(a) * 5, 0.6, Math.sin(a) * 5), color: 0xae9270, life: 0.9, size: 0.4, grow: 2.5, drag: 3, opacity: 0.45 });
+    const a = (i / 16) * Math.PI * 2, x = c.x + Math.cos(a) * 2.4, z = c.z + Math.sin(a) * 2.4, wet = groundY(x, z) < WATER;
+    spawn({ pos: new THREE.Vector3(x, surfaceY(x, z) + 0.3, z), vel: new THREE.Vector3(Math.cos(a) * 5, 0.6, Math.sin(a) * 5), color: wet ? 0xeaf4f8 : 0xae9270, life: 0.9, size: 0.4, grow: 2.5, drag: 3, opacity: 0.45 });
   }
 }
 
 // ---------- entrées ----------
 const keys = {};
-addEventListener('keydown', (e) => { keys[e.code] = true; if (e.code === 'Space') e.preventDefault(); if (e.code === 'KeyT' && !e.repeat) nextRig(); });
-addEventListener('keyup', (e) => { keys[e.code] = false; });
+// on retient la touche physique ET la lettre tapée : W A S D marchent sur un clavier QWERTY comme AZERTY
+addEventListener('keydown', (e) => {
+  keys[e.code] = keys[e.key.toLowerCase()] = true;
+  if (e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault();
+  if ((e.code === 'KeyT' || e.key.toLowerCase() === 't') && !e.repeat) nextRig();
+});
+addEventListener('keyup', (e) => { keys[e.code] = keys[e.key.toLowerCase()] = false; });
+addEventListener('blur', () => { for (const c in keys) keys[c] = false; });
 const mouse = new THREE.Vector2(), ray = new THREE.Raycaster(), ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 let useMouse = false, mouseDown = false;
 addEventListener('pointermove', (e) => { if (e.pointerType === 'mouse') { useMouse = true; mouse.set(e.clientX / innerWidth * 2 - 1, -e.clientY / innerHeight * 2 + 1); } });
@@ -536,48 +592,73 @@ renderer.setAnimationLoop(() => {
   const dt = Math.max(1e-4, Math.min(clock.getDelta(), 0.05));  // jamais 0 : on divise par dt plus bas
   const k = (...c) => c.some((x) => keys[x]) ? 1 : 0;
 
-  // déplacement : clavier en commandes de tank, joystick = direction à l'écran
-  let throttle = k('KeyW', 'KeyZ', 'ArrowUp') - k('KeyS', 'ArrowDown');
-  let turn = k('KeyA', 'KeyQ', 'ArrowLeft') - k('KeyD', 'ArrowRight');
-  const yaw0 = tank.rotation.y, speed0 = speed;
+  // déplacement : W/haut avance, S/bas recule, A/gauche et D/droite tournent ; joystick = direction à l'écran
+  const time = clock.elapsedTime, ship = rig.kind === 'ship';
+  let throttle = k('KeyW', 'ArrowUp', 'w', 'z') - k('KeyS', 'ArrowDown', 's');
+  let turn = k('KeyA', 'ArrowLeft', 'a', 'q') - k('KeyD', 'ArrowRight', 'd');
+  const steer = rig.turn * (ship ? Math.min(1, 0.2 + Math.abs(speed) / rig.speed) : 1);  // un navire tourne mieux lancé
+  const yaw0 = tank.rotation.y, speed0 = speed, old = tank.position.clone();
   const L = sticks.L, mag = Math.hypot(L.x, L.y);
   if (mag > 0.2) {
     const want = Math.atan2(L.x, L.y);           // écran droite = +x, écran bas = +z
-    tank.rotation.y = turnToward(tank.rotation.y, want, rig.turn * dt);
+    tank.rotation.y = turnToward(tank.rotation.y, want, steer * dt);
     throttle = mag * Math.max(0, Math.cos(wrap(want - tank.rotation.y)));
     turn = 0;
   }
-  tank.rotation.y += turn * rig.turn * dt;
+  tank.rotation.y += turn * steer * dt;
 
   // pente sous le tank : avant/arrière et gauche/droite
   const yaw = tank.rotation.y, fx = Math.sin(yaw), fz = Math.cos(yaw), lx = Math.cos(yaw), lz = -Math.sin(yaw);
   const { x: px, z: pz } = tank.position;
-  const hf = groundY(px + fx * 2, pz + fz * 2), hb = groundY(px - fx * 2, pz - fz * 2);
-  const hl = groundY(px + lx * 1.5, pz + lz * 1.5), hr = groundY(px - lx * 1.5, pz - lz * 1.5);
-  const grade = (hf - hb) / 4;                   // > 0 : ça monte devant
-  speed += (throttle * rig.speed * (1 - Math.max(-0.25, Math.min(0.6, grade * Math.sign(throttle)))) - speed) * Math.min(1, dt * 3);
+  let grade = 0;
+  if (!ship) {
+    const hf = groundY(px + fx * 2, pz + fz * 2), hb = groundY(px - fx * 2, pz - fz * 2);
+    const hl = groundY(px + lx * 1.5, pz + lz * 1.5), hr = groundY(px - lx * 1.5, pz - lz * 1.5);
+    grade = (hf - hb) / 4;                       // > 0 : ça monte devant
+    tilt.rotation.x += (-Math.atan2(hf - hb, 4) - tilt.rotation.x) * Math.min(1, dt * 8);
+    tilt.rotation.z += (Math.atan2(hl - hr, 3) - tilt.rotation.z) * Math.min(1, dt * 8);
+  }
+  speed += (throttle * rig.speed * (1 - Math.max(-0.25, Math.min(0.6, grade * Math.sign(throttle)))) - speed) * Math.min(1, dt * (ship ? 0.7 : 3));
   tank.position.x += fx * speed * dt;
   tank.position.z += fz * speed * dt;
-  tilt.rotation.x += (-Math.atan2(hf - hb, 4) - tilt.rotation.x) * Math.min(1, dt * 8);
-  tilt.rotation.z += (Math.atan2(hl - hr, 3) - tilt.rotation.z) * Math.min(1, dt * 8);
 
-  // collisions tank / cibles (cercles) et bords
+  // collisions avec les cibles (un cercle pour le tank, trois le long du navire) et bords
   for (const t of targets) {
     if (t.dead) continue;
-    tmp.subVectors(tank.position, t.g.position).setY(0);
-    const d = tmp.length(), min = t.r + 2;
-    if (d < min && d > 0.001) {
-      tank.position.addScaledVector(tmp, (min - d) / d * 0.6);
-      t.g.position.addScaledVector(tmp, -(min - d) / d * 0.4);  // on pousse la cible
+    for (const o of rig.circles) {
+      tmp.set(tank.position.x + fx * o, 0, tank.position.z + fz * o).sub(t.g.position).setY(0);
+      const d = tmp.length(), min = t.r + rig.radius;
+      if (d < min && d > 0.001) {
+        tank.position.addScaledVector(tmp, (min - d) / d * 0.6);
+        t.g.position.addScaledVector(tmp, -(min - d) / d * 0.4);  // on pousse la cible
+      }
     }
   }
   tank.position.x = Math.max(-HALF, Math.min(HALF, tank.position.x));
   tank.position.z = Math.max(-HALF, Math.min(HALF, tank.position.z));
-  tank.position.y = groundY(tank.position.x, tank.position.z);
-  flattenTufts(tank.position.x, tank.position.z);
+  // le tank ne va pas en eau profonde ; le navire ne touche jamais le fond (proue, milieu, poupe)
+  const blocked = () => {
+    const y = tank.rotation.y, { x, z } = tank.position;
+    return ship ? [-6, 0, 6.2].some((o) => groundY(x + Math.sin(y) * o, z + Math.cos(y) * o) > WATER - 1) : groundY(x, z) < WATER - 0.6;
+  };
+  if (blocked()) {
+    tank.position.copy(old);
+    speed *= -0.3;
+    if (blocked()) tank.rotation.y = yaw0;
+  }
+  const yawRate = wrap(tank.rotation.y - yaw0) / dt;
+  if (ship) {                                    // flotte, tangue sur la houle et gîte dans les virages
+    tank.position.y = WATER + Math.sin(time * 1.3) * 0.08;
+    tilt.rotation.x = Math.sin(time * 1.1) * 0.015;
+    tilt.rotation.z += (Math.max(-0.12, Math.min(0.12, yawRate * speed * 0.03)) + Math.sin(time * 0.8) * 0.02 - tilt.rotation.z) * Math.min(1, dt * 2);
+    rig.radar.rotation.y += dt * 2;
+  } else {
+    tank.position.y = groundY(tank.position.x, tank.position.z);
+    flattenTufts(tank.position.x, tank.position.z);
+  }
+  waterTex.offset.set(time * 0.01, time * 0.006);
 
   // chenilles et roues : chaque côté roule à sa vitesse quand le tank tourne
-  const yawRate = wrap(tank.rotation.y - yaw0) / dt;
   for (const tr of rig.treads) tr.tex.offset.x += tr.sx * (speed - tr.sx * yawRate * 1.5) * dt / (rig.trackLen / 4);
   for (const w of rig.wheels) w.pivot.rotation.x += (speed - w.sx * yawRate * 1.5) * dt / w.r;
   for (const tr of rig.treads) {
@@ -600,8 +681,15 @@ renderer.setAnimationLoop(() => {
   if (puffT <= 0 && Math.abs(speed) > 1) {
     puffT = 0.09;
     tank.updateWorldMatrix(true, true);
-    for (const e of rig.exhausts) spawn({ pos: rig.body.localToWorld(e.clone()), vel: new THREE.Vector3(rnd(0.5), 1.2, rnd(0.5)), color: 0x6d6a66, color2: 0xcfcdc9, life: 0.9, size: 0.18, grow: 3, drag: 1, opacity: 0.5 });
-    for (const sx of [-rig.trackX, rig.trackX]) spawn({ pos: rig.body.localToWorld(tmp.set(sx, 0.2, -Math.sign(speed) * 2.1)), vel: new THREE.Vector3(rnd(0.6), 0.5, rnd(0.6)), color: 0xa8895f, life: 0.8, size: 0.3, grow: 2.5, drag: 2, opacity: 0.35 });
+    for (const e of rig.exhausts) spawn({ pos: rig.body.localToWorld(e.clone()), vel: new THREE.Vector3(rnd(0.5), 1.2, rnd(0.5)), color: 0x6d6a66, color2: 0xcfcdc9, life: 0.9, size: rig.smoke, grow: 3, drag: 1, opacity: 0.5 });
+    if (ship) {                                  // sillage : écume à la poupe et vague d'étrave
+      const st = rig.body.localToWorld(tmp.set(0, 0, -6)).setY(WATER + 0.05);
+      spawn({ geo: foamGeo, pos: st, vel: new THREE.Vector3(rnd(0.4), 0, rnd(0.4)), color: 0xffffff, life: 4, size: 0.9, grow: 3, drag: 0.6, opacity: 0.6 });
+      for (const sx of [-1, 1]) {
+        const bw = rig.body.localToWorld(tmp.set(sx * 1.1, 0, 4.8)).setY(WATER + 0.05);
+        spawn({ geo: foamGeo, pos: bw, vel: new THREE.Vector3(lx * sx * 2.5, 0, lz * sx * 2.5), color: 0xffffff, life: 2.5, size: 0.4, grow: 3, drag: 0.8, opacity: 0.55 });
+      }
+    } else for (const sx of [-rig.trackX, rig.trackX]) spawn({ pos: rig.body.localToWorld(tmp.set(sx, 0.2, -Math.sign(speed) * 2.1)), vel: new THREE.Vector3(rnd(0.6), 0.5, rnd(0.6)), color: 0xa8895f, life: 0.8, size: 0.3, grow: 2.5, drag: 2, opacity: 0.35 });
   }
 
   // visée (rayon de la souris sur un plan à la hauteur du tank)
@@ -616,7 +704,7 @@ renderer.setAnimationLoop(() => {
     turretYaw = turnToward(turretYaw, Math.atan2(R.x, R.y), rig.turretRate * dt);
     aiming = true;
   }
-  rig.turret.rotation.y = turretYaw - tank.rotation.y;
+  rig.turret.rotation.y = Math.max(-rig.arc, Math.min(rig.arc, wrap(turretYaw - tank.rotation.y)));  // le canon du navire ne vise pas à travers la passerelle
 
   // tir : le canon recule d'un coup puis revient en douceur
   reload -= dt;
@@ -638,7 +726,7 @@ renderer.setAnimationLoop(() => {
   for (let i = shells.length - 1; i >= 0; i--) {
     const s = shells[i];
     s.m.position.addScaledVector(s.vel, dt);
-    s.m.position.y += (groundY(s.m.position.x, s.m.position.z) + 1.3 - s.m.position.y) * Math.min(1, dt * 8);
+    s.m.position.y += (surfaceY(s.m.position.x, s.m.position.z) + 1.3 - s.m.position.y) * Math.min(1, dt * 8);
     s.life -= dt;
     spawn({ pos: s.m.position, color: 0xffc35a, color2: 0xe2e0dc, life: 0.3, size: 0.13, grow: 1.5, opacity: 0.8 });
     let hit = null;
@@ -671,7 +759,7 @@ renderer.setAnimationLoop(() => {
       continue;
     }
     t.g.position.addScaledVector(t.vel, dt);
-    t.g.position.y = groundY(t.g.position.x, t.g.position.z);
+    t.g.position.y = t.float ? WATER - 0.5 + Math.sin(time * 2 + t.home.x) * 0.1 : groundY(t.g.position.x, t.g.position.z);
     t.vel.multiplyScalar(Math.pow(0.02, dt));
     t.hit = Math.max(0, t.hit - dt);
     t.mesh.material.emissive.setHex(t.hit > 0 ? 0xffffff : 0x000000);
@@ -706,7 +794,7 @@ renderer.setAnimationLoop(() => {
   // caméra (lissée pour ne pas sautiller sur les bosses) et ombre qui suivent le tank
   focus.lerp(tank.position, Math.min(1, dt * 6));
   shake = Math.max(0, shake - dt * 2);
-  camera.position.copy(focus).add(CAM_OFFSET);
+  camera.position.copy(focus).addScaledVector(CAM_OFFSET, rig.zoom);
   camera.position.x += rnd(shake * 0.5);
   camera.position.z += rnd(shake * 0.5);
   camera.lookAt(focus);
@@ -715,7 +803,7 @@ renderer.setAnimationLoop(() => {
 
   renderer.render(scene, camera);
 });
-window.game = { tank, targets, shells, parts, marks, groundY, get score() { return score; }, get rig() { return rig.name; }, get flattened() { return flattened; } };  // pour les tests
+window.game = { tank, targets, shells, parts, marks, groundY, get score() { return score; }, get rig() { return rig.name; }, selectRig, WATER, get flattened() { return flattened; } };  // pour les tests
 </script>
 </body>
 </html>
