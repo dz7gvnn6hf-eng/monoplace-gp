@@ -48,14 +48,60 @@ sun.shadow.mapSize.set(2048, 2048);
 Object.assign(sun.shadow.camera, { left: -40, right: 40, top: 40, bottom: -40, near: 1, far: 120 });
 scene.add(sun, sun.target);
 
-// plateforme blanche
-const platform = new THREE.Mesh(new THREE.BoxGeometry(SIZE, 2, SIZE), new THREE.MeshStandardMaterial({ color: 0xf7f7f7, roughness: 0.9 }));
+// sol en terre : texture dessinée une fois, qui se répète sans couture
+const dirt = document.createElement('canvas');
+dirt.width = dirt.height = 512;
+const dc = dirt.getContext('2d');
+dc.fillStyle = '#86674a'; dc.fillRect(0, 0, 512, 512);
+const blot = (n, rMin, rMax, light, alpha) => {
+  for (let i = 0; i < n; i++) {
+    const x = Math.random() * 512, y = Math.random() * 512, r = rMin + Math.random() * (rMax - rMin);
+    dc.fillStyle = `hsla(${24 + Math.random() * 12},${28 + Math.random() * 14}%,${light + rnd(10)}%,${alpha})`;
+    for (const ox of [-512, 0, 512]) for (const oy of [-512, 0, 512]) { dc.beginPath(); dc.arc(x + ox, y + oy, r, 0, 7); dc.fill(); }
+  }
+};
+blot(1500, 6, 22, 38, 0.18);                     // grandes taches
+blot(3000, 1.5, 5, 34, 0.35);                    // grain
+blot(500, 1, 2.5, 55, 0.7);                      // cailloux clairs
+blot(400, 1, 2.5, 20, 0.6);                      // cailloux sombres
+const dirtTex = new THREE.CanvasTexture(dirt);
+dirtTex.wrapS = dirtTex.wrapT = THREE.RepeatWrapping;
+dirtTex.repeat.set(SIZE / 8, SIZE / 8);
+dirtTex.colorSpace = THREE.SRGBColorSpace;
+dirtTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+const platform = new THREE.Mesh(new THREE.BoxGeometry(SIZE, 2, SIZE), new THREE.MeshStandardMaterial({ map: dirtTex, roughness: 1 }));
 platform.position.y = -1;
 platform.receiveShadow = true;
 scene.add(platform);
-const grid = new THREE.GridHelper(SIZE, SIZE / 4, 0xd4d8de, 0xe6e8ec);
-grid.position.y = 0.01;
-scene.add(grid);
+
+// traces de chenilles : un morceau de trace posé au sol chaque fois qu'une chenille a parcouru ~0,5 m
+const markCanvas = document.createElement('canvas');
+markCanvas.width = markCanvas.height = 32;
+const mc = markCanvas.getContext('2d');
+mc.fillStyle = 'rgba(45,30,18,.35)'; mc.fillRect(0, 0, 32, 32);
+mc.fillStyle = 'rgba(35,22,12,.6)';
+for (const y of [2, 18]) mc.fillRect(0, y, 32, 8);
+const markTex = new THREE.CanvasTexture(markCanvas);
+const MAX_MARKS = 4000;                          // shortcut: les plus vieilles traces disparaissent d'un coup, ajouter un fondu si ça se voit
+const marks = new THREE.InstancedMesh(
+  new THREE.PlaneGeometry(0.85, 1).rotateX(-Math.PI / 2),
+  new THREE.MeshBasicMaterial({ map: markTex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1 }),
+  MAX_MARKS);
+marks.count = 0;
+marks.frustumCulled = false;
+scene.add(marks);
+let markIdx = 0;
+const markDummy = new THREE.Object3D();
+function addMark(a, b) {
+  markDummy.position.set((a.x + b.x) / 2, 0.015, (a.z + b.z) / 2);
+  markDummy.rotation.y = Math.atan2(b.x - a.x, b.z - a.z);
+  markDummy.scale.set(1, 1, a.distanceTo(b) + 0.05);
+  markDummy.updateMatrix();
+  marks.setMatrixAt(markIdx, markDummy.matrix);
+  markIdx = (markIdx + 1) % MAX_MARKS;
+  marks.count = Math.max(marks.count, markIdx || MAX_MARKS);
+  marks.instanceMatrix.needsUpdate = true;
+}
 
 const resize = () => {
   renderer.setSize(innerWidth, innerHeight);
@@ -232,7 +278,7 @@ function scorch(pos, size) {
 const impactLight = new THREE.PointLight(0xff8a3c, 0, 20);
 scene.add(impactLight);
 
-function explode(pos, big, debrisColor = 0x4a4a4a) {
+function explode(pos, big, debrisColor = 0x5a4029) {
   const s = big ? 2 : 1;
   const p = pos.clone().setY(Math.max(pos.y, 0.6));
   for (let i = 0; i < 5 * s; i++) spawn({ pos: jitter(p, 0.3 * s), vel: new THREE.Vector3(rnd(2), 1 + Math.random() * 2, rnd(2)), color: 0xfff1a8, color2: 0xff4d00, life: 0.3 + Math.random() * 0.15, size: 0.45 * s, grow: 2.5 });
@@ -275,7 +321,7 @@ function fire() {
   // le souffle soulève la poussière autour du tank
   for (let i = 0; i < 16; i++) {
     const a = (i / 16) * Math.PI * 2;
-    spawn({ pos: tank.position.clone().add(new THREE.Vector3(Math.cos(a) * 2.4, 0.3, Math.sin(a) * 2.4)), vel: new THREE.Vector3(Math.cos(a) * 5, 0.6, Math.sin(a) * 5), color: 0xd8d0c0, life: 0.9, size: 0.4, grow: 2.5, drag: 3, opacity: 0.45 });
+    spawn({ pos: tank.position.clone().add(new THREE.Vector3(Math.cos(a) * 2.4, 0.3, Math.sin(a) * 2.4)), vel: new THREE.Vector3(Math.cos(a) * 5, 0.6, Math.sin(a) * 5), color: 0xae9270, life: 0.9, size: 0.4, grow: 2.5, drag: 3, opacity: 0.45 });
   }
 }
 
@@ -363,6 +409,11 @@ renderer.setAnimationLoop(() => {
   const yawRate = wrap(tank.rotation.y - yaw0) / dt;
   for (const tr of treads) tr.tex.offset.x += tr.sx * (speed - tr.sx * yawRate * 1.5) * dt / 1.075;
   for (const w of wheels) w.pivot.rotation.x += (speed - w.sx * yawRate * 1.5) * dt / w.r;
+  for (const tr of treads) {
+    const p = tank.localToWorld(tmp.set(tr.sx * 1.5, 0, 0));
+    if (!tr.last) tr.last = p.clone();
+    else if (p.distanceTo(tr.last) > 0.5) { addMark(tr.last, p); tr.last.copy(p); }
+  }
 
   // la caisse plonge/se cabre (ressort), l'antenne oscille
   const accel = (speed - speed0) / dt;
@@ -379,7 +430,7 @@ renderer.setAnimationLoop(() => {
     puffT = 0.09;
     tank.updateWorldMatrix(true, true);
     for (const e of exhausts) spawn({ pos: body.localToWorld(e.clone()), vel: new THREE.Vector3(rnd(0.5), 1.2, rnd(0.5)), color: 0x6d6a66, color2: 0xcfcdc9, life: 0.9, size: 0.18, grow: 3, drag: 1, opacity: 0.5 });
-    for (const sx of [-1.5, 1.5]) spawn({ pos: body.localToWorld(tmp.set(sx, 0.2, -Math.sign(speed) * 2.1)), vel: new THREE.Vector3(rnd(0.6), 0.5, rnd(0.6)), color: 0xd9d2c4, life: 0.8, size: 0.3, grow: 2.5, drag: 2, opacity: 0.35 });
+    for (const sx of [-1.5, 1.5]) spawn({ pos: body.localToWorld(tmp.set(sx, 0.2, -Math.sign(speed) * 2.1)), vel: new THREE.Vector3(rnd(0.6), 0.5, rnd(0.6)), color: 0xa8895f, life: 0.8, size: 0.3, grow: 2.5, drag: 2, opacity: 0.35 });
   }
 
   // visée
@@ -486,7 +537,7 @@ renderer.setAnimationLoop(() => {
 
   renderer.render(scene, camera);
 });
-window.game = { tank, targets, shells, parts, get score() { return score; } };  // pour les tests
+window.game = { tank, targets, shells, parts, marks, get score() { return score; } };  // pour les tests
 </script>
 </body>
 </html>
