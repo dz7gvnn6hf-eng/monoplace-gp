@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
 <title>Tank – Terrain d'essai</title>
 <style>
-  html,body{margin:0;height:100%;overflow:hidden;background:#c9d1db;touch-action:none;user-select:none;-webkit-user-select:none;font-family:system-ui,sans-serif}
+  html,body{margin:0;height:100%;overflow:hidden;background:#bcd3e6;touch-action:none;user-select:none;-webkit-user-select:none;font-family:system-ui,sans-serif}
   canvas{display:block;cursor:crosshair}
   #hud{position:fixed;left:12px;top:12px;color:#223;font-size:14px;line-height:1.5;pointer-events:none;background:rgba(255,255,255,.75);padding:8px 12px;border-radius:8px}
   #hud b{font-size:18px}
@@ -21,11 +21,32 @@
 <script type="module">
 import * as THREE from 'three';
 
-const SIZE = 200, HALF = SIZE / 2 - 2;          // plateforme et limite de déplacement
+const SIZE = 200, HALF = SIZE / 2 - 2;          // zone jouable
+const WORLD = 280;                               // le terrain dépasse un peu, le brouillard cache le bord
 const MAX_SPEED = 12, TURN_RATE = 2.2, TURRET_RATE = 3.5;
 const SHELL_SPEED = 45, SHELL_LIFE = 1.4, RELOAD = 0.6;
 const UP = new THREE.Vector3(0, 1, 0);
 const rnd = (a = 1) => (Math.random() - 0.5) * 2 * a;
+const smoothstep = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+
+// ---------- relief ----------
+const hash = (x, z) => { const s = Math.sin(x * 127.1 + z * 311.7) * 43758.5453; return s - Math.floor(s); };
+function noise(x, z) {                           // bruit de valeur 2D, 0..1
+  const xi = Math.floor(x), zi = Math.floor(z), u = smoothstep(0, 1, x - xi), v = smoothstep(0, 1, z - zi);
+  const a = hash(xi, zi), b = hash(xi + 1, zi), c = hash(xi, zi + 1), d = hash(xi + 1, zi + 1);
+  return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+}
+function groundY(x, z) {
+  const n = noise(x / 38, z / 38) + noise(x / 17 + 50, z / 17) * 0.45 + noise(x / 7, z / 7 + 20) * 0.1;
+  return (n - 0.78) * 13 * smoothstep(12, 35, Math.hypot(x, z));  // plat autour du départ
+}
+const groundNormal = (x, z, out) => out.set(groundY(x - 0.5, z) - groundY(x + 0.5, z), 1, groundY(x, z - 0.5) - groundY(x, z + 0.5)).normalize();
+const dirtAt = (x, z, slope) => Math.min(1, smoothstep(0.6, 0.75, noise(x / 12 + 100, z / 12)) + slope * 1.5);  // 0 = herbe, 1 = terre
+const qYaw = new THREE.Quaternion(), nrm = new THREE.Vector3();
+function alignToGround(o, x, z, yaw, lift) {     // pose un objet plat sur la pente
+  o.position.set(x, groundY(x, z) + lift, z);
+  o.quaternion.setFromUnitVectors(UP, groundNormal(x, z, nrm)).multiply(qYaw.setFromAxisAngle(UP, yaw));
+}
 
 // ---------- scène ----------
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -35,44 +56,121 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0xc9d1db);
-scene.fog = new THREE.Fog(0xc9d1db, 60, 140);
+scene.background = new THREE.Color(0xbcd3e6);
+scene.fog = new THREE.Fog(0xbcd3e6, 70, 150);
 
 const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 400);
 const CAM_OFFSET = new THREE.Vector3(0, 24, 17);  // vue de haut 3/4
 
-scene.add(new THREE.HemisphereLight(0xffffff, 0x9aa4b0, 1.6));
-const sun = new THREE.DirectionalLight(0xffffff, 2.2);
+scene.add(new THREE.HemisphereLight(0xe2efff, 0x55663a, 1.4));
+const sun = new THREE.DirectionalLight(0xfff1dc, 2.4);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
 Object.assign(sun.shadow.camera, { left: -40, right: 40, top: 40, bottom: -40, near: 1, far: 120 });
 scene.add(sun, sun.target);
 
-// sol en terre : texture dessinée une fois, qui se répète sans couture
-const dirt = document.createElement('canvas');
-dirt.width = dirt.height = 512;
-const dc = dirt.getContext('2d');
-dc.fillStyle = '#86674a'; dc.fillRect(0, 0, 512, 512);
-const blot = (n, rMin, rMax, light, alpha) => {
+// texture de détail en gris (grain, cailloux), teintée par les couleurs du terrain
+const detail = document.createElement('canvas');
+detail.width = detail.height = 256;
+const dc = detail.getContext('2d');
+dc.fillStyle = '#cfcfcf'; dc.fillRect(0, 0, 256, 256);
+const speckle = (n, rMin, rMax, light, alpha) => {
   for (let i = 0; i < n; i++) {
-    const x = Math.random() * 512, y = Math.random() * 512, r = rMin + Math.random() * (rMax - rMin);
-    dc.fillStyle = `hsla(${24 + Math.random() * 12},${28 + Math.random() * 14}%,${light + rnd(10)}%,${alpha})`;
-    for (const ox of [-512, 0, 512]) for (const oy of [-512, 0, 512]) { dc.beginPath(); dc.arc(x + ox, y + oy, r, 0, 7); dc.fill(); }
+    const x = Math.random() * 256, y = Math.random() * 256, r = rMin + Math.random() * (rMax - rMin);
+    dc.fillStyle = `hsla(0,0%,${light + rnd(8)}%,${alpha})`;
+    for (const ox of [-256, 0, 256]) for (const oy of [-256, 0, 256]) { dc.beginPath(); dc.arc(x + ox, y + oy, r, 0, 7); dc.fill(); }
   }
 };
-blot(1500, 6, 22, 38, 0.18);                     // grandes taches
-blot(3000, 1.5, 5, 34, 0.35);                    // grain
-blot(500, 1, 2.5, 55, 0.7);                      // cailloux clairs
-blot(400, 1, 2.5, 20, 0.6);                      // cailloux sombres
-const dirtTex = new THREE.CanvasTexture(dirt);
-dirtTex.wrapS = dirtTex.wrapT = THREE.RepeatWrapping;
-dirtTex.repeat.set(SIZE / 8, SIZE / 8);
-dirtTex.colorSpace = THREE.SRGBColorSpace;
-dirtTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
-const platform = new THREE.Mesh(new THREE.BoxGeometry(SIZE, 2, SIZE), new THREE.MeshStandardMaterial({ map: dirtTex, roughness: 1 }));
-platform.position.y = -1;
-platform.receiveShadow = true;
-scene.add(platform);
+speckle(500, 4, 12, 72, 0.2);
+speckle(2500, 0.8, 2.5, 62, 0.35);
+speckle(300, 0.8, 1.8, 100, 0.6);
+const detailTex = new THREE.CanvasTexture(detail);
+detailTex.wrapS = detailTex.wrapT = THREE.RepeatWrapping;
+detailTex.repeat.set(WORLD / 5, WORLD / 5);
+detailTex.colorSpace = THREE.SRGBColorSpace;
+detailTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+
+// terrain : herbe, plaques de terre et pentes raides en terre
+const SEG = 200;
+const terrainGeo = new THREE.PlaneGeometry(WORLD, WORLD, SEG, SEG).rotateX(-Math.PI / 2);
+const tp = terrainGeo.attributes.position;
+for (let i = 0; i < tp.count; i++) tp.setY(i, groundY(tp.getX(i), tp.getZ(i)));
+terrainGeo.computeVertexNormals();
+const colors = new Float32Array(tp.count * 3), col = new THREE.Color();
+const grassA = new THREE.Color(0x4c7a2e), grassB = new THREE.Color(0x7aa443), dirtC = new THREE.Color(0x8a6a48);
+for (let i = 0; i < tp.count; i++) {
+  const x = tp.getX(i), z = tp.getZ(i), slope = 1 - terrainGeo.attributes.normal.getY(i);
+  col.copy(grassA).lerp(grassB, noise(x / 6, z / 6)).lerp(dirtC, dirtAt(x, z, slope));
+  col.multiplyScalar(0.92 + tp.getY(i) * 0.015);  // creux un peu plus sombres
+  col.toArray(colors, i * 3);
+}
+terrainGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+const terrain = new THREE.Mesh(terrainGeo, new THREE.MeshStandardMaterial({ map: detailTex, vertexColors: true, roughness: 1 }));
+terrain.receiveShadow = true;
+scene.add(terrain);
+
+// touffes d'herbe (une seule géométrie instanciée), écrasées par le tank
+const tuftGeo = (() => {
+  const pos = [], cols = [];
+  for (let i = 0; i < 5; i++) {
+    const a = Math.random() * Math.PI, w = 0.07, h = 0.4 + Math.random() * 0.35, ox = rnd(0.15), oz = rnd(0.15);
+    const A = [ox - Math.cos(a) * w, 0, oz - Math.sin(a) * w], B = [ox + Math.cos(a) * w, 0, oz + Math.sin(a) * w], C = [ox + rnd(0.15), h, oz + rnd(0.15)];
+    pos.push(...A, ...B, ...C, ...B, ...A, ...C);  // deux faces, normales vers le haut : jamais de brin noir vu de dos
+    cols.push(0.55, 0.55, 0.55, 0.55, 0.55, 0.55, 1, 1, 1, 0.55, 0.55, 0.55, 0.55, 0.55, 0.55, 1, 1, 1);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(pos.map((_, i) => (i % 3 === 1 ? 1 : 0)), 3));  // éclairées comme le sol
+  g.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
+  return g;
+})();
+const TUFTS = 9000;
+const tuftMesh = new THREE.InstancedMesh(tuftGeo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 }), TUFTS);
+const tufts = [], tuftCells = new Map(), tuftDummy = new THREE.Object3D();
+const cellKey = (x, z) => Math.floor(x / 4) + ',' + Math.floor(z / 4);
+function placeTuft(i) {
+  const t = tufts[i];
+  tuftDummy.position.set(t.x, groundY(t.x, t.z), t.z);
+  tuftDummy.rotation.set(0, t.yaw, 0);
+  tuftDummy.scale.set(t.s * (t.flat ? 1.4 : 1), t.s * (t.flat ? 0.15 : 1), t.s * (t.flat ? 1.4 : 1));
+  tuftDummy.updateMatrix();
+  tuftMesh.setMatrixAt(i, tuftDummy.matrix);
+}
+while (tufts.length < TUFTS) {
+  const x = rnd(HALF), z = rnd(HALF);
+  if (dirtAt(x, z, 1 - groundNormal(x, z, nrm).y) > 0.35) continue;
+  const i = tufts.length;
+  tufts.push({ x, z, yaw: Math.random() * 6, s: 0.8 + Math.random() * 0.8, flat: false });
+  placeTuft(i);
+  tuftMesh.setColorAt(i, col.copy(grassA).lerp(grassB, 0.3 + Math.random() * 0.7));
+  const k = cellKey(x, z);
+  if (!tuftCells.has(k)) tuftCells.set(k, []);
+  tuftCells.get(k).push(i);
+}
+tuftMesh.frustumCulled = false;
+scene.add(tuftMesh);
+let flattened = 0;
+function flattenTufts(x, z) {
+  let changed = false;
+  for (let dx = -4; dx <= 4; dx += 4) for (let dz = -4; dz <= 4; dz += 4) {
+    for (const i of tuftCells.get(cellKey(x + dx, z + dz)) || []) {
+      const t = tufts[i];
+      if (t.flat || Math.hypot(t.x - x, t.z - z) > 2.3) continue;
+      t.flat = true; flattened++; changed = true;
+      placeTuft(i);
+      tuftMesh.setColorAt(i, col.setHex(0x5d6b33));
+    }
+  }
+  if (changed) { tuftMesh.instanceMatrix.needsUpdate = true; tuftMesh.instanceColor.needsUpdate = true; }
+}
+
+const resize = () => {
+  renderer.setSize(innerWidth, innerHeight);
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+};
+addEventListener('resize', resize);
+resize();
 
 // traces de chenilles : un morceau de trace posé au sol chaque fois qu'une chenille a parcouru ~0,5 m
 const markCanvas = document.createElement('canvas');
@@ -85,7 +183,7 @@ const markTex = new THREE.CanvasTexture(markCanvas);
 const MAX_MARKS = 4000;                          // shortcut: les plus vieilles traces disparaissent d'un coup, ajouter un fondu si ça se voit
 const marks = new THREE.InstancedMesh(
   new THREE.PlaneGeometry(0.85, 1).rotateX(-Math.PI / 2),
-  new THREE.MeshBasicMaterial({ map: markTex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1 }),
+  new THREE.MeshBasicMaterial({ map: markTex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }),
   MAX_MARKS);
 marks.count = 0;
 marks.frustumCulled = false;
@@ -93,23 +191,14 @@ scene.add(marks);
 let markIdx = 0;
 const markDummy = new THREE.Object3D();
 function addMark(a, b) {
-  markDummy.position.set((a.x + b.x) / 2, 0.015, (a.z + b.z) / 2);
-  markDummy.rotation.y = Math.atan2(b.x - a.x, b.z - a.z);
-  markDummy.scale.set(1, 1, a.distanceTo(b) + 0.05);
+  alignToGround(markDummy, (a.x + b.x) / 2, (a.z + b.z) / 2, Math.atan2(b.x - a.x, b.z - a.z), 0.06);
+  markDummy.scale.set(1, 1, Math.hypot(b.x - a.x, b.z - a.z) + 0.05);
   markDummy.updateMatrix();
   marks.setMatrixAt(markIdx, markDummy.matrix);
   markIdx = (markIdx + 1) % MAX_MARKS;
   marks.count = Math.max(marks.count, markIdx || MAX_MARKS);
   marks.instanceMatrix.needsUpdate = true;
 }
-
-const resize = () => {
-  renderer.setSize(innerWidth, innerHeight);
-  camera.aspect = innerWidth / innerHeight;
-  camera.updateProjectionMatrix();
-};
-addEventListener('resize', resize);
-resize();
 
 // ---------- tank ----------
 const mat = (color, extra) => new THREE.MeshStandardMaterial({ color, roughness: 0.7, ...extra });
@@ -139,8 +228,10 @@ const treadTex = () => {
 };
 
 const tank = new THREE.Group();                  // position + cap ; avant = +z local, gauche = +x local
+const tilt = new THREE.Group();                  // suit la pente du terrain
 const body = new THREE.Group();                  // tangage (recul, accélération)
-tank.add(body);
+tank.add(tilt);
+tilt.add(body);
 
 // caisse
 box(2.2, 0.6, 4.0, darkGreen, 0, 0.65, 0, body);
@@ -223,6 +314,7 @@ scene.add(tank);
 
 let speed = 0, turretYaw = Math.PI, reload = 0, recoil = 0, shake = 0, score = 0, flashT = 0;
 let pitch = 0, pitchV = 0, sway = 0, swayV = 0, puffT = 0;
+const focus = new THREE.Vector3();               // point suivi par la caméra (lissé)
 
 // ---------- cibles ----------
 const targets = [];
@@ -231,10 +323,10 @@ function addTarget(x, z, kind) {
   const m = crate ? box(2, 2, 2, mat(0xc98a4b), 0, 1, 0) : cyl(0.8, 0.8, 1.8, mat(0xc0392b), 0, 0.9, 0);
   const g = new THREE.Group();
   g.add(m);
-  g.position.set(x, 0, z);
+  g.position.set(x, groundY(x, z), z);
   scene.add(g);
   const maxHp = crate ? 3 : 1;
-  targets.push({ g, mesh: m, r: crate ? 1.3 : 0.9, maxHp, hp: maxHp, home: new THREE.Vector3(x, 0, z), vel: new THREE.Vector3(), hit: 0, dead: 0 });
+  targets.push({ g, mesh: m, r: crate ? 1.3 : 0.9, maxHp, hp: maxHp, home: g.position.clone(), vel: new THREE.Vector3(), hit: 0, dead: 0 });
 }
 for (let i = -3; i <= 3; i++) addTarget(i * 4, -20, i % 2 ? 'barrel' : 'crate');  // rangée de test devant
 for (let i = 0; i < 40; i++) {
@@ -266,9 +358,8 @@ sc.fillStyle = grad; sc.fillRect(0, 0, 64, 64);
 const scorchTex = new THREE.CanvasTexture(scorchCanvas), scorchGeo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
 const scorches = [];
 function scorch(pos, size) {
-  const m = new THREE.Mesh(scorchGeo, new THREE.MeshBasicMaterial({ map: scorchTex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }));
-  m.position.set(pos.x, 0.02, pos.z);
-  m.rotation.y = Math.random() * 6;
+  const m = new THREE.Mesh(scorchGeo, new THREE.MeshBasicMaterial({ map: scorchTex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3 }));
+  alignToGround(m, pos.x, pos.z, Math.random() * 6, 0.08);
   m.scale.setScalar(size);
   scene.add(m);
   scorches.push({ m, t: 12 });
@@ -280,12 +371,13 @@ scene.add(impactLight);
 
 function explode(pos, big, debrisColor = 0x5a4029) {
   const s = big ? 2 : 1;
-  const p = pos.clone().setY(Math.max(pos.y, 0.6));
+  const gy = groundY(pos.x, pos.z);
+  const p = pos.clone().setY(Math.max(pos.y, gy + 0.6));
   for (let i = 0; i < 5 * s; i++) spawn({ pos: jitter(p, 0.3 * s), vel: new THREE.Vector3(rnd(2), 1 + Math.random() * 2, rnd(2)), color: 0xfff1a8, color2: 0xff4d00, life: 0.3 + Math.random() * 0.15, size: 0.45 * s, grow: 2.5 });
   for (let i = 0; i < 9 * s; i++) spawn({ pos: jitter(p, 0.5 * s), vel: new THREE.Vector3(rnd(2.5 * s), 1.5 + Math.random() * 2.5, rnd(2.5 * s)), color: 0x3d3a36, color2: 0xb9b6b0, life: 1.4 + Math.random() * 1.2, size: 0.4 * s, grow: 3, drag: 1.5, opacity: 0.75 });
   for (let i = 0; i < 12 * s; i++) spawn({ geo: cubeGeo, pos: p, vel: new THREE.Vector3(rnd(8 * s), 4 + Math.random() * 8 * s, rnd(8 * s)), color: 0xffd34d, color2: 0xff5a1a, life: 0.35 + Math.random() * 0.2, size: 0.08, grav: 18 });
   for (let i = 0; i < 8 * s; i++) spawn({ geo: cubeGeo, pos: p, vel: new THREE.Vector3(rnd(6 * s), 3 + Math.random() * 7 * s, rnd(6 * s)), color: debrisColor, life: 1.2 + Math.random() * 0.6, size: 0.12 + Math.random() * 0.2 * s, grav: 25, spin: true });
-  spawn({ geo: ringGeo, pos: new THREE.Vector3(p.x, 0.06, p.z), color: 0x8f8a82, life: 0.45, size: 0.6 * s, grow: 7, opacity: 0.6 });
+  spawn({ geo: ringGeo, pos: new THREE.Vector3(p.x, gy + 0.15, p.z), color: 0x8f8a82, life: 0.45, size: 0.6 * s, grow: 7, opacity: 0.6 });
   impactLight.position.copy(p).y += 1.5;
   impactLight.intensity = 60 * s;
   scorch(p, 2.4 * s);
@@ -320,8 +412,8 @@ function fire() {
   for (let i = 0; i < 10; i++) spawn({ geo: cubeGeo, pos: tip, vel: dir.clone().multiplyScalar(14 + Math.random() * 12).add(jitter(UP, 3)), color: 0xffe066, color2: 0xff7a20, life: 0.25 + Math.random() * 0.15, size: 0.07, grav: 10 });
   // le souffle soulève la poussière autour du tank
   for (let i = 0; i < 16; i++) {
-    const a = (i / 16) * Math.PI * 2;
-    spawn({ pos: tank.position.clone().add(new THREE.Vector3(Math.cos(a) * 2.4, 0.3, Math.sin(a) * 2.4)), vel: new THREE.Vector3(Math.cos(a) * 5, 0.6, Math.sin(a) * 5), color: 0xae9270, life: 0.9, size: 0.4, grow: 2.5, drag: 3, opacity: 0.45 });
+    const a = (i / 16) * Math.PI * 2, x = tank.position.x + Math.cos(a) * 2.4, z = tank.position.z + Math.sin(a) * 2.4;
+    spawn({ pos: new THREE.Vector3(x, groundY(x, z) + 0.3, z), vel: new THREE.Vector3(Math.cos(a) * 5, 0.6, Math.sin(a) * 5), color: 0xae9270, life: 0.9, size: 0.4, grow: 2.5, drag: 3, opacity: 0.45 });
   }
 }
 
@@ -388,9 +480,18 @@ renderer.setAnimationLoop(() => {
     turn = 0;
   }
   tank.rotation.y += turn * TURN_RATE * dt;
-  speed += (throttle * MAX_SPEED - speed) * Math.min(1, dt * 3);
-  tank.position.x += Math.sin(tank.rotation.y) * speed * dt;
-  tank.position.z += Math.cos(tank.rotation.y) * speed * dt;
+
+  // pente sous le tank : avant/arrière et gauche/droite
+  const yaw = tank.rotation.y, fx = Math.sin(yaw), fz = Math.cos(yaw), lx = Math.cos(yaw), lz = -Math.sin(yaw);
+  const { x: px, z: pz } = tank.position;
+  const hf = groundY(px + fx * 2, pz + fz * 2), hb = groundY(px - fx * 2, pz - fz * 2);
+  const hl = groundY(px + lx * 1.5, pz + lz * 1.5), hr = groundY(px - lx * 1.5, pz - lz * 1.5);
+  const grade = (hf - hb) / 4;                   // > 0 : ça monte devant
+  speed += (throttle * MAX_SPEED * (1 - Math.max(-0.25, Math.min(0.6, grade * Math.sign(throttle)))) - speed) * Math.min(1, dt * 3);
+  tank.position.x += fx * speed * dt;
+  tank.position.z += fz * speed * dt;
+  tilt.rotation.x += (-Math.atan2(hf - hb, 4) - tilt.rotation.x) * Math.min(1, dt * 8);
+  tilt.rotation.z += (Math.atan2(hl - hr, 3) - tilt.rotation.z) * Math.min(1, dt * 8);
 
   // collisions tank / cibles (cercles) et bords
   for (const t of targets) {
@@ -404,15 +505,17 @@ renderer.setAnimationLoop(() => {
   }
   tank.position.x = Math.max(-HALF, Math.min(HALF, tank.position.x));
   tank.position.z = Math.max(-HALF, Math.min(HALF, tank.position.z));
+  tank.position.y = groundY(tank.position.x, tank.position.z);
+  flattenTufts(tank.position.x, tank.position.z);
 
   // chenilles et roues : chaque côté roule à sa vitesse quand le tank tourne
   const yawRate = wrap(tank.rotation.y - yaw0) / dt;
   for (const tr of treads) tr.tex.offset.x += tr.sx * (speed - tr.sx * yawRate * 1.5) * dt / 1.075;
   for (const w of wheels) w.pivot.rotation.x += (speed - w.sx * yawRate * 1.5) * dt / w.r;
   for (const tr of treads) {
-    const p = tank.localToWorld(tmp.set(tr.sx * 1.5, 0, 0));
+    const p = tmp.set(px + lx * tr.sx * 1.5, 0, pz + lz * tr.sx * 1.5);
     if (!tr.last) tr.last = p.clone();
-    else if (p.distanceTo(tr.last) > 0.5) { addMark(tr.last, p); tr.last.copy(p); }
+    else if (p.distanceTo(tr.last) > 0.5) { if (p.distanceTo(tr.last) < 3) addMark(tr.last, p); tr.last.copy(p); }
   }
 
   // la caisse plonge/se cabre (ressort), l'antenne oscille
@@ -433,9 +536,10 @@ renderer.setAnimationLoop(() => {
     for (const sx of [-1.5, 1.5]) spawn({ pos: body.localToWorld(tmp.set(sx, 0.2, -Math.sign(speed) * 2.1)), vel: new THREE.Vector3(rnd(0.6), 0.5, rnd(0.6)), color: 0xa8895f, life: 0.8, size: 0.3, grow: 2.5, drag: 2, opacity: 0.35 });
   }
 
-  // visée
+  // visée (rayon de la souris sur un plan à la hauteur du tank)
   let aiming = false;
   if (useMouse) {
+    ground.constant = -tank.position.y;
     ray.setFromCamera(mouse, camera);
     if (ray.ray.intersectPlane(ground, tmp)) { turretYaw = turnToward(turretYaw, Math.atan2(tmp.x - tank.position.x, tmp.z - tank.position.z), TURRET_RATE * dt); }
   }
@@ -462,10 +566,11 @@ renderer.setAnimationLoop(() => {
   flashLight.intensity = Math.max(0, flashT) * 900;
   impactLight.intensity *= Math.pow(0.0005, dt);
 
-  // obus traçants
+  // obus traçants : ils suivent le relief à hauteur fixe pour pouvoir toucher les cibles sur les collines
   for (let i = shells.length - 1; i >= 0; i--) {
     const s = shells[i];
     s.m.position.addScaledVector(s.vel, dt);
+    s.m.position.y += (groundY(s.m.position.x, s.m.position.z) + 1.3 - s.m.position.y) * Math.min(1, dt * 8);
     s.life -= dt;
     spawn({ pos: s.m.position, color: 0xffc35a, color2: 0xe2e0dc, life: 0.3, size: 0.13, grow: 1.5, opacity: 0.8 });
     let hit = null;
@@ -479,10 +584,10 @@ renderer.setAnimationLoop(() => {
       shells.splice(i, 1);
       if (hit) {
         hit.hp--; hit.hit = 0.15;
-        hit.vel.addScaledVector(s.vel, 0.12);
+        hit.vel.addScaledVector(s.vel, 0.12).setY(0);
         if (hit.hp <= 0) {
           hit.dead = 4; hit.g.visible = false;
-          explode(hit.g.position.clone().setY(1), true, hit.mesh.material.color.getHex());
+          explode(hit.g.position.clone().setY(hit.g.position.y + 1), true, hit.mesh.material.color.getHex());
           shake = 0.8;
           document.getElementById('score').textContent = ++score;
         }
@@ -498,6 +603,7 @@ renderer.setAnimationLoop(() => {
       continue;
     }
     t.g.position.addScaledVector(t.vel, dt);
+    t.g.position.y = groundY(t.g.position.x, t.g.position.z);
     t.vel.multiplyScalar(Math.pow(0.02, dt));
     t.hit = Math.max(0, t.hit - dt);
     t.mesh.material.emissive.setHex(t.hit > 0 ? 0xffffff : 0x000000);
@@ -512,7 +618,10 @@ renderer.setAnimationLoop(() => {
     p.vel.y -= p.grav * dt;
     if (p.drag) p.vel.multiplyScalar(Math.exp(-p.drag * dt));
     p.m.position.addScaledVector(p.vel, dt);
-    if (p.grav && p.m.position.y < 0.05) { p.m.position.y = 0.05; p.vel.multiplyScalar(0.5); p.vel.y *= -0.3; }
+    if (p.grav) {
+      const gy = groundY(p.m.position.x, p.m.position.z) + 0.05;
+      if (p.m.position.y < gy) { p.m.position.y = gy; p.vel.multiplyScalar(0.5); p.vel.y *= -0.3; }
+    }
     if (p.spin) { p.m.rotation.x += dt * 8; p.m.rotation.y += dt * 6; }
     p.m.scale.setScalar(p.size * (1 + p.grow * Math.sqrt(f)));
     if (p.c2) p.m.material.color.copy(p.c1).lerp(p.c2, Math.min(1, f * 1.6));
@@ -526,18 +635,19 @@ renderer.setAnimationLoop(() => {
     if (s.t <= 0) { scene.remove(s.m); s.m.material.dispose(); scorches.splice(i, 1); }
   }
 
-  // caméra et ombre qui suivent le tank
+  // caméra (lissée pour ne pas sautiller sur les bosses) et ombre qui suivent le tank
+  focus.lerp(tank.position, Math.min(1, dt * 6));
   shake = Math.max(0, shake - dt * 2);
-  camera.position.copy(tank.position).add(CAM_OFFSET);
+  camera.position.copy(focus).add(CAM_OFFSET);
   camera.position.x += rnd(shake * 0.5);
   camera.position.z += rnd(shake * 0.5);
-  camera.lookAt(tank.position);
-  sun.position.copy(tank.position).add(tmp.set(20, 40, 15));
-  sun.target.position.copy(tank.position);
+  camera.lookAt(focus);
+  sun.position.copy(focus).add(tmp.set(35, 28, 8));  // soleil assez bas pour que les collines se lisent
+  sun.target.position.copy(focus);
 
   renderer.render(scene, camera);
 });
-window.game = { tank, targets, shells, parts, marks, get score() { return score; } };  // pour les tests
+window.game = { tank, targets, shells, parts, marks, groundY, get score() { return score; }, get flattened() { return flattened; } };  // pour les tests
 </script>
 </body>
 </html>
