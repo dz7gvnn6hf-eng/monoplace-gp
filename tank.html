@@ -261,7 +261,7 @@ const lightMat = mat(0xfff3c4, { emissive: 0xfff0b0, emissiveIntensity: 0.6 });
 const newRig = (name, stats) => {
   const body = new THREE.Group();
   tilt.add(body);
-  return { name, body, kind: 'tank', arc: Math.PI, circles: [0], radius: 2, zoom: 1, smoke: 0.18, kick: 1.4, pos: new THREE.Vector3(), yaw: Math.PI, treads: [], wheels: [], antennas: [], exhausts: [], ...stats };
+  return { name, body, kind: 'tank', arc: Math.PI, circles: [0], radius: 2, cam: CAM_OFFSET, smoke: 0.18, kick: 1.4, pos: new THREE.Vector3(), yaw: Math.PI, treads: [], wheels: [], antennas: [], exhausts: [], ...stats };
 };
 // chenille texturée + roues à rayons (on voit la roue tourner)
 function addTrack(rig, sx, { x, w, h, len, wheelX, n, r, rEnd, wheelMat, hubMat }) {
@@ -328,55 +328,178 @@ function buildHeavy() {
   return rig;
 }
 
+// ---------- navire de guerre ----------
+const SHIP_STERN = -8.6, SHIP_LEN = 18;          // de la poupe (z = -8,6) à la proue (z = +9,4)
+const shipT = (z) => (z - SHIP_STERN) / SHIP_LEN;
+const shipWidth = (z) => {                       // demi-largeur de la coque au pont
+  const t = shipT(z);
+  return 2.3 * (t < 0.45 ? 0.84 + 0.16 * Math.sin((t / 0.45) * Math.PI / 2) : Math.sqrt(Math.max(0, 1 - ((t - 0.45) / 0.55) ** 2)));
+};
+const shipDeck = (z) => 1.0 + 0.7 * smoothstep(0.55, 1, shipT(z));  // le pont remonte vers la proue
+function hullGeometry() {
+  const N = 32, pos = [], cols = [], st = [];
+  const gray = new THREE.Color(0x6f7882), black = new THREE.Color(0x24282c), red = new THREE.Color(0x8c3328), deckC = new THREE.Color(0x4b5258);
+  for (let i = 0; i <= N; i++) {
+    const z = SHIP_STERN + (i / N) * SHIP_LEN, w = shipWidth(z), v = smoothstep(0.6, 1, shipT(z));  // v : proue en V
+    st.push({ z, ring: [[w, shipDeck(z)], [w * (0.96 - 0.12 * v), 0.3], [w * (0.94 - 0.2 * v), 0], [w * (0.8 - 0.5 * v), -0.7], [w * (0.25 - 0.2 * v), -1.1]] });
+  }
+  const tri = (a, b, c, color) => { pos.push(...a, ...b, ...c); for (let k = 0; k < 3; k++) cols.push(color.r, color.g, color.b); };
+  const P = (r, s, sx) => [sx * r[0], r[1], s.z];
+  for (let i = 0; i < N; i++) {
+    const A = st[i], B = st[i + 1];
+    for (let j = 0; j < 4; j++) {
+      const c = j === 0 ? gray : j === 1 ? black : red;  // coque grise, bande noire, carène rouge sous l'eau
+      for (const sx of [1, -1]) {
+        const a = P(A.ring[j], A, sx), b = P(A.ring[j + 1], A, sx), cc = P(B.ring[j + 1], B, sx), d = P(B.ring[j], B, sx);
+        tri(a, cc, b, c); tri(a, d, cc, c);
+      }
+    }
+    const l0 = P(A.ring[0], A, -1), r0 = P(A.ring[0], A, 1), l1 = P(B.ring[0], B, -1), r1 = P(B.ring[0], B, 1);
+    tri(l0, r1, r0, deckC); tri(l0, l1, r1, deckC);  // pont
+  }
+  const s0 = st[0], mid = [0, 0.2, s0.z];          // tableau arrière
+  for (let j = 0; j < 4; j++) for (const sx of [1, -1]) tri(mid, P(s0.ring[j], s0, sx), P(s0.ring[j + 1], s0, sx), j === 0 ? gray : j === 1 ? black : red);
+  tri(mid, P(s0.ring[0], s0, 1), P(s0.ring[0], s0, -1), gray);
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
+  g.computeVertexNormals();
+  return g;
+}
+// bloc à pans inclinés (le haut est plus étroit), style navire furtif
+const taper = (w, h, d, kx, kz, m, x, y, z, parent) => {
+  const g = new THREE.BoxGeometry(w, h, d), p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) if (p.getY(i) > 0) { p.setX(i, p.getX(i) * kx); p.setZ(i, p.getZ(i) * kz); }
+  g.computeVertexNormals();
+  return mesh(g, m, x, y, z, parent);
+};
+const canvasTex = (w, h, draw) => {
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  draw(c.getContext('2d'));
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  return t;
+};
+
 function buildShip() {
-  const hullMat = mat(0x6b7480), upper = mat(0x8d959e), deck = mat(0x4d545a), glass = mat(0x1e2a33, { roughness: 0.2, metalness: 0.3 });
-  const orange = mat(0xe2722b), white = mat(0xe8ecef);
-  const rig = newRig('Navire de guerre', { kind: 'ship', speed: 10, turn: 0.7, turretRate: 2.5, reload: 0.9, barrelZ: 0.75, recoilLen: 0.35, kick: 0.3,
-    muzzle: new THREE.Vector3(0, 0, 2.45), arc: 2.4, circles: [-4.2, 0, 4.2], radius: 1.8, zoom: 1.3, smoke: 0.4, pos: findShipSpawn() });
+  const upper = mat(0x8e969f, { flatShading: true }), deckM = mat(0x4b5258), glass = mat(0x18232c, { roughness: 0.15, metalness: 0.4 });
+  const white = mat(0xe9edf0), orange = mat(0xe2722b), rubber = mat(0x3a3f44), rail = mat(0xd5dade);
+  const rig = newRig('Navire de guerre', { kind: 'ship', speed: 10, turn: 0.6, turretRate: 2.5, reload: 0.9, barrelZ: 0.7, recoilLen: 0.35, kick: 0.25,
+    muzzle: new THREE.Vector3(0, 0, 3.3), arc: 2.5, circles: [-6, -2, 2, 6], radius: 2.2, cam: new THREE.Vector3(0, 31, 33), smoke: 0.32,  // caméra plus inclinée : on voit les flancs
+    pos: findShipSpawn() });
   const b = rig.body;
-  // coque : contour en pointe extrudé (y du dessin négatif = avant après rotation)
-  const outline = new THREE.Shape();
-  outline.moveTo(-1.45, 6); outline.lineTo(1.45, 6); outline.lineTo(1.65, -1);
-  outline.quadraticCurveTo(1.5, -4.6, 0, -6.4); outline.quadraticCurveTo(-1.5, -4.6, -1.65, -1); outline.closePath();
-  mesh(new THREE.ExtrudeGeometry(outline, { depth: 1.7, bevelEnabled: false }).rotateX(-Math.PI / 2).translate(0, -0.9, 0), hullMat, 0, 0, 0, b);
-  mesh(new THREE.ShapeGeometry(outline).rotateX(-Math.PI / 2), deck, 0, 0.81, 0, b).scale.set(0.96, 1, 0.97);
-  // superstructure
-  box(2.3, 1.1, 3.4, upper, 0, 1.35, -0.6, b);
-  box(2.5, 0.85, 1.5, upper, 0, 2.3, 0.4, b);                                // passerelle
-  box(2.52, 0.22, 0.12, glass, 0, 2.45, 1.16, b);
-  for (const sx of [-1, 1]) box(0.12, 0.22, 1.2, glass, sx * 1.26, 2.45, 0.4, b);
-  cyl(0.07, 0.12, 3.2, dark, 0, 4.2, -0.2, b);                               // mât
-  box(1.8, 0.06, 0.06, dark, 0, 5.0, -0.2, b);
-  rig.radar = new THREE.Group();
-  rig.radar.position.set(0, 5.85, -0.2);
-  box(1.3, 0.28, 0.08, white, 0, 0, 0, rig.radar);
-  b.add(rig.radar);
-  box(1.0, 1.4, 1.3, upper, 0, 2.5, -2.1, b).rotation.x = -0.12;            // cheminée
-  box(1.04, 0.22, 1.34, dark, 0, 3.22, -2.2, b).rotation.x = -0.12;
-  rig.exhausts.push(new THREE.Vector3(0, 3.4, -2.25));
-  box(2.2, 0.95, 1.8, upper, 0, 1.25, -3.3, b);                              // hangar
-  for (const sx of [-1, 1]) box(0.38, 0.32, 1.2, orange, sx * 1.3, 1.55, -1.0, b);  // canots de sauvetage
-  cyl(0.28, 0.32, 0.45, upper, 0, 1.95, -3.6, b);
-  mesh(new THREE.SphereGeometry(0.34, 14, 10), white, 0, 2.3, -3.6, b);       // radôme
-  mesh(new THREE.RingGeometry(0.7, 0.82, 28).rotateX(-Math.PI / 2), white, 0, 0.83, -5.0, b);  // hélipad
-  box(1.0, 0.05, 0.8, dark, 0, 0.83, 1.9, b);                                // silos à missiles
-  // tourelle de proue
+
+  mesh(hullGeometry(), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, flatShading: true, side: THREE.DoubleSide }), 0, 0, 0, b);
+  // rambardes le long du pont
+  for (const sx of [-1, 1]) {
+    const pts = [];
+    for (let z = SHIP_STERN + 0.2; z < 9.2; z += 0.6) pts.push(new THREE.Vector3(sx * (shipWidth(z) - 0.06), shipDeck(z) + 0.32, z));
+    pts.push(new THREE.Vector3(0, shipDeck(9.3) + 0.32, 9.3));
+    mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 80, 0.025, 4), rail, 0, 0, 0, b).castShadow = false;
+  }
+  // numéro de coque, ancres, bittes d'amarrage
+  const numTex = canvasTex(128, 64, (c) => { c.font = 'bold 50px system-ui, sans-serif'; c.textAlign = 'center'; c.fillStyle = '#f2f4f5'; c.fillText('61', 64, 50); });
+  for (const sx of [-1, 1]) {
+    const z = 6.3, n = mesh(new THREE.PlaneGeometry(1.3, 0.65), new THREE.MeshStandardMaterial({ map: numTex, transparent: true, roughness: 0.6 }), sx * (shipWidth(z) * 0.97 + 0.03), 0.75, z, b);
+    n.rotation.y = sx * Math.PI / 2;
+    n.castShadow = false;
+    box(0.12, 0.35, 0.28, dark, sx * (shipWidth(7.8) + 0.03), 1.15, 7.8, b);           // ancre
+    for (const z2 of [7.0, -7.9]) cyl(0.09, 0.09, 0.22, dark, sx * (shipWidth(z2) - 0.35), shipDeck(z2) + 0.11, z2, b, 8);
+  }
+
+  // canon de proue (tourelle furtive)
   const t = rig.turret = new THREE.Group();
-  t.position.set(0, 0.8, 3.4);
+  t.position.set(0, shipDeck(6.4), 6.4);
   b.add(t);
-  cyl(0.75, 0.85, 0.3, upper, 0, 0.15, 0, t, 20);
-  box(1.2, 0.55, 1.5, upper, 0, 0.55, -0.1, t);
-  box(1.2, 0.45, 0.55, upper, 0, 0.5, 0.75, t).rotation.x = 0.55;
+  cyl(0.85, 0.95, 0.25, upper, 0, 0.12, 0, t, 20);
+  taper(1.5, 0.75, 2.0, 0.65, 0.7, upper, 0, 0.6, -0.1, t);
   const br = rig.barrel = new THREE.Group();
-  br.position.set(0, 0.55, 0.75);
+  br.position.set(0, 0.55, 0.7);
   t.add(br);
-  cyl(0.08, 0.11, 2.4, dark, 0, 0, 1.2, br).rotation.x = Math.PI / 2;
+  cyl(0.07, 0.1, 3.2, dark, 0, 0, 1.6, br).rotation.x = Math.PI / 2;
+  cyl(0.13, 0.13, 0.35, upper, 0, 0, 0.2, br).rotation.x = Math.PI / 2;
+  // silos à missiles (grille de trappes)
+  const vlsTex = canvasTex(64, 64, (c) => {
+    c.fillStyle = '#3c4247'; c.fillRect(0, 0, 64, 64);
+    c.fillStyle = '#5b636a';
+    for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) c.fillRect(2 + i * 16, 2 + j * 16, 12, 12);
+  });
+  box(1.8, 0.1, 1.5, mat(0xffffff, { map: vlsTex }), 0, shipDeck(4.3) + 0.05, 4.3, b);
+
+  // superstructure avant, passerelle et ailerons
+  taper(3.6, 1.5, 3.2, 0.88, 0.85, upper, 0, 1.75, 1.8, b);
+  taper(3.2, 1.0, 2.2, 0.9, 0.8, upper, 0, 3.0, 1.6, b);
+  box(2.95, 0.28, 0.08, glass, 0, 3.15, 2.62, b).rotation.x = -0.22;              // vitres avant
+  for (const sx of [-1, 1]) box(0.06, 0.26, 1.5, glass, sx * 1.5, 3.15, 1.6, b).rotation.z = sx * 0.1;
+  box(4.4, 0.1, 0.7, upper, 0, 2.55, 2.3, b);                                      // ailerons de passerelle
+  const navLight = (color) => mat(color, { emissive: color, emissiveIntensity: 1.5 });
+  box(0.14, 0.14, 0.14, navLight(0xff3030), 2.15, 2.68, 2.3, b);                    // feu bâbord (gauche)
+  box(0.14, 0.14, 0.14, navLight(0x30ff60), -2.15, 2.68, 2.3, b);                   // feu tribord (droite)
+  // système de défense rapproché devant la passerelle
+  cyl(0.3, 0.35, 0.3, upper, 0, 2.65, 3.0, b);
+  mesh(new THREE.SphereGeometry(0.32, 14, 10), white, 0, 3.05, 3.0, b);
+  cyl(0.04, 0.04, 0.6, dark, 0, 2.85, 3.4, b).rotation.x = Math.PI / 2;
+  // mât-tour, vergue, antennes et radar tournant
+  taper(1.5, 2.4, 1.5, 0.3, 0.3, upper, 0, 4.7, 1.2, b);
+  box(2.2, 0.05, 0.05, dark, 0, 5.3, 1.2, b);
+  for (const sx of [-1, 1]) cyl(0.01, 0.02, 1.0, dark, sx * 1.05, 5.8, 1.2, b, 4);
+  rig.radar = new THREE.Group();
+  rig.radar.position.set(0, 6.0, 1.2);
+  box(0.2, 0.3, 0.2, dark, 0, 0, 0, rig.radar);
+  box(1.6, 0.35, 0.1, white, 0, 0.25, 0, rig.radar);
+  b.add(rig.radar);
+
+  // bloc arrière, cheminée, canots
+  taper(3.2, 1.2, 4.0, 0.9, 0.9, upper, 0, 1.6, -2.4, b);
+  taper(1.5, 1.8, 2.2, 0.75, 0.8, upper, 0, 3.1, -1.8, b);                          // cheminée
+  taper(1.15, 0.25, 1.78, 0.95, 0.95, dark, 0, 4.12, -1.8, b);
+  for (const z of [-1.5, -2.1]) cyl(0.12, 0.12, 0.35, dark, 0, 4.35, z, b, 10);
+  rig.exhausts.push(new THREE.Vector3(0, 4.5, -1.5), new THREE.Vector3(0, 4.5, -2.1));
+  for (const sx of [-1, 1]) {
+    box(0.6, 0.3, 1.6, rubber, sx * 1.85, 1.95, -2.4, b);                             // semi-rigide
+    box(0.62, 0.12, 1.5, orange, sx * 1.85, 2.15, -2.4, b);
+    for (const z of [-3.0, -1.8]) box(0.08, 0.6, 0.08, dark, sx * 1.55, 2.2, z, b);  // bossoirs
+  }
+  // hangar et hélipad avec un hélicoptère
+  taper(3.2, 1.4, 2.2, 0.95, 0.95, upper, 0, 1.7, -4.9, b);
+  box(2.2, 1.0, 0.05, mat(0x7a828b), 0, 1.55, -6.02, b);                            // porte du hangar
+  const padTex = canvasTex(128, 128, (c) => {
+    c.strokeStyle = '#f2f4f5'; c.lineWidth = 6;
+    c.beginPath(); c.arc(64, 64, 50, 0, 7); c.stroke();
+    c.fillStyle = '#f2f4f5'; c.fillRect(40, 34, 12, 60); c.fillRect(76, 34, 12, 60); c.fillRect(40, 58, 48, 12);
+  });
+  const pad = mesh(new THREE.PlaneGeometry(2.6, 2.6).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ map: padTex, transparent: true, polygonOffset: true, polygonOffsetFactor: -2 }), 0, shipDeck(-7.3) + 0.02, -7.3, b);
+  pad.castShadow = false;
+  const heli = new THREE.Group();
+  heli.position.set(0, shipDeck(-7.3), -7.2);
+  heli.rotation.y = Math.PI;                                                        // nez vers l'arrière, prêt à décoller
+  const heliMat = mat(0x5f6a73);
+  mesh(new THREE.SphereGeometry(1, 14, 10), heliMat, 0, 0.5, 0.15, heli).scale.set(0.38, 0.36, 0.8);
+  mesh(new THREE.SphereGeometry(1, 12, 8), glass, 0, 0.58, 0.65, heli).scale.set(0.3, 0.25, 0.35);
+  cyl(0.06, 0.12, 1.3, heliMat, 0, 0.6, -0.95, heli).rotation.x = Math.PI / 2;
+  box(0.05, 0.4, 0.3, heliMat, 0, 0.8, -1.55, heli);
+  for (const sx of [-1, 1]) box(0.05, 0.05, 1.1, dark, sx * 0.3, 0.08, 0.15, heli);
+  rig.rotor = new THREE.Group();
+  rig.rotor.position.set(0, 0.95, 0.15);
+  box(2.4, 0.03, 0.12, dark, 0, 0, 0, rig.rotor);
+  box(0.12, 0.03, 2.4, dark, 0, 0, 0, rig.rotor);
+  heli.add(rig.rotor);
+  b.add(heli);
+  // pavillon à la poupe
+  cyl(0.025, 0.025, 1.3, dark, 0, shipDeck(-8.3) + 0.65, -8.3, b, 6);
+  rig.flag = new THREE.Group();
+  rig.flag.position.set(0, shipDeck(-8.3) + 1.15, -8.3);
+  const flagTex = canvasTex(64, 40, (c) => { c.fillStyle = '#1f3c7a'; c.fillRect(0, 0, 64, 40); c.fillStyle = '#fff'; c.fillRect(0, 16, 64, 8); c.fillRect(28, 0, 8, 40); });
+  mesh(new THREE.PlaneGeometry(0.7, 0.44), new THREE.MeshStandardMaterial({ map: flagTex, side: THREE.DoubleSide }), 0, 0, -0.35, rig.flag).rotation.y = Math.PI / 2;
+  b.add(rig.flag);
   return rig;
 }
 function findShipSpawn() {                       // un endroit assez profond pour toute la coque
   for (let r = 0; r < 40; r += 2) for (let a = 0; a < 6.28; a += 0.2) {
     const x = LAKE_X + Math.cos(a) * r, z = LAKE_Z + Math.sin(a) * r;
-    if (Math.abs(z) + 7 < HALF && [-7, 0, 7].every((o) => groundY(x, z + o) < WATER - 2)) return new THREE.Vector3(x, WATER, z);
+    if (Math.abs(z) + 10 < HALF && [-10, -5, 0, 5, 10].every((o) => groundY(x, z + o) < WATER - 2)) return new THREE.Vector3(x, WATER, z);
   }
   return new THREE.Vector3(LAKE_X, WATER, LAKE_Z);
 }
@@ -444,7 +567,7 @@ for (let i = 0, tries = 0; i < 40 && tries < 5000; tries++) {
 }
 for (let i = 0, tries = 0; i < 14 && tries < 5000; tries++) {  // bouées flottantes pour le navire
   const a = Math.random() * Math.PI * 2, d = Math.random() * 32, x = LAKE_X + Math.cos(a) * d, z = LAKE_Z + Math.sin(a) * d;
-  if (groundY(x, z) > WATER - 1.5 || Math.abs(z) > HALF || Math.hypot(x - rigs[1].pos.x, z - rigs[1].pos.z) < 10) continue;  // pas collée au navire
+  if (groundY(x, z) > WATER - 1.5 || Math.abs(z) > HALF || Math.hypot(x - rigs[1].pos.x, z - rigs[1].pos.z) < 13) continue;  // pas collée au navire
   addTarget(x, z, 'barrel', true);
   i++;
 }
@@ -639,7 +762,7 @@ renderer.setAnimationLoop(() => {
   // le tank ne va pas en eau profonde ; le navire ne touche jamais le fond (proue, milieu, poupe)
   const blocked = () => {
     const y = tank.rotation.y, { x, z } = tank.position;
-    return ship ? [-6, 0, 6.2].some((o) => groundY(x + Math.sin(y) * o, z + Math.cos(y) * o) > WATER - 1) : groundY(x, z) < WATER - 0.6;
+    return ship ? [-8.6, -4, 0, 4, 9.4].some((o) => groundY(x + Math.sin(y) * o, z + Math.cos(y) * o) > WATER - 1) : groundY(x, z) < WATER - 0.6;
   };
   if (blocked()) {
     tank.position.copy(old);
@@ -652,6 +775,8 @@ renderer.setAnimationLoop(() => {
     tilt.rotation.x = Math.sin(time * 1.1) * 0.015;
     tilt.rotation.z += (Math.max(-0.12, Math.min(0.12, yawRate * speed * 0.03)) + Math.sin(time * 0.8) * 0.02 - tilt.rotation.z) * Math.min(1, dt * 2);
     rig.radar.rotation.y += dt * 2;
+    rig.rotor.rotation.y += dt * 9;
+    rig.flag.rotation.y = Math.sin(time * 5) * 0.25 + yawRate * 0.3;
   } else {
     tank.position.y = groundY(tank.position.x, tank.position.z);
     flattenTufts(tank.position.x, tank.position.z);
@@ -683,11 +808,14 @@ renderer.setAnimationLoop(() => {
     tank.updateWorldMatrix(true, true);
     for (const e of rig.exhausts) spawn({ pos: rig.body.localToWorld(e.clone()), vel: new THREE.Vector3(rnd(0.5), 1.2, rnd(0.5)), color: 0x6d6a66, color2: 0xcfcdc9, life: 0.9, size: rig.smoke, grow: 3, drag: 1, opacity: 0.5 });
     if (ship) {                                  // sillage : écume à la poupe et vague d'étrave
-      const st = rig.body.localToWorld(tmp.set(0, 0, -6)).setY(WATER + 0.05);
-      spawn({ geo: foamGeo, pos: st, vel: new THREE.Vector3(rnd(0.4), 0, rnd(0.4)), color: 0xffffff, life: 4, size: 0.9, grow: 3, drag: 0.6, opacity: 0.6 });
+      const st = rig.body.localToWorld(tmp.set(0, 0, -8.8)).setY(WATER + 0.05);
+      spawn({ geo: foamGeo, pos: st, vel: new THREE.Vector3(rnd(0.4), 0, rnd(0.4)), color: 0xffffff, life: 4.5, size: 0.7, grow: 2.5, drag: 0.6, opacity: 0.5 });
       for (const sx of [-1, 1]) {
-        const bw = rig.body.localToWorld(tmp.set(sx * 1.1, 0, 4.8)).setY(WATER + 0.05);
-        spawn({ geo: foamGeo, pos: bw, vel: new THREE.Vector3(lx * sx * 2.5, 0, lz * sx * 2.5), color: 0xffffff, life: 2.5, size: 0.4, grow: 3, drag: 0.8, opacity: 0.55 });
+        const sv = rig.body.localToWorld(tmp.set(sx * 1.6, 0, -8.4)).setY(WATER + 0.05);  // bras du sillage en V
+        spawn({ geo: foamGeo, pos: sv, vel: new THREE.Vector3(lx * sx * 1.6, 0, lz * sx * 1.6), color: 0xffffff, life: 3.5, size: 0.5, grow: 2.5, drag: 0.5, opacity: 0.5 });
+        const bw = rig.body.localToWorld(tmp.set(sx * 1.0, 0, 8.2)).setY(WATER + 0.05);   // vague d'étrave
+        spawn({ geo: foamGeo, pos: bw, vel: new THREE.Vector3(lx * sx * 2.8, 0, lz * sx * 2.8), color: 0xffffff, life: 2.5, size: 0.32, grow: 3, drag: 0.8, opacity: 0.55 });
+        if (Math.abs(speed) > 5) spawn({ pos: bw.clone().setY(WATER + 0.4), vel: new THREE.Vector3(lx * sx * 2 + fx * speed * 0.3, 2 + Math.random() * 1.5, lz * sx * 2 + fz * speed * 0.3), color: 0xffffff, life: 0.6, size: 0.12, grav: 9, opacity: 0.8 });  // embruns
       }
     } else for (const sx of [-rig.trackX, rig.trackX]) spawn({ pos: rig.body.localToWorld(tmp.set(sx, 0.2, -Math.sign(speed) * 2.1)), vel: new THREE.Vector3(rnd(0.6), 0.5, rnd(0.6)), color: 0xa8895f, life: 0.8, size: 0.3, grow: 2.5, drag: 2, opacity: 0.35 });
   }
@@ -794,7 +922,7 @@ renderer.setAnimationLoop(() => {
   // caméra (lissée pour ne pas sautiller sur les bosses) et ombre qui suivent le tank
   focus.lerp(tank.position, Math.min(1, dt * 6));
   shake = Math.max(0, shake - dt * 2);
-  camera.position.copy(focus).addScaledVector(CAM_OFFSET, rig.zoom);
+  camera.position.copy(focus).add(rig.cam);
   camera.position.x += rnd(shake * 0.5);
   camera.position.z += rnd(shake * 0.5);
   camera.lookAt(focus);
