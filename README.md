@@ -5,3 +5,5 @@ Jeu de course de monoplaces en vue de dessus : Grand Prix, championnat, contre-l
 Jouer : https://dz7gvnn6hf-eng.github.io/monoplace-gp/
 
 Tout le jeu tient dans `index.html`. Le jeu en ligne passe par des connexions directes entre joueurs (PeerJS).
+
+Mineur Planétaire (jeu de minage 2D sur une planète ronde) : `minage.html`, jouable sur https://dz7gvnn6hf-eng.github.io/monoplace-gp/minage.html

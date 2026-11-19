@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Mineur Planétaire</title>
+<style>
+html,body{margin:0;height:100%;background:#070914;overflow:hidden;touch-action:none;font:14px system-ui,sans-serif;color:#fff;user-select:none;-webkit-user-select:none}
+canvas{display:block;width:100vw;height:100vh}
+#hud{position:fixed;top:calc(8px + env(safe-area-inset-top,0px));left:10px;right:10px;line-height:1.6;text-shadow:0 1px 3px #000;pointer-events:none}
+#msg{position:fixed;top:40%;left:0;right:0;text-align:center;font-size:24px;font-weight:700;text-shadow:0 2px 6px #000;pointer-events:none}
+#help{position:fixed;bottom:10px;left:0;right:0;text-align:center;opacity:.7;pointer-events:none}
+.btn{position:fixed;bottom:calc(16px + env(safe-area-inset-bottom,0px));width:68px;height:68px;border-radius:50%;border:2px solid #fff6;background:#ffffff22;color:#fff;font-size:26px;display:none;touch-action:none}
+@media (pointer:coarse){.btn{display:block}#help{display:none}}
+#bl{left:16px}#br{left:96px}#bj{right:96px}#bd{right:16px}
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+<div id="hud"></div>
+<div id="msg"></div>
+<div id="help">← → ou Q D : marcher (pousser contre un mur le creuse) · ↑ Z Espace : sauter · ↓ S : creuser dessous · clic maintenu : miner un bloc proche</div>
+<button class="btn" id="bl" aria-label="Gauche">◀</button>
+<button class="btn" id="br" aria-label="Droite">▶</button>
+<button class="btn" id="bj" aria-label="Sauter">▲</button>
+<button class="btn" id="bd" aria-label="Creuser">⛏</button>
+<script>
+const T = 16, R = 48, TAU = Math.PI * 2;           // taille d'un bloc, nombre d'anneaux de la planète
+const W = 10, H = 22, SPEED = 110, G = 900, JUMP = 290, REACH = 3.5 * T;
+const TYPES = [
+  null,
+  { n: 'Herbe', c: '#4caf50', h: 1, drop: 2 },
+  { n: 'Terre', c: '#8b5a2b', h: 1 },
+  { n: 'Pierre', c: '#6b6b78', h: 2 },
+  { n: 'Charbon', c: '#111', h: 2.5, ore: 1 },
+  { n: 'Fer', c: '#e8a87c', h: 3, ore: 1 },
+  { n: 'Or', c: '#ffd23f', h: 4, ore: 1 },
+  { n: 'Diamant', c: '#5ef2ff', h: 5, ore: 1 },
+  { n: 'Noyau', c: '#ff5a1f', h: Infinity },
+];
+
+// Planète : anneaux concentriques, chaque anneau a ~2πr blocs pour qu'ils restent à peu près carrés.
+const rings = [], bg = [];
+const s1 = Math.random() * TAU, s2 = Math.random() * TAU;
+for (let i = 0; i < R; i++) {
+  const n = Math.max(4, Math.round(TAU * (i + 0.5)));
+  const ring = new Uint8Array(n), back = new Uint8Array(n);
+  for (let j = 0; j < n; j++) {
+    const a = (j + 0.5) / n * TAU;
+    const top = Math.min(R - 1, R - 6 + Math.round(3 + 1.6 * Math.sin(3 * a + s1) + 1.2 * Math.sin(8 * a + s2)));
+    const d = top - i, p = Math.random();
+    ring[j] = i < 4 ? 8 : d < 0 ? 0 : d === 0 ? 1 : d < 4 ? 2
+      : d > 30 && p < .03 ? 7 : d > 20 && p < .07 ? 6 : d > 10 && p < .13 ? 5 : p < .19 ? 4 : d > 6 && p < .25 ? 0 : 3;
+    back[j] = d >= 0 ? 1 : 0;
+  }
+  rings.push(ring); bg.push(back);
+}
+
+const cellAt = (rad, ang) => {
+  const i = Math.floor(rad / T);
+  if (i < 0 || i >= R) return null;
+  const n = rings[i].length;
+  return [i, Math.floor(((ang % TAU + TAU) % TAU) / TAU * n) % n];
+};
+const solid = (rad, ang) => { if (rad < 0) return true; const c = cellAt(rad, ang); return !!c && rings[c[0]][c[1]] > 0; };
+// Le corps du mineur tient entre r et r+H, sur une largeur W.
+const free = (r, a) => [2, H / 2, H - 2].every(h => {
+  const rr = r + h, da = (W / 2 - 1) / rr;
+  return !solid(rr, a - da) && !solid(rr, a + da);
+});
+
+const P = { a: -Math.PI / 2, r: 0, vr: 0, face: 1, ground: false };
+for (let i = R - 1; i >= 0; i--) if (solid(i * T + 1, P.a)) { P.r = (i + 1) * T; break; }
+console.assert(P.r > 4 * T && free(P.r, P.a), 'apparition hors du sol');
+console.assert(solid(T, 0) && !solid(R * T + 5, 0), 'noyau plein, ciel vide');
+
+const inv = {};
+let mine = null, prog = 0, won = false;
+const keys = {}, ptr = { id: null, x: 0, y: 0 };
+
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+let cw, ch, z;
+function resize() {
+  const dpr = devicePixelRatio || 1;
+  cw = cv.width = innerWidth * dpr; ch = cv.height = innerHeight * dpr;
+  z = Math.max(1.5, Math.min(innerWidth, innerHeight) / 300) * dpr;
+}
+addEventListener('resize', resize); resize();
+
+const cam = () => { const r = P.r + H / 2; return [Math.cos(P.a) * r, Math.sin(P.a) * r]; };
+const ORIGIN_Y = 0.55;
+function screenToWorld(x, y) {
+  const dpr = devicePixelRatio || 1, rot = Math.PI / 2 + P.a;
+  const vx = (x * dpr - cw / 2) / z, vy = (y * dpr - ch * ORIGIN_Y) / z;
+  const [cx, cy] = cam();
+  return [cx + vx * Math.cos(rot) - vy * Math.sin(rot), cy + vx * Math.sin(rot) + vy * Math.cos(rot)];
+}
+
+function step(dt) {
+  let want = null;
+  const dir = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
+  if (dir) {
+    P.face = dir;
+    const na = P.a + dir * SPEED * dt / P.r;
+    const stepTop = (Math.floor((P.r + 2) / T) + 1) * T;
+    if (free(P.r, na)) P.a = na;
+    else if (P.ground && stepTop - P.r <= T && free(stepTop, na)) { P.r = stepTop; P.a = na; } // monte une marche
+    else if (P.ground) {
+      for (const h of [2, H / 2, H - 2]) {                       // creuse le bloc le plus bas du mur
+        const rr = P.r + h, ea = na + dir * (W / 2) / rr;
+        if (solid(rr, ea)) { want = cellAt(rr, ea); break; }
+      }
+    }
+  }
+  if (keys.down && P.ground) want = cellAt(P.r - 1, P.a);
+  if (ptr.id !== null) {
+    const [wx, wy] = screenToWorld(ptr.x, ptr.y), [cx, cy] = cam();
+    if (Math.hypot(wx - cx, wy - cy) <= REACH && solid(Math.hypot(wx, wy), Math.atan2(wy, wx)))
+      want = cellAt(Math.hypot(wx, wy), Math.atan2(wy, wx));
+  }
+
+  const t = want && rings[want[0]][want[1]];
+  if (t && TYPES[t].h < Infinity) {
+    if (!mine || mine[0] !== want[0] || mine[1] !== want[1]) { mine = want; prog = 0; }
+    prog += dt * 2.5 / TYPES[t].h;
+    if (prog >= 1) {
+      const k = TYPES[TYPES[t].drop || t].n;
+      inv[k] = (inv[k] || 0) + 1;
+      rings[want[0]][want[1]] = 0; mine = null;
+    }
+  } else mine = null;
+
+  if (keys.up && P.ground) P.vr = JUMP;
+  P.vr = Math.max(-500, P.vr - G * dt);
+  const nr = P.r + P.vr * dt, da = (W / 2 - 1) / P.r;
+  P.ground = false;
+  if (P.vr <= 0) {
+    if (solid(nr, P.a - da) || solid(nr, P.a + da)) { P.r = (Math.floor(nr / T) + 1) * T; P.vr = 0; P.ground = true; }
+    else P.r = nr;
+  } else if (solid(nr + H, P.a - da) || solid(nr + H, P.a + da)) P.vr = 0;
+  else P.r = nr;
+
+  if (!won && P.ground && P.r <= 4 * T + 0.5) { won = true; document.getElementById('msg').textContent = 'Tu as atteint le noyau de la planète !'; }
+}
+
+const stars = Array.from({ length: 400 }, () => {
+  const a = Math.random() * TAU, d = R * T * (1.1 + Math.random() * 3);
+  return [Math.cos(a) * d, Math.sin(a) * d, Math.random() * 1.5 + 0.5];
+});
+
+function sector(r0, r1, a0, a1) {
+  ctx.beginPath(); ctx.arc(0, 0, r1, a0, a1); ctx.arc(0, 0, r0, a1, a0, true); ctx.closePath();
+}
+
+function draw() {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = '#070914'; ctx.fillRect(0, 0, cw, ch);
+  const [cx, cy] = cam();
+  ctx.translate(cw / 2, ch * ORIGIN_Y); ctx.scale(z, z); ctx.rotate(-Math.PI / 2 - P.a); ctx.translate(-cx, -cy);
+
+  ctx.fillStyle = '#fff';
+  for (const [x, y, s] of stars) ctx.fillRect(x, y, s, s);
+  const atm = ctx.createRadialGradient(0, 0, R * T * 0.9, 0, 0, R * T * 1.35);
+  atm.addColorStop(0, 'rgba(110,170,255,.55)'); atm.addColorStop(1, 'rgba(110,170,255,0)');
+  ctx.fillStyle = atm; ctx.beginPath(); ctx.arc(0, 0, R * T * 1.35, 0, TAU); ctx.fill();
+
+  const view = Math.hypot(cw, ch) / 2 / z + T, pr = P.r + H / 2;
+  ctx.lineWidth = 0.6; ctx.strokeStyle = 'rgba(0,0,0,.3)';
+  for (let i = Math.max(0, Math.floor((pr - view) / T)); i < Math.min(R, Math.ceil((pr + view) / T)); i++) {
+    const ring = rings[i], n = ring.length, r0 = i * T, r1 = r0 + T;
+    const da = view / Math.max(r0, 1);
+    let j0 = Math.floor((P.a - da) / TAU * n), j1 = Math.ceil((P.a + da) / TAU * n);
+    if (da >= Math.PI || j1 - j0 >= n) { j0 = 0; j1 = n - 1; }
+    for (let jj = j0; jj <= j1; jj++) {
+      const j = ((jj % n) + n) % n, t = ring[j], a0 = j / n * TAU, a1 = (j + 1) / n * TAU;
+      if (!t) { if (bg[i][j]) { sector(r0, r1, a0, a1); ctx.fillStyle = '#2a1d14'; ctx.fill(); } continue; }
+      sector(r0, r1, a0, a1);
+      ctx.fillStyle = TYPES[t].ore ? TYPES[3].c : TYPES[t].c; ctx.fill(); ctx.stroke();
+      if (TYPES[t].ore) {
+        ctx.fillStyle = TYPES[t].c;
+        for (const [fa, fr, s] of [[.3, .35, 3], [.7, .65, 2.5], [.6, .25, 2]]) {
+          const a = a0 + (a1 - a0) * fa, r = r0 + T * fr;
+          ctx.beginPath(); ctx.arc(Math.cos(a) * r, Math.sin(a) * r, s, 0, TAU); ctx.fill();
+        }
+      }
+      if (mine && mine[0] === i && mine[1] === j) {
+        sector(r0, r1, a0, a1); ctx.fillStyle = `rgba(0,0,0,${prog * 0.7})`; ctx.fill();
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.stroke(); ctx.lineWidth = 0.6; ctx.strokeStyle = 'rgba(0,0,0,.3)';
+      }
+    }
+  }
+
+  // Mineur, dessiné dans son repère local : -y = vers le ciel, pieds en y=0.
+  ctx.save();
+  ctx.translate(Math.cos(P.a) * P.r, Math.sin(P.a) * P.r); ctx.rotate(P.a + Math.PI / 2); ctx.scale(P.face, 1);
+  ctx.fillStyle = '#2d3e8c'; ctx.fillRect(-4, -6, 3, 6); ctx.fillRect(1, -6, 3, 6);
+  ctx.fillStyle = '#3f6fd8'; ctx.fillRect(-5, -15, 10, 10);
+  ctx.fillStyle = '#f1c27d'; ctx.beginPath(); ctx.arc(0, -18, 4, 0, TAU); ctx.fill();
+  ctx.fillStyle = '#ffcc00'; ctx.beginPath(); ctx.arc(0, -19, 4.5, Math.PI, TAU); ctx.fill(); ctx.fillRect(2, -21, 3, 2);
+  ctx.strokeStyle = '#ccc'; ctx.lineWidth = 1.5;
+  const swing = mine ? Math.sin(performance.now() / 60) * 0.8 : 0.6;
+  ctx.save(); ctx.translate(4, -11); ctx.rotate(swing);
+  ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(8, 0); ctx.moveTo(8, -4); ctx.quadraticCurveTo(10, 0, 8, 4); ctx.stroke();
+  ctx.restore(); ctx.restore();
+
+  // Obscurité qui augmente avec la profondeur, la lampe du casque éclaire autour du mineur.
+  const depth = (R - 3) - P.r / T;
+  if (depth > 0) {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    const g = ctx.createRadialGradient(cw / 2, ch * ORIGIN_Y, 30 * z, cw / 2, ch * ORIGIN_Y, 150 * z);
+    g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, `rgba(0,0,0,${Math.min(0.9, depth / 15)})`);
+    ctx.fillStyle = g; ctx.fillRect(0, 0, cw, ch);
+  }
+}
+
+const hud = document.getElementById('hud');
+function drawHud() {
+  const d = Math.max(0, Math.round((R - 3) - P.r / T));
+  const s = `Profondeur : ${d} m · ` + (Object.entries(inv).map(([k, v]) => `${k} ${v}`).join(' · ') || 'Inventaire vide');
+  if (hud.textContent !== s) hud.textContent = s;
+}
+
+const MAP = { ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right', ArrowUp: 'up', KeyW: 'up', Space: 'up', ArrowDown: 'down', KeyS: 'down' };
+addEventListener('keydown', e => { if (MAP[e.code]) { keys[MAP[e.code]] = true; e.preventDefault(); } });
+addEventListener('keyup', e => { if (MAP[e.code]) keys[MAP[e.code]] = false; });
+addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
+cv.addEventListener('pointerdown', e => { Object.assign(ptr, { id: e.pointerId, x: e.clientX, y: e.clientY }); cv.setPointerCapture(e.pointerId); });
+cv.addEventListener('pointermove', e => { if (e.pointerId === ptr.id) { ptr.x = e.clientX; ptr.y = e.clientY; } });
+for (const ev of ['pointerup', 'pointercancel']) cv.addEventListener(ev, e => { if (e.pointerId === ptr.id) ptr.id = null; });
+for (const [id, k] of [['bl', 'left'], ['br', 'right'], ['bj', 'up'], ['bd', 'down']]) {
+  const b = document.getElementById(id);
+  b.addEventListener('pointerdown', e => { e.preventDefault(); keys[k] = true; b.setPointerCapture(e.pointerId); });
+  for (const ev of ['pointerup', 'pointercancel']) b.addEventListener(ev, () => { keys[k] = false; });
+}
+
+let last = performance.now(), acc = 0;
+function frame(now) {
+  acc += Math.min(0.1, (now - last) / 1000); last = now;
+  while (acc >= 1 / 120) { step(1 / 120); acc -= 1 / 120; }   // pas fixe : pas de traversée de blocs
+  draw(); drawHud();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
