@@ -9,13 +9,15 @@
   canvas{display:block;cursor:crosshair}
   #hud{position:fixed;left:12px;top:12px;color:#223;font-size:14px;line-height:1.5;pointer-events:none;background:rgba(255,255,255,.75);padding:8px 12px;border-radius:8px}
   #hud b{font-size:18px}
+  #swap{pointer-events:auto;font:inherit;font-size:13px;margin:4px 0 2px 6px;padding:5px 10px;border:1px solid #556;border-radius:6px;background:#fff;color:#223;cursor:pointer}
+  #swap:focus-visible{outline:2px solid #2a6;outline-offset:2px}
   .stick{position:fixed;width:110px;height:110px;margin:-55px 0 0 -55px;border-radius:50%;background:rgba(0,0,0,.08);border:2px solid rgba(0,0,0,.2);display:none;pointer-events:none}
   .stick i{position:absolute;left:35px;top:35px;width:40px;height:40px;border-radius:50%;background:rgba(0,0,0,.3)}
 </style>
 <script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js"}}</script>
 </head>
 <body>
-<div id="hud">Cibles détruites : <b id="score">0</b><br><span id="help">ZQSD / WASD / flèches : rouler · Souris : viser · Clic ou Espace : tirer</span></div>
+<div id="hud">Cibles détruites : <b id="score">0</b><br><span id="tankName"></span> <button id="swap" type="button">Changer de tank (T)</button><br><span id="help">ZQSD / WASD / flèches : rouler · Souris : viser · Clic ou Espace : tirer</span></div>
 <div class="stick" id="stickL"><i></i></div>
 <div class="stick" id="stickR"><i></i></div>
 <script type="module">
@@ -23,8 +25,7 @@ import * as THREE from 'three';
 
 const SIZE = 200, HALF = SIZE / 2 - 2;          // zone jouable
 const WORLD = 280;                               // le terrain dépasse un peu, le brouillard cache le bord
-const MAX_SPEED = 12, TURN_RATE = 2.2, TURRET_RATE = 3.5;
-const SHELL_SPEED = 45, SHELL_LIFE = 1.4, RELOAD = 0.6;
+const SHELL_SPEED = 45, SHELL_LIFE = 1.4;
 const UP = new THREE.Vector3(0, 1, 0);
 const rnd = (a = 1) => (Math.random() - 0.5) * 2 * a;
 const smoothstep = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
@@ -211,7 +212,7 @@ const mesh = (geo, m, x = 0, y = 0, z = 0, parent) => {
 };
 const box = (w, h, d, m, x, y, z, parent) => mesh(new THREE.BoxGeometry(w, h, d), m, x, y, z, parent);
 const cyl = (rt, rb, h, m, x, y, z, parent, seg = 14) => mesh(new THREE.CylinderGeometry(rt, rb, h, seg), m, x, y, z, parent);
-const green = mat(0x55703d), darkGreen = mat(0x405a2f), dark = mat(0x2b2f2a), steel = mat(0x5b605a, { metalness: 0.4 }), tan = mat(0x6e5d3c);
+const dark = mat(0x2b2f2a);
 
 // texture des chenilles (maillons), une par côté pour les faire défiler à des vitesses différentes
 const treadCanvas = document.createElement('canvas');
@@ -229,74 +230,125 @@ const treadTex = () => {
 
 const tank = new THREE.Group();                  // position + cap ; avant = +z local, gauche = +x local
 const tilt = new THREE.Group();                  // suit la pente du terrain
-const body = new THREE.Group();                  // tangage (recul, accélération)
 tank.add(tilt);
-tilt.add(body);
-
-// caisse
-box(2.2, 0.6, 4.0, darkGreen, 0, 0.65, 0, body);
-box(3.7, 0.35, 3.6, green, 0, 1.12, -0.15, body);
-box(3.7, 0.35, 0.9, green, 0, 1.0, 1.85, body).rotation.x = 0.45;           // glacis avant
-box(3.7, 0.5, 0.15, darkGreen, 0, 0.95, -1.98, body);
-for (let i = 0; i < 5; i++) box(1.6, 0.05, 0.12, dark, 0, 1.31, -0.9 - i * 0.2, body);  // grille moteur
-const exhausts = [-0.9, 0.9].map((x) => {
-  cyl(0.1, 0.1, 0.4, dark, x, 1.0, -2.1, body).rotation.x = Math.PI / 2;
-  return new THREE.Vector3(x, 1.0, -2.35);
-});
 const lightMat = mat(0xfff3c4, { emissive: 0xfff0b0, emissiveIntensity: 0.6 });
-for (const x of [-1.35, 1.35]) box(0.25, 0.15, 0.12, lightMat, x, 1.25, 1.95, body);
-for (const x of [-1.55, 1.55]) box(0.45, 0.22, 1.2, tan, x, 1.4, -0.7, body);  // coffres sur les garde-boue
 
-// chenilles et roues
-const treads = [], wheels = [];
-for (const sx of [-1, 1]) {
+// chaque style de tank a son propre corps (tangage), tourelle, canon et réglages
+const newRig = (name, stats) => {
+  const body = new THREE.Group();
+  tilt.add(body);
+  return { name, body, treads: [], wheels: [], antennas: [], exhausts: [], ...stats };
+};
+// chenille texturée + roues à rayons (on voit la roue tourner)
+function addTrack(rig, sx, { x, w, h, len, wheelX, n, r, rEnd, wheelMat, hubMat }) {
   const tex = treadTex();
-  box(0.85, 0.9, 4.3, mat(0xffffff, { map: tex, roughness: 0.95 }), sx * 1.5, 0.45, 0, body);
-  treads.push({ sx, tex });
-  for (let i = 0; i < 7; i++) {
-    const end = i === 0 || i === 6, r = end ? 0.36 : 0.29;
+  box(w, h, len, mat(0xffffff, { map: tex, roughness: 0.95 }), sx * x, h / 2, 0, rig.body);
+  rig.treads.push({ sx, tex });
+  for (let i = 0; i < n; i++) {
+    const end = i === 0 || i === n - 1, rr = end ? rEnd : r;
     const pivot = new THREE.Group();
-    pivot.position.set(sx * 1.94, end ? 0.5 : 0.36, -1.85 + i * (3.7 / 6));
-    cyl(r, r, 0.16, end ? steel : dark, 0, 0, 0, pivot, 16).rotation.z = Math.PI / 2;
-    box(0.06, 0.1, r * 1.6, steel, sx * 0.08, 0, 0, pivot);                 // rayons : on voit la roue tourner
-    box(0.06, r * 1.6, 0.1, steel, sx * 0.08, 0, 0, pivot);
-    body.add(pivot);
-    wheels.push({ sx, pivot, r });
+    pivot.position.set(sx * wheelX, end ? rr + 0.14 : rr + 0.07, -(len - 0.6) / 2 + i * (len - 0.6) / (n - 1));
+    cyl(rr, rr, 0.16, end ? hubMat : wheelMat, 0, 0, 0, pivot, 16).rotation.z = Math.PI / 2;
+    box(0.06, 0.1, rr * 1.6, hubMat, sx * 0.08, 0, 0, pivot);
+    box(0.06, rr * 1.6, 0.1, hubMat, sx * 0.08, 0, 0, pivot);
+    rig.body.add(pivot);
+    rig.wheels.push({ sx, pivot, r: rr });
   }
 }
+const addAntenna = (rig, parent, x, y, z, h) => {
+  const a = new THREE.Group();
+  a.position.set(x, y, z);
+  cyl(0.012, 0.03, h, dark, 0, h / 2, 0, a, 5);
+  parent.add(a);
+  rig.antennas.push(a);
+};
 
-// tourelle
-const turret = new THREE.Group();
-turret.position.y = 1.3;
-body.add(turret);
-box(2.0, 0.55, 2.2, green, 0, 0.28, -0.1, turret);
-box(1.7, 0.14, 1.8, green, 0, 0.6, -0.15, turret);
-box(1.8, 0.45, 0.6, darkGreen, 0, 0.3, -1.45, turret);                       // panier arrière
-box(1.0, 0.5, 0.45, darkGreen, 0, 0.3, 1.1, turret);                         // masque du canon
-cyl(0.32, 0.36, 0.3, darkGreen, 0.5, 0.8, -0.45, turret);                    // tourelleau
-cyl(0.28, 0.28, 0.06, dark, 0.5, 0.98, -0.45, turret);
-cyl(0.04, 0.04, 0.8, dark, 0.5, 1.05, -0.05, turret).rotation.x = Math.PI / 2;  // mitrailleuse
-box(0.22, 0.14, 0.16, dark, -0.45, 0.72, 0.35, turret);                      // périscope
-for (const sx of [-1, 1]) for (let i = 0; i < 3; i++) {
-  cyl(0.07, 0.07, 0.25, dark, sx * 1.02, 0.42 + i * 0.12, 0.65, turret, 8).rotation.x = Math.PI / 2;  // lance-fumigènes
+function buildHeavy() {
+  const green = mat(0x55703d), darkGreen = mat(0x405a2f), steel = mat(0x5b605a, { metalness: 0.4 }), tan = mat(0x6e5d3c);
+  const rig = newRig('Char lourd', { speed: 12, turn: 2.2, turretRate: 3.5, reload: 0.6, trackX: 1.5, trackLen: 4.3, barrelZ: 1.2, recoilLen: 0.6, muzzle: new THREE.Vector3(0, 0, 3.3) });
+  const b = rig.body;
+  // caisse
+  box(2.2, 0.6, 4.0, darkGreen, 0, 0.65, 0, b);
+  box(3.7, 0.35, 3.6, green, 0, 1.12, -0.15, b);
+  box(3.7, 0.35, 0.9, green, 0, 1.0, 1.85, b).rotation.x = 0.45;             // glacis avant
+  box(3.7, 0.5, 0.15, darkGreen, 0, 0.95, -1.98, b);
+  for (let i = 0; i < 5; i++) box(1.6, 0.05, 0.12, dark, 0, 1.31, -0.9 - i * 0.2, b);  // grille moteur
+  for (const x of [-0.9, 0.9]) {
+    cyl(0.1, 0.1, 0.4, dark, x, 1.0, -2.1, b).rotation.x = Math.PI / 2;
+    rig.exhausts.push(new THREE.Vector3(x, 1.0, -2.35));
+  }
+  for (const x of [-1.35, 1.35]) box(0.25, 0.15, 0.12, lightMat, x, 1.25, 1.95, b);
+  for (const x of [-1.55, 1.55]) box(0.45, 0.22, 1.2, tan, x, 1.4, -0.7, b);  // coffres sur les garde-boue
+  for (const sx of [-1, 1]) addTrack(rig, sx, { x: 1.5, w: 0.85, h: 0.9, len: 4.3, wheelX: 1.94, n: 7, r: 0.29, rEnd: 0.36, wheelMat: dark, hubMat: steel });
+  // tourelle
+  const t = rig.turret = new THREE.Group();
+  t.position.y = 1.3;
+  b.add(t);
+  box(2.0, 0.55, 2.2, green, 0, 0.28, -0.1, t);
+  box(1.7, 0.14, 1.8, green, 0, 0.6, -0.15, t);
+  box(1.8, 0.45, 0.6, darkGreen, 0, 0.3, -1.45, t);                          // panier arrière
+  box(1.0, 0.5, 0.45, darkGreen, 0, 0.3, 1.1, t);                            // masque du canon
+  cyl(0.32, 0.36, 0.3, darkGreen, 0.5, 0.8, -0.45, t);                       // tourelleau
+  cyl(0.28, 0.28, 0.06, dark, 0.5, 0.98, -0.45, t);
+  cyl(0.04, 0.04, 0.8, dark, 0.5, 1.05, -0.05, t).rotation.x = Math.PI / 2;  // mitrailleuse
+  box(0.22, 0.14, 0.16, dark, -0.45, 0.72, 0.35, t);                         // périscope
+  for (const sx of [-1, 1]) for (let i = 0; i < 3; i++) cyl(0.07, 0.07, 0.25, dark, sx * 1.02, 0.42 + i * 0.12, 0.65, t, 8).rotation.x = Math.PI / 2;  // lance-fumigènes
+  addAntenna(rig, t, -0.7, 0.66, -1.3, 2.2);
+  // canon
+  const br = rig.barrel = new THREE.Group();
+  br.position.set(0, 0.3, 1.2);
+  t.add(br);
+  cyl(0.12, 0.15, 3.0, dark, 0, 0, 1.5, br).rotation.x = Math.PI / 2;
+  cyl(0.2, 0.2, 0.45, dark, 0, 0, 1.6, br).rotation.x = Math.PI / 2;        // évacuateur de fumée
+  box(0.36, 0.28, 0.4, steel, 0, 0, 3.05, br);                                // frein de bouche
+  return rig;
 }
-const antenna = new THREE.Group();
-antenna.position.set(-0.7, 0.66, -1.3);
-cyl(0.012, 0.03, 2.2, dark, 0, 1.1, 0, antenna, 5);
-turret.add(antenna);
 
-// canon
-const barrel = new THREE.Group();
-barrel.position.set(0, 0.3, 1.2);
-turret.add(barrel);
-cyl(0.12, 0.15, 3.0, dark, 0, 0, 1.5, barrel).rotation.x = Math.PI / 2;
-cyl(0.2, 0.2, 0.45, dark, 0, 0, 1.6, barrel).rotation.x = Math.PI / 2;      // évacuateur de fumée
-box(0.36, 0.28, 0.4, steel, 0, 0, 3.05, barrel);                              // frein de bouche
-const MUZZLE = new THREE.Vector3(0, 0, 3.3);
+function buildLight() {
+  const sand = mat(0xc4a46c), sandDark = mat(0x9e8452), olive = mat(0x4a4a3c);
+  const rig = newRig('Char léger', { speed: 16, turn: 2.8, turretRate: 5, reload: 0.35, trackX: 1.35, trackLen: 4.6, barrelZ: 1.15, recoilLen: 0.4, muzzle: new THREE.Vector3(0, 0, 4.0) });
+  const b = rig.body;
+  // caisse basse et longue, nez pointu, jupes sur les côtés
+  box(2.0, 0.5, 4.4, sandDark, 0, 0.6, 0, b);
+  box(3.3, 0.3, 4.0, sand, 0, 1.0, -0.1, b);
+  box(3.3, 0.3, 1.0, sand, 0, 0.82, 2.2, b).rotation.x = 0.6;
+  box(3.3, 0.45, 0.15, sandDark, 0, 0.85, -2.15, b);
+  for (const sx of [-1, 1]) {
+    addTrack(rig, sx, { x: 1.35, w: 0.7, h: 0.75, len: 4.6, wheelX: 1.62, n: 6, r: 0.26, rEnd: 0.3, wheelMat: olive, hubMat: sandDark });
+    box(0.1, 0.42, 4.0, sandDark, sx * 1.72, 0.78, -0.1, b);                 // jupes latérales
+    box(0.4, 0.18, 1.0, olive, sx * 1.35, 1.24, -1.2, b);                    // paquetages
+  }
+  for (let i = 0; i < 4; i++) box(0.12, 0.05, 1.2, olive, -0.45 + i * 0.3, 1.17, -1.4, b);  // grille moteur
+  cyl(0.09, 0.09, 0.35, olive, 1.3, 0.9, -2.3, b).rotation.x = Math.PI / 2;
+  rig.exhausts.push(new THREE.Vector3(1.3, 0.9, -2.5));
+  for (const x of [-1.3, 1.3]) box(0.3, 0.1, 0.1, lightMat, x, 1.05, 2.05, b);
+  // tourelle basse en flèche
+  const t = rig.turret = new THREE.Group();
+  t.position.y = 1.15;
+  b.add(t);
+  box(2.1, 0.42, 2.0, sand, 0, 0.21, -0.3, t);
+  for (const sx of [-1, 1]) box(1.25, 0.42, 0.35, sand, sx * 0.48, 0.21, 0.95, t).rotation.y = sx * 0.5;
+  box(1.9, 0.38, 0.8, sandDark, 0, 0.2, -1.6, t);                            // panier
+  box(0.6, 0.35, 0.3, sandDark, 0, 0.2, 1.1, t);                             // masque
+  box(0.35, 0.3, 0.35, olive, -0.55, 0.57, 0.1, t);                          // viseur du chef
+  box(0.25, 0.2, 0.2, olive, -0.55, 0.78, 0.15, t);
+  box(0.45, 0.25, 0.5, olive, 0.5, 0.55, -0.4, t);                           // mitrailleuse téléopérée
+  cyl(0.035, 0.035, 0.7, olive, 0.5, 0.6, 0.05, t).rotation.x = Math.PI / 2;
+  for (const sx of [-1, 1]) for (let i = 0; i < 4; i++) cyl(0.06, 0.06, 0.22, olive, sx * (0.72 + i * 0.12), 0.48, 0.55 - i * 0.07, t, 8).rotation.x = Math.PI / 2;
+  addAntenna(rig, t, -0.8, 0.4, -1.75, 2.6);
+  addAntenna(rig, t, 0.8, 0.4, -1.75, 1.8);
+  // canon long avec manchon thermique
+  const br = rig.barrel = new THREE.Group();
+  br.position.set(0, 0.22, 1.15);
+  t.add(br);
+  cyl(0.09, 0.11, 3.9, olive, 0, 0, 1.95, br).rotation.x = Math.PI / 2;
+  for (const z of [1.0, 2.2]) cyl(0.13, 0.13, 0.5, sandDark, 0, 0, z, br).rotation.x = Math.PI / 2;
+  cyl(0.15, 0.15, 0.35, olive, 0, 0, 2.9, br).rotation.x = Math.PI / 2;     // évacuateur de fumée
+  return rig;
+}
 
-// flash de bouche : boule + jets avant et latéraux (frein de bouche)
+// flash de bouche : boule + jets avant et latéraux, accroché au canon du tank choisi
 const flash = new THREE.Group();
-flash.position.copy(MUZZLE);
 const flashMat = new THREE.MeshBasicMaterial({ color: 0xffe9a0, transparent: true, depthWrite: false });
 const flashMat2 = new THREE.MeshBasicMaterial({ color: 0xff9a2e, transparent: true, depthWrite: false });
 const coneGeo = new THREE.ConeGeometry(0.35, 1.6, 10).rotateX(Math.PI / 2).translate(0, 0, 0.8);
@@ -304,10 +356,25 @@ flash.add(new THREE.Mesh(new THREE.SphereGeometry(0.45, 12, 8), flashMat));
 const fwd = new THREE.Mesh(coneGeo, flashMat2); fwd.scale.set(1.2, 1.2, 1.6); flash.add(fwd);
 for (const sx of [-1, 1]) { const c = new THREE.Mesh(coneGeo, flashMat2); c.rotation.y = sx * Math.PI / 2; c.scale.set(0.7, 0.7, 0.7); flash.add(c); }
 flash.visible = false;
-barrel.add(flash);
 const flashLight = new THREE.PointLight(0xffaa44, 0, 18);
-flashLight.position.copy(MUZZLE);
-barrel.add(flashLight);
+
+const rigs = [buildHeavy(), buildLight()];
+let rig;
+function selectRig(i) {
+  rig = rigs[i];
+  for (const r of rigs) r.body.visible = r === rig;
+  rig.barrel.add(flash, flashLight);
+  flash.position.copy(rig.muzzle);
+  flashLight.position.copy(rig.muzzle);
+  document.getElementById('tankName').textContent = rig.name;
+  try { localStorage.setItem('tankStyle', String(i)); } catch {}
+}
+let savedStyle = 0;
+try { savedStyle = Number(localStorage.getItem('tankStyle')) || 0; } catch {}
+selectRig(savedStyle % rigs.length);
+const swapBtn = document.getElementById('swap');
+const nextRig = () => selectRig((rigs.indexOf(rig) + 1) % rigs.length);
+swapBtn.addEventListener('click', () => { nextRig(); swapBtn.blur(); });
 
 tank.rotation.y = Math.PI;                       // regarde vers le haut de l'écran
 scene.add(tank);
@@ -388,10 +455,10 @@ const shells = [];
 const shellGeo = new THREE.SphereGeometry(1, 8, 6), shellMat = new THREE.MeshBasicMaterial({ color: 0xffd36b });
 function fire() {
   if (reload > 0) return;
-  reload = RELOAD; recoil = 1; shake = 0.45; flashT = 0.09;
+  reload = rig.reload; recoil = 1; shake = 0.45; flashT = 0.09;
   pitchV -= 1.4; swayV -= 6;                     // la caisse se cabre, l'antenne fouette
-  barrel.updateWorldMatrix(true, false);
-  const tip = barrel.localToWorld(MUZZLE.clone());
+  rig.barrel.updateWorldMatrix(true, false);
+  const tip = rig.barrel.localToWorld(rig.muzzle.clone());
   const dir = new THREE.Vector3(Math.sin(turretYaw), 0, Math.cos(turretYaw));
   const side = new THREE.Vector3(dir.z, 0, -dir.x);
 
@@ -419,18 +486,19 @@ function fire() {
 
 // ---------- entrées ----------
 const keys = {};
-addEventListener('keydown', (e) => { keys[e.code] = true; if (e.code === 'Space') e.preventDefault(); });
+addEventListener('keydown', (e) => { keys[e.code] = true; if (e.code === 'Space') e.preventDefault(); if (e.code === 'KeyT' && !e.repeat) nextRig(); });
 addEventListener('keyup', (e) => { keys[e.code] = false; });
 const mouse = new THREE.Vector2(), ray = new THREE.Raycaster(), ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 let useMouse = false, mouseDown = false;
 addEventListener('pointermove', (e) => { if (e.pointerType === 'mouse') { useMouse = true; mouse.set(e.clientX / innerWidth * 2 - 1, -e.clientY / innerHeight * 2 + 1); } });
-addEventListener('pointerdown', (e) => { if (e.pointerType === 'mouse') mouseDown = true; });
+addEventListener('pointerdown', (e) => { if (e.pointerType === 'mouse' && !e.target.closest('button')) mouseDown = true; });
 addEventListener('pointerup', (e) => { if (e.pointerType === 'mouse') mouseDown = false; });
 
 // tactile : joystick gauche = rouler, droit = viser (tire tant qu'il est poussé)
 const sticks = { L: { id: null, x: 0, y: 0, ox: 0, oy: 0, el: stickL }, R: { id: null, x: 0, y: 0, ox: 0, oy: 0, el: stickR } };
 const STICK_R = 50;
 function onTouch(e) {
+  if (e.target.closest && e.target.closest('button')) return;  // laisse passer le tap sur le bouton
   e.preventDefault();
   for (const t of e.changedTouches) {
     if (e.type === 'touchstart') {
@@ -475,11 +543,11 @@ renderer.setAnimationLoop(() => {
   const L = sticks.L, mag = Math.hypot(L.x, L.y);
   if (mag > 0.2) {
     const want = Math.atan2(L.x, L.y);           // écran droite = +x, écran bas = +z
-    tank.rotation.y = turnToward(tank.rotation.y, want, TURN_RATE * dt);
+    tank.rotation.y = turnToward(tank.rotation.y, want, rig.turn * dt);
     throttle = mag * Math.max(0, Math.cos(wrap(want - tank.rotation.y)));
     turn = 0;
   }
-  tank.rotation.y += turn * TURN_RATE * dt;
+  tank.rotation.y += turn * rig.turn * dt;
 
   // pente sous le tank : avant/arrière et gauche/droite
   const yaw = tank.rotation.y, fx = Math.sin(yaw), fz = Math.cos(yaw), lx = Math.cos(yaw), lz = -Math.sin(yaw);
@@ -487,7 +555,7 @@ renderer.setAnimationLoop(() => {
   const hf = groundY(px + fx * 2, pz + fz * 2), hb = groundY(px - fx * 2, pz - fz * 2);
   const hl = groundY(px + lx * 1.5, pz + lz * 1.5), hr = groundY(px - lx * 1.5, pz - lz * 1.5);
   const grade = (hf - hb) / 4;                   // > 0 : ça monte devant
-  speed += (throttle * MAX_SPEED * (1 - Math.max(-0.25, Math.min(0.6, grade * Math.sign(throttle)))) - speed) * Math.min(1, dt * 3);
+  speed += (throttle * rig.speed * (1 - Math.max(-0.25, Math.min(0.6, grade * Math.sign(throttle)))) - speed) * Math.min(1, dt * 3);
   tank.position.x += fx * speed * dt;
   tank.position.z += fz * speed * dt;
   tilt.rotation.x += (-Math.atan2(hf - hb, 4) - tilt.rotation.x) * Math.min(1, dt * 8);
@@ -510,10 +578,10 @@ renderer.setAnimationLoop(() => {
 
   // chenilles et roues : chaque côté roule à sa vitesse quand le tank tourne
   const yawRate = wrap(tank.rotation.y - yaw0) / dt;
-  for (const tr of treads) tr.tex.offset.x += tr.sx * (speed - tr.sx * yawRate * 1.5) * dt / 1.075;
-  for (const w of wheels) w.pivot.rotation.x += (speed - w.sx * yawRate * 1.5) * dt / w.r;
-  for (const tr of treads) {
-    const p = tmp.set(px + lx * tr.sx * 1.5, 0, pz + lz * tr.sx * 1.5);
+  for (const tr of rig.treads) tr.tex.offset.x += tr.sx * (speed - tr.sx * yawRate * 1.5) * dt / (rig.trackLen / 4);
+  for (const w of rig.wheels) w.pivot.rotation.x += (speed - w.sx * yawRate * 1.5) * dt / w.r;
+  for (const tr of rig.treads) {
+    const p = tmp.set(px + lx * tr.sx * rig.trackX, 0, pz + lz * tr.sx * rig.trackX);
     if (!tr.last) tr.last = p.clone();
     else if (p.distanceTo(tr.last) > 0.5) { if (p.distanceTo(tr.last) < 3) addMark(tr.last, p); tr.last.copy(p); }
   }
@@ -522,18 +590,18 @@ renderer.setAnimationLoop(() => {
   const accel = (speed - speed0) / dt;
   pitchV += (-pitch * 70 - pitchV * 9 - accel * 0.12) * dt;
   pitch += pitchV * dt;
-  body.rotation.x = pitch;
+  rig.body.rotation.x = pitch;
   swayV += (-sway * 40 - swayV * 3 - accel * 0.4) * dt;
   sway += swayV * dt;
-  antenna.rotation.x = sway * 0.15;
+  for (const a of rig.antennas) a.rotation.x = sway * 0.15;
 
   // fumée d'échappement et poussière quand il roule
   puffT -= dt;
   if (puffT <= 0 && Math.abs(speed) > 1) {
     puffT = 0.09;
     tank.updateWorldMatrix(true, true);
-    for (const e of exhausts) spawn({ pos: body.localToWorld(e.clone()), vel: new THREE.Vector3(rnd(0.5), 1.2, rnd(0.5)), color: 0x6d6a66, color2: 0xcfcdc9, life: 0.9, size: 0.18, grow: 3, drag: 1, opacity: 0.5 });
-    for (const sx of [-1.5, 1.5]) spawn({ pos: body.localToWorld(tmp.set(sx, 0.2, -Math.sign(speed) * 2.1)), vel: new THREE.Vector3(rnd(0.6), 0.5, rnd(0.6)), color: 0xa8895f, life: 0.8, size: 0.3, grow: 2.5, drag: 2, opacity: 0.35 });
+    for (const e of rig.exhausts) spawn({ pos: rig.body.localToWorld(e.clone()), vel: new THREE.Vector3(rnd(0.5), 1.2, rnd(0.5)), color: 0x6d6a66, color2: 0xcfcdc9, life: 0.9, size: 0.18, grow: 3, drag: 1, opacity: 0.5 });
+    for (const sx of [-rig.trackX, rig.trackX]) spawn({ pos: rig.body.localToWorld(tmp.set(sx, 0.2, -Math.sign(speed) * 2.1)), vel: new THREE.Vector3(rnd(0.6), 0.5, rnd(0.6)), color: 0xa8895f, life: 0.8, size: 0.3, grow: 2.5, drag: 2, opacity: 0.35 });
   }
 
   // visée (rayon de la souris sur un plan à la hauteur du tank)
@@ -541,20 +609,20 @@ renderer.setAnimationLoop(() => {
   if (useMouse) {
     ground.constant = -tank.position.y;
     ray.setFromCamera(mouse, camera);
-    if (ray.ray.intersectPlane(ground, tmp)) { turretYaw = turnToward(turretYaw, Math.atan2(tmp.x - tank.position.x, tmp.z - tank.position.z), TURRET_RATE * dt); }
+    if (ray.ray.intersectPlane(ground, tmp)) { turretYaw = turnToward(turretYaw, Math.atan2(tmp.x - tank.position.x, tmp.z - tank.position.z), rig.turretRate * dt); }
   }
   const R = sticks.R;
   if (Math.hypot(R.x, R.y) > 0.3) {
-    turretYaw = turnToward(turretYaw, Math.atan2(R.x, R.y), TURRET_RATE * dt);
+    turretYaw = turnToward(turretYaw, Math.atan2(R.x, R.y), rig.turretRate * dt);
     aiming = true;
   }
-  turret.rotation.y = turretYaw - tank.rotation.y;
+  rig.turret.rotation.y = turretYaw - tank.rotation.y;
 
   // tir : le canon recule d'un coup puis revient en douceur
   reload -= dt;
   if (keys.Space || mouseDown || aiming) fire();
   recoil = Math.max(0, recoil - dt * 2.2);
-  barrel.position.z = 1.2 - 0.6 * recoil * recoil;
+  rig.barrel.position.z = rig.barrelZ - rig.recoilLen * recoil * recoil;
   flashT -= dt;
   flash.visible = flashT > 0;
   if (flash.visible) {
@@ -647,7 +715,7 @@ renderer.setAnimationLoop(() => {
 
   renderer.render(scene, camera);
 });
-window.game = { tank, targets, shells, parts, marks, groundY, get score() { return score; }, get flattened() { return flattened; } };  // pour les tests
+window.game = { tank, targets, shells, parts, marks, groundY, get score() { return score; }, get rig() { return rig.name; }, get flattened() { return flattened; } };  // pour les tests
 </script>
 </body>
 </html>
